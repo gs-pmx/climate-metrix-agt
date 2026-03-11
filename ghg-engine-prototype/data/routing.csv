@@ -1,0 +1,7 @@
+source_id,label,source_type,scope,metric_group,metric_subgroup,is_biogenic,default_unit,method_id,emission_category,factor_description
+fuel_gasoline_s1,Owned Gasoline,gasoline,Scope 1,fuel,fossil_fuel,False,gallon,direct_factor,mobile-combustion,motor-gasoline-default
+fuel_diesel_s1,Owned Diesel,diesel,Scope 1,fuel,fossil_fuel,False,gallon,direct_factor,mobile-combustion,motor-diesel-default
+fuel_natgas_s1,Natural Gas,natural-gas,Scope 1,fuel,fossil_fuel,False,scf,direct_factor,stationary-energy,us-weighted-avg
+travel_miles_s3,Rented Vehicle Miles,gasoline,Scope 3,travel,3.6_business_travel,False,mile,miles_to_fuel,mobile-combustion,motor-gasoline-default
+electricity_s2,Purchased Electricity,electricity,Scope 2,grid_energy,electricity_mix,False,kwh,direct_factor,purchased-electricity,us-grid
+steam_s2,District Steam,district-steam,Scope 2,grid_energy,district_steam,False,mmbtu,direct_factor,purchased-steam,us-steam
