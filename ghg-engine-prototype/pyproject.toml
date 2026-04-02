@@ -10,6 +10,7 @@ dependencies = [
   "fastapi>=0.110",
   "uvicorn>=0.23",
   "pydantic>=2.6",
+  "pydantic-settings>=2.2",
   "pint>=0.23",
   "pandas>=2.0",
   "python-dateutil>=2.9",
@@ -34,4 +35,4 @@ ignore_missing_imports = true
 
 [tool.setuptools]
 packages = ["ghg_engine"]
-py-modules = ["api_main", "project_store"]
+py-modules = ["api_main", "project_store", "config"]
