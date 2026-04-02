@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -9,30 +8,30 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from config import get_settings
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
 from ghg_engine.models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from ghg_engine.routing import RoutingCatalog
 from project_store import ProjectStore
 
+settings = get_settings()
+
 app = FastAPI(title="GHG Prototype API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
+    allow_origins=settings.cors_origins,
+    allow_origin_regex=settings.cors_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-BASE_DIR = Path(__file__).resolve().parent
-ROUTING = RoutingCatalog.from_csv(str(BASE_DIR / "data" / "routing.csv"))
-FACTORS = FactorRepository.from_csv(str(BASE_DIR / "data" / "factors.csv"))
+ROUTING = RoutingCatalog.from_csv(str(settings.data_dir / "routing.csv"))
+FACTORS = FactorRepository.from_csv(str(settings.data_dir / "factors.csv"))
 ENGINE = GHGEngine(ROUTING, FACTORS)
-PROJECT_STORE = ProjectStore(BASE_DIR / "data" / "ghg_projects.sqlite")
+PROJECT_STORE = ProjectStore(settings.db_path)
 
 
 @app.get("/catalog/routing")

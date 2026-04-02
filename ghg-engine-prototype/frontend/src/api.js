@@ -1,21 +1,30 @@
+function normalizeBase(value) {
+  return String(value || "").trim().replace(/\/+$/, "");
+}
+
 function apiBaseCandidates() {
   const host = typeof window !== "undefined" ? window.location.hostname : "";
-  const dynamicHostBase = host ? `http://${host}:8000` : "";
+  const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
+  const dynamicHostBase = host ? `${protocol}//${host}:8000` : "";
   return [
     import.meta.env.VITE_API_BASE || "",
+    "/api",
     dynamicHostBase,
-    "http://localhost:8000",
     "http://127.0.0.1:8000",
-  ].filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
+    "http://localhost:8000",
+  ]
+    .map(normalizeBase)
+    .filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
 }
 
 async function request(path, options = {}) {
   let lastError = null;
   const tried = [];
   for (const base of apiBaseCandidates()) {
-    tried.push(`${base}${path}`);
+    const url = `${base}${path}`;
+    tried.push(url);
     try {
-      const res = await fetch(`${base}${path}`, {
+      const res = await fetch(url, {
         headers: { "Content-Type": "application/json", ...(options.headers || {}) },
         ...options,
       });
@@ -27,7 +36,7 @@ async function request(path, options = {}) {
         return res.json();
       }
       const text = await res.text();
-      throw new Error(`Non-JSON response from ${base}${path}: ${text.slice(0, 80)}`);
+      throw new Error(`Non-JSON response from ${url}: ${text.slice(0, 80)}`);
     } catch (e) {
       lastError = e;
     }

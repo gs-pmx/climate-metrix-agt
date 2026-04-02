@@ -22,7 +22,14 @@ npm install
 npm run dev
 ```
 
-The UI is available at `http://localhost:5173` and calls the API at `http://localhost:8000`.
+The UI is available at `http://localhost:5173`.
+
+In development, Vite now proxies `"/api/*"` requests from `:5173` to the FastAPI service on `http://127.0.0.1:8000`, so the expected local setup is:
+
+- frontend on `:5173`
+- backend on `:8000`
+
+If the UI loads but calculations fail, confirm the FastAPI server is running; the frontend port does not replace the backend port.
 
 ## API Endpoints
 

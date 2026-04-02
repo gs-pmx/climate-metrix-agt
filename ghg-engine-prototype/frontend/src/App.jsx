@@ -216,6 +216,12 @@ function formatNumber(value, digits = 2) {
   return n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
 }
 
+function formatPercent(value, digits = 1) {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "";
+  return `${n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
+}
+
 function toMetricTons(value, unit = "kg") {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -597,7 +603,9 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       const key = row.facility_name || row.facility_id || "Unknown";
       byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
     }
-    return Object.entries(byKey).map(([facility_name, value], i) => ({ id: `f_${i}`, facility_name, value }));
+    return Object.entries(byKey)
+      .map(([facility_name, value], i) => ({ id: `f_${i}`, facility_name, value }))
+      .sort((a, b) => b.value - a.value);
   }, [co2eRows]);
   const dashboardByScopeRows = React.useMemo(() => {
     const byKey = {};
@@ -605,7 +613,9 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       const key = row.scope || "Unknown";
       byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
     }
-    return Object.entries(byKey).map(([scope, value], i) => ({ id: `s_${i}`, scope, value }));
+    return Object.entries(byKey)
+      .map(([scope, value], i) => ({ id: `s_${i}`, scope, value }))
+      .sort((a, b) => b.value - a.value);
   }, [co2eRows]);
   const dashboardBySourceRows = React.useMemo(() => {
     const byKey = {};
@@ -613,8 +623,72 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       const key = row.source_label || row.source_id || "Unknown";
       byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
     }
-    return Object.entries(byKey).map(([source_label, value], i) => ({ id: `src_${i}`, source_label, value }));
+    return Object.entries(byKey)
+      .map(([source_label, value], i) => ({ id: `src_${i}`, source_label, value }))
+      .sort((a, b) => b.value - a.value);
   }, [co2eRows]);
+  const totalCo2e = React.useMemo(
+    () => co2eRows.reduce((acc, row) => acc + Number(row.value || 0), 0),
+    [co2eRows],
+  );
+  const dashboardKpis = React.useMemo(() => {
+    const topFacility = dashboardByFacilityRows[0];
+    const topSource = dashboardBySourceRows[0];
+    const topScope = dashboardByScopeRows[0];
+    return [
+      {
+        id: "total",
+        label: "Total Emissions",
+        value: `${formatNumber(totalCo2e)} MTCO2e`,
+        detail: `${co2eRows.length} CO2e result rows`,
+      },
+      {
+        id: "facility",
+        label: "Top Facility",
+        value: topFacility?.facility_name || "No data",
+        detail:
+          topFacility && totalCo2e > 0
+            ? `${formatNumber(topFacility.value)} MTCO2e (${formatPercent((topFacility.value / totalCo2e) * 100)})`
+            : "No facility totals yet",
+      },
+      {
+        id: "source",
+        label: "Top Source",
+        value: topSource?.source_label || "No data",
+        detail:
+          topSource && totalCo2e > 0
+            ? `${formatNumber(topSource.value)} MTCO2e (${formatPercent((topSource.value / totalCo2e) * 100)})`
+            : "No source totals yet",
+      },
+      {
+        id: "scope",
+        label: "Largest Scope",
+        value: topScope?.scope || "No data",
+        detail:
+          topScope && totalCo2e > 0
+            ? `${formatNumber(topScope.value)} MTCO2e (${formatPercent((topScope.value / totalCo2e) * 100)})`
+            : "No scope totals yet",
+      },
+    ];
+  }, [co2eRows.length, dashboardByFacilityRows, dashboardByScopeRows, dashboardBySourceRows, totalCo2e]);
+  const dashboardTableRows = React.useMemo(
+    () =>
+      co2eRows
+        .map((row, i) => {
+          const value = Number(row.value || 0);
+          return {
+            id: row.id || `dashboard_${i}`,
+            facility_name: row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
+            source_label: row.source_label || sourceLabelById[row.source_id] || row.source_id,
+            scope: row.scope || "Unknown",
+            accounting_method: row.accounting_method || "",
+            value,
+            share_pct: totalCo2e > 0 ? (value / totalCo2e) * 100 : 0,
+          };
+        })
+        .sort((a, b) => b.value - a.value),
+    [co2eRows, facilityNameById, sourceLabelById, totalCo2e],
+  );
 
   const refreshProjects = React.useCallback(async () => {
     const list = await api.listProjects();
@@ -1213,6 +1287,31 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     ),
     [],
   );
+  const dashboardTableColumns = React.useMemo(
+    () => [
+      { field: "facility_name", headerName: "Facility", flex: 0.95, minWidth: 160, renderCell: renderWrappedCell },
+      { field: "source_label", headerName: "Source", flex: 1.1, minWidth: 180, renderCell: renderWrappedCell },
+      { field: "scope", headerName: "Scope", flex: 0.7, minWidth: 120 },
+      { field: "accounting_method", headerName: "Accounting", flex: 0.85, minWidth: 140 },
+      {
+        field: "value",
+        headerName: "MTCO2e",
+        type: "number",
+        flex: 0.6,
+        minWidth: 120,
+        valueFormatter: (value) => formatNumber(value),
+      },
+      {
+        field: "share_pct",
+        headerName: "Share",
+        type: "number",
+        flex: 0.55,
+        minWidth: 110,
+        valueFormatter: (value) => formatPercent(value),
+      },
+    ],
+    [renderWrappedCell],
+  );
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
@@ -1595,29 +1694,70 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             sx={{
               display: "grid",
               gap: 2,
-              gridTemplateColumns: { xs: "1fr", xl: "minmax(0, 1.6fr) minmax(0, 1fr)" },
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+            }}
+          >
+            {dashboardKpis.map((kpi) => (
+              <Paper key={kpi.id} sx={{ p: 2 }}>
+                <Typography variant="overline" color="text.secondary">
+                  {kpi.label}
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.25 }}>
+                  {kpi.value}
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                  {kpi.detail}
+                </Typography>
+              </Paper>
+            ))}
+          </Box>
+          <Paper sx={{ p: 2, minHeight: 420 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>
+              Emissions by Source (Column Chart)
+            </Typography>
+            <SourceBarChart rows={dashboardBySourceRows} />
+          </Paper>
+          <Box
+            sx={{
+              display: "grid",
+              gap: 2,
+              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 0.95fr) minmax(0, 1.25fr)" },
               alignItems: "stretch",
             }}
           >
-            <Paper sx={{ p: 2, minHeight: 420 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                Emissions by Source (Column Chart)
-              </Typography>
-              <SourceBarChart rows={dashboardBySourceRows} />
-            </Paper>
             <Paper sx={{ p: 2, minHeight: 420 }}>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
                 Emissions by Scope (Donut Chart)
               </Typography>
               <ScopeDonutChart rows={dashboardByScopeRows} />
             </Paper>
-            <Paper sx={{ p: 2, gridColumn: { xs: "1", xl: "1 / span 2" }, minHeight: 380 }}>
+            <Paper sx={{ p: 2, minHeight: 420 }}>
               <Typography variant="subtitle1" sx={{ mb: 1 }}>
                 Emissions by Facility and Source (Treemap)
               </Typography>
               <FacilitySourceTreemap rows={co2eRows} />
             </Paper>
           </Box>
+          <Paper sx={{ p: 2 }}>
+            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
+              <Typography variant="subtitle1">Detailed CO2e Results</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Use sorting, pagination, and keyboard navigation to inspect the heaviest rows.
+              </Typography>
+            </Stack>
+            <Box sx={{ height: 420 }}>
+              <DataGrid
+                rows={dashboardTableRows}
+                columns={dashboardTableColumns}
+                disableRowSelectionOnClick
+                pageSizeOptions={[10, 25, 50]}
+                initialState={{
+                  sorting: { sortModel: [{ field: "value", sort: "desc" }] },
+                  pagination: { paginationModel: { pageSize: 10, page: 0 } },
+                }}
+              />
+            </Box>
+          </Paper>
         </Stack>
       )}
 
