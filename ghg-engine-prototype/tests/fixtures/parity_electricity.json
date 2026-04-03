@@ -1,0 +1,44 @@
+{
+  "context": {
+    "inventory_year": 2024,
+    "gwp_set": "AR6",
+    "source_attributes": {
+      "country": "US",
+      "egrid_subregion": "WECC"
+    }
+  },
+  "activities": [
+    {
+      "facility_id": "F1",
+      "source_id": "electricity_s2",
+      "source_type": "electricity",
+      "scope": "Scope 2",
+      "metric_group": "grid_energy",
+      "metric_subgroup": "electricity_mix",
+      "activity": {
+        "value": 1000.0,
+        "unit": "kwh"
+      }
+    }
+  ],
+  "expected": [
+    {
+      "facility_id": "F1",
+      "source_id": "electricity_s2",
+      "scope": "Scope 2",
+      "accounting_method": "location_based",
+      "gas": "co2",
+      "unit": "kg",
+      "value": 350.0
+    },
+    {
+      "facility_id": "F1",
+      "source_id": "electricity_s2",
+      "scope": "Scope 2",
+      "accounting_method": "market_based",
+      "gas": "co2",
+      "unit": "kg",
+      "value": 200.0
+    }
+  ]
+}
