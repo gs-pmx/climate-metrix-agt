@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx vite:*)",
+      "Bash(python api_main.py)",
+      "Bash(python:*)",
+      "WebFetch(domain:localhost)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(curl -s http://localhost:8000/catalog/routing)",
+      "Bash(curl -s http://localhost:5173/src/ActivityInputsPanel.jsx)",
+      "Bash(curl -s http://localhost:5173/catalog/routing)",
+      "Bash(curl -s http://localhost:5173/api/catalog/routing)",
+      "Bash(npx eslint:*)",
+      "Bash(ls eslint*)",
+      "Bash(npm run:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

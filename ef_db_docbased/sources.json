@@ -1,0 +1,392 @@
+[
+  {
+    "_id": "tcr",
+    "name": "The Climate Registry",
+    "short_name": "TCR",
+    "organization_type": "registry",
+    "base_url": "https://theclimateregistry.org/registries-resources/protocols/",
+    "tables": [
+      {
+        "ref": "Table 1.1 U.S. Default Factors for Calculating CO2 Emissions from \nCombustion of",
+        "title": "Table 1.1 U.S. Default Factors for Calculating CO2 Emissions from \nCombustion of Fossil Fuel and Biomass",
+        "covers_attributes": [
+          "co2-ef",
+          "heat-content"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      },
+      {
+        "ref": "Table 1.9 U.S. Default Factors for Calculating CH4 and N2O Emissions \nby Fuel Ty",
+        "title": "Table 1.9 U.S. Default Factors for Calculating CH4 and N2O Emissions \nby Fuel Type Industrial and Energy Sectors",
+        "covers_attributes": [
+          "ch4-ef",
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": 3,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "epa",
+    "name": "Environmental Protection Agency",
+    "short_name": "EPA",
+    "organization_type": "government-agency",
+    "base_url": "https://www.epa.gov/climateleadership/ghg-emission-factors-hub",
+    "tables": [
+      {
+        "ref": "Table 8 - Scope 3 Category 4",
+        "title": "Table 8 - Scope 3 Category 4",
+        "covers_attributes": [
+          "ch4-ef",
+          "co2-ef",
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "freight-transport"
+        ]
+      },
+      {
+        "ref": "Table 10 - Scope 3 Category 6",
+        "title": "Table 10 - Scope 3 Category 6",
+        "covers_attributes": [
+          "ch4-ef",
+          "co2-ef",
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "passenger-transport"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": 4,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "egrid",
+    "name": "EPA Emissions & Generation Resource Integrated Database",
+    "short_name": "eGRID",
+    "organization_type": "government-database",
+    "base_url": "https://www.epa.gov/egrid",
+    "tables": [
+      {
+        "ref": "eGRID subregion annual CO2 total output emission rate (lb/MWh)",
+        "title": "eGRID subregion annual CO2 total output emission rate (lb/MWh)",
+        "covers_attributes": [
+          "co2-ef"
+        ],
+        "covers_domains": [
+          "electricity-generation"
+        ]
+      },
+      {
+        "ref": "eGRID subregion annual CH4 total output emission rate (lb/MWh)",
+        "title": "eGRID subregion annual CH4 total output emission rate (lb/MWh)",
+        "covers_attributes": [
+          "ch4-ef"
+        ],
+        "covers_domains": [
+          "electricity-generation"
+        ]
+      },
+      {
+        "ref": "eGRID subregion annual N2O total output emission rate (lb/MWh)",
+        "title": "eGRID subregion annual N2O total output emission rate (lb/MWh)",
+        "covers_attributes": [
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "electricity-generation"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": 1,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "ipcc",
+    "name": "Intergovernmental Panel on Climate Change",
+    "short_name": "IPCC",
+    "organization_type": "international-body",
+    "base_url": "https://www.ipcc.ch/",
+    "tables": [
+      {
+        "ref": "IPCC Global Warming Potential (GWP) values relative to CO2 -- Hydrofluorocarbons",
+        "title": "IPCC Global Warming Potential (GWP) values relative to CO2 -- Hydrofluorocarbons",
+        "covers_attributes": [
+          "gwp-100-ar6"
+        ],
+        "covers_domains": [
+          "refrigerant-release"
+        ]
+      },
+      {
+        "ref": "IPCC Global Warming Potential (GWP) values relative to CO2 -- Fully fluorinated ",
+        "title": "IPCC Global Warming Potential (GWP) values relative to CO2 -- Fully fluorinated species",
+        "covers_attributes": [
+          "gwp-100-ar6"
+        ],
+        "covers_domains": [
+          "refrigerant-release"
+        ]
+      },
+      {
+        "ref": "Table 5.2 - Refrigerant blends",
+        "title": "Table 5.2 - Refrigerant blends",
+        "covers_attributes": [
+          "gwp-100-ar6"
+        ],
+        "covers_domains": [
+          "refrigerant-release"
+        ]
+      },
+      {
+        "ref": "Table 5.1 - GWP Values",
+        "title": "Table 5.1 - GWP Values",
+        "covers_attributes": [
+          "gwp-100-ar6"
+        ],
+        "covers_domains": [
+          "refrigerant-release"
+        ]
+      }
+    ],
+    "update_frequency": "per-assessment-cycle",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "greet",
+    "name": "R&D GREET Model (Argonne National Lab)",
+    "short_name": "GREET",
+    "organization_type": "national-lab-model",
+    "base_url": "https://greet.anl.gov/",
+    "tables": [],
+    "update_frequency": "annual",
+    "typical_publication_month": 10,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "desnz",
+    "name": "UK Department for Energy Security and Net Zero",
+    "short_name": "DESNZ",
+    "organization_type": "government-agency",
+    "base_url": "https://www.gov.uk/government/organisations/department-for-energy-security-and-net-zero",
+    "tables": [
+      {
+        "ref": "Documentation",
+        "title": "Documentation",
+        "covers_attributes": [
+          "factor"
+        ],
+        "covers_domains": [
+          "passenger-transport"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": 6,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "eia",
+    "name": "U.S. Energy Information Administration",
+    "short_name": "EIA",
+    "organization_type": "government-agency",
+    "base_url": "https://www.eia.gov/",
+    "tables": [
+      {
+        "ref": "In text",
+        "title": "In text",
+        "covers_attributes": [
+          "T&D-loss",
+          "ch4-ef",
+          "co2-ef",
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "electricity-generation"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "or-greet4.0",
+    "name": "Oregon GREET 4.0 Model",
+    "short_name": "OR-GREET4.0",
+    "organization_type": "state-model",
+    "base_url": "https://www.oregon.gov/deq/ghgp/pages/default.aspx",
+    "tables": [],
+    "update_frequency": "periodic",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "usdot",
+    "name": "U.S. Department of Transportation",
+    "short_name": "USDOT",
+    "organization_type": "government-agency",
+    "base_url": "https://www.transportation.gov/",
+    "tables": [
+      {
+        "ref": "Average Fuel Efficiency of US Light Duty Vehicles",
+        "title": "Average Fuel Efficiency of US Light Duty Vehicles",
+        "covers_attributes": [
+          "mpg"
+        ],
+        "covers_domains": [
+          "passenger-transport"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "odeq",
+    "name": "Oregon Department of Environmental Quality",
+    "short_name": "ODEQ",
+    "organization_type": "state-agency",
+    "base_url": "https://www.oregon.gov/deq/",
+    "tables": [
+      {
+        "ref": "Carbon intensity (gCO2e/MJ)",
+        "title": "Carbon intensity (gCO2e/MJ)",
+        "covers_attributes": [
+          "ci"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      },
+      {
+        "ref": "Energy density (MJ/unit)",
+        "title": "Energy density (MJ/unit)",
+        "covers_attributes": [
+          "heat-content"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      },
+      {
+        "ref": "Calculated",
+        "title": "Calculated",
+        "covers_attributes": [
+          "ci"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "afleet",
+    "name": "AFLEET Tool (Argonne National Lab)",
+    "short_name": "AFLEET",
+    "organization_type": "national-lab-model",
+    "base_url": "https://afleet.es.anl.gov/",
+    "tables": [],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "ecology",
+    "name": "Washington Department of Ecology",
+    "short_name": "Ecology",
+    "organization_type": "state-agency",
+    "base_url": "https://ecology.wa.gov/",
+    "tables": [
+      {
+        "ref": "Carbon intensity (gCO2e/MJ)",
+        "title": "Carbon intensity (gCO2e/MJ)",
+        "covers_attributes": [
+          "ci"
+        ],
+        "covers_domains": [
+          "combustion"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "ornl",
+    "name": "Oak Ridge National Laboratory",
+    "short_name": "ORNL",
+    "organization_type": "national-lab",
+    "base_url": "https://www.ornl.gov/",
+    "tables": [
+      {
+        "ref": "Table 2.13 - Passenger Travel and Energy Use, 2019",
+        "title": "Table 2.13 - Passenger Travel and Energy Use, 2019",
+        "covers_attributes": [
+          "energy-intensity"
+        ],
+        "covers_domains": [
+          "passenger-transport"
+        ]
+      }
+    ],
+    "update_frequency": "periodic",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  },
+  {
+    "_id": "epa-calculated",
+    "name": "EPA (Calculated/Derived)",
+    "short_name": "EPA (calculated)",
+    "organization_type": "derived",
+    "base_url": "https://www.epa.gov/climateleadership/ghg-emission-factors-hub",
+    "tables": [
+      {
+        "ref": "Calculated",
+        "title": "Calculated",
+        "covers_attributes": [
+          "ch4-ef",
+          "co2-ef",
+          "n2o-ef"
+        ],
+        "covers_domains": [
+          "passenger-transport"
+        ]
+      }
+    ],
+    "update_frequency": "annual",
+    "typical_publication_month": null,
+    "last_checked": "2025-04-01",
+    "notes": null
+  }
+]
