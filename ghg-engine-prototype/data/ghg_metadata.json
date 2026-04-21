@@ -1,0 +1,2175 @@
+[
+  {
+    "_id": "co2",
+    "name": "Carbon Dioxide",
+    "chemical_formula": "CO2",
+    "category": "kyoto-direct",
+    "gwp": {
+      "ar4_100yr": 1,
+      "ar5_100yr": 1,
+      "ar6_100yr": 1
+    },
+    "is_kyoto_gas": true,
+    "notes": "Reference gas. GWP is 1 by definition."
+  },
+  {
+    "_id": "ch4",
+    "name": "Methane",
+    "chemical_formula": "CH4",
+    "category": "kyoto-direct",
+    "gwp": {
+      "ar4_100yr": 25,
+      "ar5_100yr": 28,
+      "ar6_100yr": 27.9
+    },
+    "is_kyoto_gas": true,
+    "notes": "GWP varies by AR version and whether carbon-cycle feedbacks are included."
+  },
+  {
+    "_id": "n2o",
+    "name": "Nitrous Oxide",
+    "chemical_formula": "N2O",
+    "category": "kyoto-direct",
+    "gwp": {
+      "ar4_100yr": 298,
+      "ar5_100yr": 265,
+      "ar6_100yr": 273
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_23",
+    "name": "HFC-23",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 14600.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_32",
+    "name": "HFC-32",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 771.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_41",
+    "name": "HFC-41",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 135.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_125",
+    "name": "HFC-125",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3740.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_134",
+    "name": "HFC-134",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1260.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_134a",
+    "name": "HFC-134a",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1530.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_143",
+    "name": "HFC-143",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 364.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_143a",
+    "name": "HFC-143a",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 5810.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_152",
+    "name": "HFC-152",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 21.5
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_152a",
+    "name": "HFC-152a",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 164.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_161",
+    "name": "HFC-161",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4.84
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_227ca",
+    "name": "HFC-227ca",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2980.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_227ea",
+    "name": "HFC-227ea",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3600.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_236cb",
+    "name": "HFC-236cb",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1350.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_236ea",
+    "name": "HFC-236ea",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1500.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_236fa",
+    "name": "HFC-236fa",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 8690.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_245ca",
+    "name": "HFC-245ca",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 787.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_245cb",
+    "name": "HFC-245cb",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4550.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_245ea",
+    "name": "HFC-245ea",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 255.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_245eb",
+    "name": "HFC-245eb",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 325.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_245fa",
+    "name": "HFC-245fa",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 962.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_263fb",
+    "name": "HFC-263fb",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 74.8
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_272ca",
+    "name": "HFC-272ca",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 599.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_329p",
+    "name": "HFC-329p",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2890.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_365mfc",
+    "name": "HFC-365mfc",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 914.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfc_43_10mee",
+    "name": "HFC-43-10mee",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1600.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1123",
+    "name": "HFO-1123",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.005
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1132a_a",
+    "name": "HFO-1132a a",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.052
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1141_a",
+    "name": "HFO-1141 a",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.024
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1225ye(z)",
+    "name": "HFO-1225ye(Z)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.344
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1225ye(e)",
+    "name": "HFO-1225ye(E)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.118
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1234ze(z)",
+    "name": "HFO-1234ze(Z)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.315
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1234ze(e)_a",
+    "name": "HFO-1234ze(E) a",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 1.37
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1234yf_a",
+    "name": "HFO-1234yf a",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.501
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1336mzz(e)",
+    "name": "HFO-1336mzz(E)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 18.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1336mzz(z)",
+    "name": "HFO-1336mzz(Z)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 2.08
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1243zf",
+    "name": "HFO-1243zf",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.261
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1345zfc_a",
+    "name": "HFO-1345zfc a",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 0.182
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hfo_1438ezy(e)",
+    "name": "HFO-1438ezy(E)",
+    "chemical_formula": null,
+    "category": "hfo",
+    "gwp": {
+      "ar6_100yr": 8.22
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "pfc_14",
+    "name": "PFC-14",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 7380.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_116",
+    "name": "PFC-116",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 12400.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_218",
+    "name": "PFC-218",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 9290.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_c_318_(pfc_318)",
+    "name": "PFC-C-318 (PFC-318)",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 10200.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_31_10_c",
+    "name": "PFC-31-10 c",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 10000.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_41_12_c",
+    "name": "PFC-41-12 c",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 9220.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_51_14_c",
+    "name": "PFC-51-14 c",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 8620.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_61_16",
+    "name": "PFC-61-16",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 8410.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_71_18",
+    "name": "PFC-71-18",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 8260.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_91_18_c",
+    "name": "PFC-91-18 c",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 7480.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_1114",
+    "name": "PFC-1114",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 0.004
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_1216",
+    "name": "PFC-1216",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 0.09
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_401a",
+    "name": "R-401A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 21.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_401b",
+    "name": "R-401B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 18.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_401c",
+    "name": "R-401C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 25.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_402a",
+    "name": "R-402A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2244.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_402b",
+    "name": "R-402B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1421.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_404a",
+    "name": "R-404A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4728.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407a",
+    "name": "R-407A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2262.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407b",
+    "name": "R-407B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3001.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407c",
+    "name": "R-407C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1908.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407d",
+    "name": "R-407D",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1748.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407e",
+    "name": "R-407E",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1672.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407f",
+    "name": "R-407F",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1965.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407g",
+    "name": "R-407G",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1566.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407h",
+    "name": "R-407H",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1615.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_407i",
+    "name": "R-407I",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1570.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_408a",
+    "name": "R-408A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2934.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_410a",
+    "name": "R-410A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2256.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_410b",
+    "name": "R-410B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2404.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_411a",
+    "name": "R-411A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 18.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_411b",
+    "name": "R-411B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 5.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_415a",
+    "name": "R-415A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 30.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_415b",
+    "name": "R-415B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 123.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_416a",
+    "name": "R-416A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 903.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_417a",
+    "name": "R-417A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2508.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_417b",
+    "name": "R-417B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3235.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_417c",
+    "name": "R-417C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1935.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_418a",
+    "name": "R-418A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_419a",
+    "name": "R-419A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3171.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_419b",
+    "name": "R-419B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2548.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_420a",
+    "name": "R-420A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1346.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_421a",
+    "name": "R-421A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2812.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_421b",
+    "name": "R-421B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3409.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_422a",
+    "name": "R-422A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3359.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_422b",
+    "name": "R-422B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2700.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_422c",
+    "name": "R-422C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3296.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_422d",
+    "name": "R-422D",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2917.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_422e",
+    "name": "R-422E",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2770.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_423a",
+    "name": "R-423A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2513.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_424a",
+    "name": "R-424A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2608.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_425a",
+    "name": "R-425A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1638.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_426a",
+    "name": "R-426A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1614.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_427a",
+    "name": "R-427A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2397.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_427c",
+    "name": "R-427C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2321.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_428a",
+    "name": "R-428A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4061.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_429a",
+    "name": "R-429A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 16.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_430a",
+    "name": "R-430A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 125.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_431a",
+    "name": "R-431A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 48.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_434a",
+    "name": "R-434A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3654.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_435a",
+    "name": "R-435A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 33.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_437a",
+    "name": "R-437A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1930.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_438a",
+    "name": "R-438A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2425.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_439a",
+    "name": "R-439A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2143.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_440a",
+    "name": "R-440A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 185.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_442a",
+    "name": "R-442A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2042.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_444a",
+    "name": "R-444A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 101.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_444b",
+    "name": "R-444B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 336.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_445a",
+    "name": "R-445A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 138.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_446a",
+    "name": "R-446A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 524.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_447a",
+    "name": "R-447A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 655.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_447b",
+    "name": "R-447B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 823.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_448a",
+    "name": "R-448A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1494.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_449a",
+    "name": "R-449A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1504.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_449b",
+    "name": "R-449B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1521.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_449c",
+    "name": "R-449C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1346.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_450a",
+    "name": "R-450A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 643.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_451a",
+    "name": "R-451A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 156.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_451b",
+    "name": "R-451B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 171.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_452a",
+    "name": "R-452A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2291.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_452b",
+    "name": "R-452B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 778.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_452c",
+    "name": "R-452C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2378.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_453a",
+    "name": "R-453A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1887.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_454a",
+    "name": "R-454A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 270.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_454b",
+    "name": "R-454B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 531.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_454c",
+    "name": "R-454C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 166.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_455a",
+    "name": "R-455A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 166.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_456a",
+    "name": "R-456A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 735.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_457a",
+    "name": "R-457A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 158.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_457b",
+    "name": "R-457B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 286.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_457c",
+    "name": "R-457C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 82.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_458a",
+    "name": "R-458A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1299.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_460a",
+    "name": "R-460A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2252.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_460b",
+    "name": "R-460B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1457.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_460c",
+    "name": "R-460C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 817.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_461a",
+    "name": "R-461A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 3017.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_462a",
+    "name": "R-462A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 2430.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_463a",
+    "name": "R-463A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1614.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_464a",
+    "name": "R-464A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1434.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_465a",
+    "name": "R-465A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 162.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_466a",
+    "name": "R-466A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 808.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_467a",
+    "name": "R-467A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1464.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_468a",
+    "name": "R-468A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 166.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_468b",
+    "name": "R-468B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 100.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_468c",
+    "name": "R-468C",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 324.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_469a",
+    "name": "R-469A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1466.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_470a",
+    "name": "R-470A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1049.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_470b",
+    "name": "R-470B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 799.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_471a",
+    "name": "R-471A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 156.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_472a",
+    "name": "R-472A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 384.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_472b",
+    "name": "R-472B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 567.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_473a",
+    "name": "R-473A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 1835.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_475a",
+    "name": "R-475A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 658.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_476a",
+    "name": "R-476A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 153.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_500",
+    "name": "R-500",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 43.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_503",
+    "name": "R-503",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 5855.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_504",
+    "name": "R-504",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 372.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_507",
+    "name": "R-507",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 4775.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_512a",
+    "name": "R-512A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 232.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_513a",
+    "name": "R-513A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 673.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_513b",
+    "name": "R-513B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 635.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_515a",
+    "name": "R-515A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 432.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_515b",
+    "name": "R-515B",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 320.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_516a",
+    "name": "R-516A",
+    "chemical_formula": null,
+    "category": "hfc",
+    "gwp": {
+      "ar6_100yr": 153.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_403a",
+    "name": "R-403A",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 1858.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_403b",
+    "name": "R-403B",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 3623.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_412a",
+    "name": "R-412A",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 465.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_509",
+    "name": "R-509",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 5017.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "r_509a",
+    "name": "R-509A",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 5202.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "sf6",
+    "name": "SF6",
+    "chemical_formula": null,
+    "category": "sulfur-fluoride",
+    "gwp": {
+      "ar6_100yr": 24300.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "hcfc_22",
+    "name": "HCFC-22",
+    "chemical_formula": null,
+    "category": "hcfc",
+    "gwp": {
+      "ar6_100yr": 1960.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "cfc_11",
+    "name": "CFC-11",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 6230.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "cfc_12",
+    "name": "CFC-12",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 12500.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "cfc_13",
+    "name": "CFC-13",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 16200.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "cfc_113",
+    "name": "CFC-113",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 6520.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hcfc_123",
+    "name": "HCFC-123",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 90.4
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hcfc_124",
+    "name": "HCFC-124",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 597.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hcfc_141b",
+    "name": "HCFC-141b",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 860.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "hcfc_142b",
+    "name": "HCFC-142b",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 2300.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_406a",
+    "name": "R-406A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_409a",
+    "name": "R-409A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_409b",
+    "name": "R-409B",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_413a",
+    "name": "R-413A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar4_100yr": 2053.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_414a",
+    "name": "R-414A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_414b",
+    "name": "R-414B",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_501",
+    "name": "R-501",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_502",
+    "name": "R-502",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_505",
+    "name": "R-505",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_506",
+    "name": "R-506",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 0.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_507a",
+    "name": "R-507A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 3985.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_508a",
+    "name": "R-508A",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 11607.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "r_508b",
+    "name": "R-508B",
+    "chemical_formula": null,
+    "category": "cfc",
+    "gwp": {
+      "ar6_100yr": 11698.0
+    },
+    "is_kyoto_gas": false,
+    "notes": null
+  },
+  {
+    "_id": "pfc_3_1_10",
+    "name": "PFC-3-1-10",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 10000.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "pfc_5_1_14",
+    "name": "PFC-5-1-14",
+    "chemical_formula": null,
+    "category": "pfc",
+    "gwp": {
+      "ar6_100yr": 8620.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  },
+  {
+    "_id": "nf3",
+    "name": "NF3",
+    "chemical_formula": null,
+    "category": "nitrogen-fluoride",
+    "gwp": {
+      "ar6_100yr": 17400.0
+    },
+    "is_kyoto_gas": true,
+    "notes": null
+  }
+]

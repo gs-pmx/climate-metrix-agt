@@ -1,0 +1,63 @@
+{
+  "migration_date": "2026-04-14T20:21:33.281679+00:00",
+  "source_file": "/mnt/user-data/uploads/ef_database_2025.xlsx",
+  "total_input_rows": 619,
+  "total_factors_created": 619,
+  "total_sources_created": 14,
+  "total_grid_regions_created": 28,
+  "total_ghg_metadata_created": 197,
+  "total_unit_definitions_created": 17,
+  "total_cross_references": 597,
+  "factors_by_domain": {
+    "refrigerant-release": 195,
+    "combustion": 174,
+    "electricity-generation": 164,
+    "passenger-transport": 54,
+    "freight-transport": 24,
+    "waste-decomposition": 8
+  },
+  "factors_by_source": {
+    "ipcc": 182,
+    "epa": 123,
+    "eia": 83,
+    "egrid": 81,
+    "tcr": 78,
+    "odeq": 26,
+    "unknown": 13,
+    "desnz": 10,
+    "usdot": 9,
+    "epa-calculated": 6,
+    "greet": 2,
+    "or-greet4.0": 2,
+    "ecology": 2,
+    "afleet": 1,
+    "ornl": 1
+  },
+  "factors_by_geographic_specificity": {
+    "national": 212,
+    "global": 211,
+    "subregion": 164,
+    "state": 32
+  },
+  "factors_by_attribute": {
+    "gwp-100-ar6": 194,
+    "co2-ef": 124,
+    "ch4-ef": 112,
+    "n2o-ef": 106,
+    "heat-content": 38,
+    "ci": 18,
+    "co2e-ef": 10,
+    "mpg": 9,
+    "thermal-efficiency": 2,
+    "T&D-loss": 2,
+    "factor": 2,
+    "gwp-100-ar4": 1,
+    "energy-intensity": 1
+  },
+  "warnings": [
+    "Duplicate factor_key resolved: propane_kg-per-gal_liquid-propane-gal_co2-ef_tcr_d2024_r2024__dup1",
+    "Duplicate factor_key resolved: propane_kg-per-gal_liquid-propane-gal_co2-ef_tcr_d_r2023__dup1",
+    "eGRID code 'us-average' not in predefined map \u2014 needs manual state mapping"
+  ],
+  "warnings_count": 3
+}

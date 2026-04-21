@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     ]
     cors_origin_regex: str = r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$"
     log_level: str = "INFO"
+    factor_backend: str = Field(default="document", description="Factor repository backend: 'csv' or 'document'.")
 
 
 def get_settings() -> Settings:

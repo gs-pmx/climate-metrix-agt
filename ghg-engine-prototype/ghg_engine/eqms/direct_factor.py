@@ -97,7 +97,14 @@ class DirectFactorMethod(EQMPlugin):
                 )
                 if factor is None:
                     continue
-                denom_qty, numerator = self._activity_to_factor_denominator(activity, factor.unit, ureg)
+                try:
+                    denom_qty, numerator = self._activity_to_factor_denominator(activity, factor.unit, ureg)
+                except Exception:
+                    traces.defaults_applied.append(
+                        f"skipped {gas} factor {factor.factor_id}: "
+                        f"cannot convert activity unit '{activity.activity.unit}' to factor denominator"
+                    )
+                    continue
                 factor_denominator = factor.unit.split("/")[1].strip()
                 factor_q = parse_qty(ureg, factor.value, numerator) / parse_qty(
                     ureg,

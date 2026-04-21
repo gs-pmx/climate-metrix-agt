@@ -47,6 +47,7 @@ class ProjectStore:
             migrations: list[tuple[int, str, Any]] = [
                 (1, "initial project storage schema", self._migration_1_initial_schema),
                 (2, "project name index and helper views", self._migration_2_indexes),
+                (3, "emission factor document store", self._migration_3_factors),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -177,6 +178,66 @@ class ProjectStore:
             CREATE INDEX IF NOT EXISTS idx_fact_actuals_version ON fact_actuals(version_id);
             """
         )
+
+    def _migration_3_factors(self, conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS factors (
+                factor_key TEXT PRIMARY KEY,
+                lineage_id TEXT NOT NULL,
+                domain TEXT NOT NULL,
+                type TEXT NOT NULL,
+                attribute TEXT NOT NULL,
+                is_current INTEGER DEFAULT 1,
+                data_year INTEGER,
+                doc TEXT NOT NULL,
+                source TEXT DEFAULT 'seed'
+            );
+            CREATE INDEX IF NOT EXISTS idx_factors_lookup
+                ON factors(domain, type, attribute, is_current);
+            CREATE INDEX IF NOT EXISTS idx_factors_lineage
+                ON factors(lineage_id, is_current);
+            """
+        )
+
+    def seed_factors(self, json_path: Path) -> int:
+        """Load emission_factors.json into the factors table if empty. Returns count inserted."""
+        with self._connect() as conn:
+            count = conn.execute("SELECT COUNT(*) FROM factors").fetchone()[0]
+            if count > 0:
+                return 0
+            with open(json_path, encoding="utf-8") as f:
+                docs = json.load(f)
+            rows = []
+            for doc in docs:
+                classification = doc.get("classification", {})
+                factor = doc.get("factor", {})
+                provenance = doc.get("provenance", {})
+                versioning = doc.get("versioning", {})
+                rows.append((
+                    doc.get("factor_key", doc.get("_id", "")),
+                    doc.get("lineage_id", ""),
+                    classification.get("domain", ""),
+                    classification.get("type", ""),
+                    factor.get("attribute", ""),
+                    1 if versioning.get("is_current", True) else 0,
+                    provenance.get("data_year"),
+                    json.dumps(doc, sort_keys=True),
+                    "seed",
+                ))
+            conn.executemany(
+                """
+                INSERT OR IGNORE INTO factors
+                    (factor_key, lineage_id, domain, type, attribute, is_current, data_year, doc, source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                rows,
+            )
+            return len(rows)
+
+    def factors_connection(self) -> sqlite3.Connection:
+        """Return a connection for the DocumentFactorRepository to read from."""
+        return self._connect()
 
     def schema_info(self) -> dict[str, Any]:
         with self._connect() as conn:

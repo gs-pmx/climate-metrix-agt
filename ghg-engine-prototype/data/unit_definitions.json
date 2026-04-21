@@ -1,0 +1,141 @@
+[
+  {
+    "_id": "kg",
+    "name": "Kilogram",
+    "symbol": "kg",
+    "dimension": "mass",
+    "si_unit": "kilogram",
+    "conversion_to_si": 1
+  },
+  {
+    "_id": "g",
+    "name": "Gram",
+    "symbol": "g",
+    "dimension": "mass",
+    "si_unit": "kilogram",
+    "conversion_to_si": 0.001
+  },
+  {
+    "_id": "lb",
+    "name": "Pound",
+    "symbol": "lb",
+    "dimension": "mass",
+    "si_unit": "kilogram",
+    "conversion_to_si": 0.453592
+  },
+  {
+    "_id": "short_ton",
+    "name": "Short Ton (US)",
+    "symbol": "short ton",
+    "dimension": "mass",
+    "si_unit": "kilogram",
+    "conversion_to_si": 907.185
+  },
+  {
+    "_id": "metric_tonne",
+    "name": "Metric Tonne",
+    "symbol": "t",
+    "dimension": "mass",
+    "si_unit": "kilogram",
+    "conversion_to_si": 1000
+  },
+  {
+    "_id": "mmbtu",
+    "name": "Million BTU",
+    "symbol": "MMBtu",
+    "dimension": "energy",
+    "si_unit": "joule",
+    "conversion_to_si": 1055055852.62
+  },
+  {
+    "_id": "btu",
+    "name": "British Thermal Unit",
+    "symbol": "Btu",
+    "dimension": "energy",
+    "si_unit": "joule",
+    "conversion_to_si": 1055.056
+  },
+  {
+    "_id": "kwh",
+    "name": "Kilowatt-hour",
+    "symbol": "kWh",
+    "dimension": "energy",
+    "si_unit": "joule",
+    "conversion_to_si": 3600000
+  },
+  {
+    "_id": "mwh",
+    "name": "Megawatt-hour",
+    "symbol": "MWh",
+    "dimension": "energy",
+    "si_unit": "joule",
+    "conversion_to_si": 3600000000
+  },
+  {
+    "_id": "mj",
+    "name": "Megajoule",
+    "symbol": "MJ",
+    "dimension": "energy",
+    "si_unit": "joule",
+    "conversion_to_si": 1000000
+  },
+  {
+    "_id": "gal",
+    "name": "US Gallon",
+    "symbol": "gal",
+    "dimension": "volume",
+    "si_unit": "liter",
+    "conversion_to_si": 3.78541
+  },
+  {
+    "_id": "scf",
+    "name": "Standard Cubic Foot",
+    "symbol": "scf",
+    "dimension": "volume",
+    "si_unit": "liter",
+    "conversion_to_si": 28.3168
+  },
+  {
+    "_id": "mile",
+    "name": "Mile",
+    "symbol": "mi",
+    "dimension": "distance",
+    "si_unit": "meter",
+    "conversion_to_si": 1609.34
+  },
+  {
+    "_id": "passenger_mile",
+    "name": "Passenger-Mile",
+    "symbol": "passenger-mile",
+    "dimension": "distance",
+    "si_unit": "composite",
+    "conversion_to_si": null,
+    "notes": "Composite unit: 1 passenger transported 1 mile."
+  },
+  {
+    "_id": "short_ton_mile",
+    "name": "Short Ton-Mile",
+    "symbol": "short-ton-mile",
+    "dimension": "distance",
+    "si_unit": "composite",
+    "conversion_to_si": null,
+    "notes": "Composite unit: 1 short ton transported 1 mile."
+  },
+  {
+    "_id": "unitless",
+    "name": "Unitless / Dimensionless",
+    "symbol": "-",
+    "dimension": "dimensionless",
+    "si_unit": null,
+    "conversion_to_si": null
+  },
+  {
+    "_id": "gwp_100",
+    "name": "Global Warming Potential (100-year)",
+    "symbol": "GWP-100",
+    "dimension": "dimensionless",
+    "si_unit": null,
+    "conversion_to_si": null,
+    "notes": "Relative to CO2 = 1."
+  }
+]

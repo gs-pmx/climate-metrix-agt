@@ -24,14 +24,8 @@ import {
 } from "@mui/material";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import { api } from "./api";
-
-const UNIT_OPTIONS_BY_SOURCE_TYPE = {
-  "natural-gas": ["cubic feet", "therm", "mmbtu"],
-  electricity: ["kwh"],
-  gasoline: ["gallon", "mile"],
-  diesel: ["gallon", "mile"],
-  "district-steam": ["mmbtu"],
-};
+import { EMPTY_ACTIVITY, uid, normalizeActivityForSubmit } from "./constants";
+import ActivityInputsPanel from "./ActivityInputsPanel";
 
 const US_STATE_OPTIONS = [
   "Alabama",
@@ -143,24 +137,6 @@ const EMPTY_FACILITY = {
   owned_leased: "Owned",
 };
 
-const EMPTY_ACTIVITY = {
-  id: "",
-  facility_id: "",
-  source_id: "",
-  source_label: "",
-  source_type: "",
-  scope: "",
-  metric_group: "",
-  metric_subgroup: "",
-  activity_value: "",
-  activity_unit: "",
-  params: {},
-};
-
-function uid() {
-  return `id_${Math.random().toString(36).slice(2, 10)}`;
-}
-
 function useSnack() {
   const [snack, setSnack] = React.useState({ open: false, msg: "", sev: "success" });
   const show = React.useCallback((msg, sev = "success") => setSnack({ open: true, msg, sev }), []);
@@ -175,25 +151,6 @@ function groupByFacility(rows) {
     grouped[row.facility_id].push(row);
   }
   return grouped;
-}
-
-function normalizeActivityForSubmit(row) {
-  const isMiles = String(row.activity_unit).toLowerCase().startsWith("mile");
-  const isFuelVehicle = row.source_type === "gasoline" || row.source_type === "diesel";
-  if (!isMiles || !isFuelVehicle) {
-    return {
-      activity: { value: Number(row.activity_value), unit: row.activity_unit },
-      params: row.params || {},
-    };
-  }
-  const mpg = Number(row.params?.mpg || 0);
-  if (!Number.isFinite(mpg) || mpg <= 0) {
-    throw new Error(`${row.source_label || row.source_type}: miles input requires positive mpg.`);
-  }
-  return {
-    activity: { value: Number(row.activity_value) / mpg, unit: "gallon" },
-    params: {},
-  };
 }
 
 function ensureRowsWithIds(rows, makeRow) {
@@ -806,6 +763,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     ],
   );
 
+  React.useEffect(() => {
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+        e.preventDefault();
+        if (hasActiveProject) saveCurrentVersion("Checkpoint (Ctrl+S).");
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [hasActiveProject, saveCurrentVersion]);
+
   const selectProject = React.useCallback(
     async (projectId) => {
       setActiveProjectId(projectId);
@@ -999,71 +967,9 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   };
 
   const addFacility = () => setFacilities((prev) => [...prev, { ...EMPTY_FACILITY, id: uid() }]);
-  const addActivity = () => setActivities((prev) => [...prev, { ...EMPTY_ACTIVITY, id: uid() }]);
-  const removeActivity = (id) => setActivities((prev) => prev.filter((r) => r.id !== id));
-
   const processFacilityUpdate = (newRow) => {
     setFacilities((prev) => prev.map((r) => (r.id === newRow.id ? newRow : r)));
     return newRow;
-  };
-
-  const hydrateActivityFromSource = async (row) => {
-    const src = routingById[row.source_id];
-    if (!src) return row;
-    const units = UNIT_OPTIONS_BY_SOURCE_TYPE[src.source_type] || [src.default_unit];
-    const next = {
-      ...row,
-      source_label: src.label || src.source_type,
-      source_type: src.source_type,
-      scope: src.scope,
-      metric_group: src.metric_group,
-      metric_subgroup: src.metric_subgroup || "",
-      activity_unit: units.includes(row.activity_unit) ? row.activity_unit : units[0] || row.activity_unit,
-    };
-    return next;
-  };
-
-  const maybeCollectEqmParams = (row) => {
-    const isMiles = String(row.activity_unit).toLowerCase().startsWith("mile");
-    const isFuelVehicle = row.source_type === "gasoline" || row.source_type === "diesel";
-    if (!isMiles || !isFuelVehicle) {
-      return row;
-    }
-    const existingMpg = row.params?.mpg;
-    if (existingMpg && Number(existingMpg) > 0) {
-      return row;
-    }
-    const mpgInput = window.prompt(
-      `Source "${row.source_label}" entered in miles requires mpg. Enter mpg value:`,
-      "25",
-    );
-    const mpg = Number(mpgInput);
-    if (!Number.isFinite(mpg) || mpg <= 0) {
-      throw new Error("Miles-based fuel activity requires positive mpg.");
-    }
-    return { ...row, params: { ...(row.params || {}), mpg, fuel_type: row.source_type } };
-  };
-
-  const processActivityUpdate = async (newRow) => {
-    let row = newRow;
-    if (row.source_id) {
-      row = await hydrateActivityFromSource(row);
-    }
-    try {
-      row = maybeCollectEqmParams(row);
-    } catch (err) {
-      show(String(err.message || err), "error");
-      return newRow;
-    }
-    setActivities((prev) => prev.map((r) => (r.id === row.id ? row : r)));
-    return row;
-  };
-
-  const updateActivityField = async (id, field, value) => {
-    const row = activities.find((r) => r.id === id);
-    if (!row) return;
-    const candidate = { ...row, [field]: value };
-    return processActivityUpdate(candidate);
   };
 
   const runCalculation = async () => {
@@ -1507,138 +1413,26 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       )}
 
       {tab === 2 && hasActiveProject && (
-        <Stack spacing={2}>
-          <Paper sx={{ p: 2 }}>
-            <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
-              <TextField
-                label="Inventory Year"
-                value={inventoryYear}
-                onChange={(e) => setInventoryYear(e.target.value)}
-                sx={{ width: 150 }}
-              />
-              <Select value={gwpSet} onChange={(e) => setGwpSet(e.target.value)} sx={{ width: 150 }}>
-                <MenuItem value="AR6">AR6</MenuItem>
-                <MenuItem value="AR5">AR5</MenuItem>
-              </Select>
-              <Select value={String(includeTrace)} onChange={(e) => setIncludeTrace(e.target.value === "true")} sx={{ width: 170 }}>
-                <MenuItem value="true">Include Trace</MenuItem>
-                <MenuItem value="false">No Trace</MenuItem>
-              </Select>
-              <Typography variant="body2" color="text.secondary">
-                Source geo context is pulled from each facility row.
-              </Typography>
-            </Stack>
-          </Paper>
-
-          <Paper sx={{ p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
-              <Typography variant="h6">Activity Inputs</Typography>
-              <Stack direction="row" spacing={1}>
-                <Button variant="outlined" onClick={addActivity}>
-                  Add Activity Row
-                </Button>
-                <Button variant="outlined" onClick={() => saveCurrentVersion("Checkpoint before calculation.")}>
-                  Save Checkpoint
-                </Button>
-                <Button variant="contained" onClick={runCalculation} disabled={calculating}>
-                  {calculating ? "Calculating..." : "Run Calculation"}
-                </Button>
-              </Stack>
-            </Stack>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Miles input for gasoline/diesel will prompt for MPG when needed.
-            </Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-              Loaded sources from routing table: {routing.length}
-            </Typography>
-            {routingError ? (
-              <Alert severity="error" sx={{ mb: 1 }}>
-                Failed to load routing sources: {routingError}
-              </Alert>
-            ) : null}
-            <TableContainer sx={{ maxHeight: 520, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Facility</TableCell>
-                    <TableCell>Source</TableCell>
-                    <TableCell>Activity Value</TableCell>
-                    <TableCell>Unit</TableCell>
-                    <TableCell>Actions</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {activities.map((row) => {
-                    const src = routingById[row.source_id];
-                    const unitOptions = src
-                      ? UNIT_OPTIONS_BY_SOURCE_TYPE[src.source_type] || [src.default_unit]
-                      : [];
-                    return (
-                      <TableRow key={row.id}>
-                        <TableCell sx={{ minWidth: 210 }}>
-                          <Select
-                            size="small"
-                            value={row.facility_id}
-                            onChange={(e) => updateActivityField(row.id, "facility_id", e.target.value)}
-                            fullWidth
-                          >
-                            {facilityOptions.map((opt) => (
-                              <MenuItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 260 }}>
-                          <Select
-                            size="small"
-                            value={row.source_id}
-                            onChange={(e) => updateActivityField(row.id, "source_id", e.target.value)}
-                            fullWidth
-                          >
-                            {sourceOptions.map((opt) => (
-                              <MenuItem key={opt.value} value={opt.value}>
-                                {opt.label}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 160 }}>
-                          <TextField
-                            size="small"
-                            type="number"
-                            value={row.activity_value}
-                            onChange={(e) => updateActivityField(row.id, "activity_value", e.target.value)}
-                            fullWidth
-                          />
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 170 }}>
-                          <Select
-                            size="small"
-                            value={row.activity_unit}
-                            onChange={(e) => updateActivityField(row.id, "activity_unit", e.target.value)}
-                            fullWidth
-                          >
-                            {unitOptions.map((u) => (
-                              <MenuItem key={u} value={u}>
-                                {u}
-                              </MenuItem>
-                            ))}
-                          </Select>
-                        </TableCell>
-                        <TableCell sx={{ minWidth: 120 }}>
-                          <Button color="error" size="small" onClick={() => removeActivity(row.id)}>
-                            Remove
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </Paper>
-        </Stack>
+        <ActivityInputsPanel
+          activities={activities}
+          setActivities={setActivities}
+          facilities={facilities}
+          routing={routing}
+          routingById={routingById}
+          facilityOptions={facilityOptions}
+          sourceOptions={sourceOptions}
+          inventoryYear={inventoryYear}
+          setInventoryYear={setInventoryYear}
+          gwpSet={gwpSet}
+          setGwpSet={setGwpSet}
+          includeTrace={includeTrace}
+          setIncludeTrace={setIncludeTrace}
+          runCalculation={runCalculation}
+          calculating={calculating}
+          saveCurrentVersion={saveCurrentVersion}
+          routingError={routingError}
+          show={show}
+        />
       )}
 
       {tab === 3 && hasActiveProject && (

@@ -1,22 +1,39 @@
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from config import Settings, get_settings
+from ghg_engine.document_factors import DocumentFactorRepository
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
 from ghg_engine.routing import RoutingCatalog
 from project_store import ProjectStore
 
+log = logging.getLogger(__name__)
+
 
 @lru_cache(maxsize=1)
-def _build(settings: Settings | None = None) -> tuple[RoutingCatalog, FactorRepository, GHGEngine, ProjectStore]:
+def _build(settings: Settings | None = None) -> tuple[RoutingCatalog, FactorRepository | DocumentFactorRepository, GHGEngine, ProjectStore]:
     if settings is None:
         settings = get_settings()
     routing = RoutingCatalog.from_csv(str(settings.data_dir / "routing.csv"))
-    factors = FactorRepository.from_csv(str(settings.data_dir / "factors.csv"))
-    engine = GHGEngine(routing, factors)
     store = ProjectStore(settings.db_path)
+
+    if settings.factor_backend == "document":
+        ef_json = settings.data_dir / "emission_factors.json"
+        seeded = store.seed_factors(ef_json)
+        if seeded:
+            log.info("Seeded %d emission factor documents into SQLite.", seeded)
+        conn = store.factors_connection()
+        factors = DocumentFactorRepository.from_sqlite(conn)
+        conn.close()
+        log.info("Using document-based factor repository (%d factors).", len(factors._docs))
+    else:
+        factors = FactorRepository.from_csv(str(settings.data_dir / "factors.csv"))
+        log.info("Using CSV-based factor repository.")
+
+    engine = GHGEngine(routing, factors)
     return routing, factors, engine, store
 
 
@@ -24,7 +41,7 @@ def get_routing() -> RoutingCatalog:
     return _build()[0]
 
 
-def get_factors() -> FactorRepository:
+def get_factors() -> FactorRepository | DocumentFactorRepository:
     return _build()[1]
 
 

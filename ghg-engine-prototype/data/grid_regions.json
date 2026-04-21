@@ -1,0 +1,323 @@
+[
+  {
+    "_id": "AKGD",
+    "subregion_name": "ASCC Alaska Grid",
+    "nerc_region": "ASCC",
+    "applicable_states": [
+      "AK"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "AKMS",
+    "subregion_name": "ASCC Miscellaneous",
+    "nerc_region": "ASCC",
+    "applicable_states": [
+      "AK"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "AZNM",
+    "subregion_name": "WECC Southwest",
+    "nerc_region": "WECC",
+    "applicable_states": [
+      "AZ",
+      "NM"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "CAMX",
+    "subregion_name": "WECC California",
+    "nerc_region": "WECC",
+    "applicable_states": [
+      "CA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "ERCT",
+    "subregion_name": "ERCOT All",
+    "nerc_region": "ERCOT",
+    "applicable_states": [
+      "TX"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "FRCC",
+    "subregion_name": "FRCC All",
+    "nerc_region": "FRCC",
+    "applicable_states": [
+      "FL"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "HIMS",
+    "subregion_name": "HICC Miscellaneous",
+    "nerc_region": "HICC",
+    "applicable_states": [
+      "HI"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "HIOA",
+    "subregion_name": "HICC Oahu",
+    "nerc_region": "HICC",
+    "applicable_states": [
+      "HI"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "MROE",
+    "subregion_name": "MRO East",
+    "nerc_region": "MRO",
+    "applicable_states": [
+      "WI",
+      "MI",
+      "IA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "MROW",
+    "subregion_name": "MRO West",
+    "nerc_region": "MRO",
+    "applicable_states": [
+      "MN",
+      "ND",
+      "SD",
+      "NE",
+      "MT",
+      "IA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "NEWE",
+    "subregion_name": "NPCC New England",
+    "nerc_region": "NPCC",
+    "applicable_states": [
+      "CT",
+      "MA",
+      "ME",
+      "NH",
+      "RI",
+      "VT"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "NWPP",
+    "subregion_name": "WECC Northwest",
+    "nerc_region": "WECC",
+    "applicable_states": [
+      "WA",
+      "OR",
+      "ID",
+      "MT",
+      "WY",
+      "NV",
+      "UT"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "NYCW",
+    "subregion_name": "NPCC NYC/Westchester",
+    "nerc_region": "NPCC",
+    "applicable_states": [
+      "NY"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "NYLI",
+    "subregion_name": "NPCC Long Island",
+    "nerc_region": "NPCC",
+    "applicable_states": [
+      "NY"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "NYUP",
+    "subregion_name": "NPCC Upstate NY",
+    "nerc_region": "NPCC",
+    "applicable_states": [
+      "NY"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "PRMS",
+    "subregion_name": "Puerto Rico Miscellaneous",
+    "nerc_region": "None",
+    "applicable_states": [
+      "PR"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "RFCE",
+    "subregion_name": "RFC East",
+    "nerc_region": "RFC",
+    "applicable_states": [
+      "PA",
+      "NJ",
+      "DE",
+      "MD",
+      "DC",
+      "VA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "RFCM",
+    "subregion_name": "RFC Michigan",
+    "nerc_region": "RFC",
+    "applicable_states": [
+      "MI"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "RFCW",
+    "subregion_name": "RFC West",
+    "nerc_region": "RFC",
+    "applicable_states": [
+      "OH",
+      "IN",
+      "WV",
+      "KY"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "RMPA",
+    "subregion_name": "WECC Rockies",
+    "nerc_region": "WECC",
+    "applicable_states": [
+      "CO",
+      "WY"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SPNO",
+    "subregion_name": "SPP North",
+    "nerc_region": "SPP",
+    "applicable_states": [
+      "KS",
+      "NE",
+      "OK"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SPSO",
+    "subregion_name": "SPP South",
+    "nerc_region": "SPP",
+    "applicable_states": [
+      "OK",
+      "AR",
+      "LA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SRMV",
+    "subregion_name": "SERC Mississippi Valley",
+    "nerc_region": "SERC",
+    "applicable_states": [
+      "AR",
+      "LA",
+      "MS",
+      "MO"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SRMW",
+    "subregion_name": "SERC Midwest",
+    "nerc_region": "SERC",
+    "applicable_states": [
+      "MO",
+      "IL"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SRSO",
+    "subregion_name": "SERC South",
+    "nerc_region": "SERC",
+    "applicable_states": [
+      "AL",
+      "GA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SRTV",
+    "subregion_name": "SERC Tennessee Valley",
+    "nerc_region": "SERC",
+    "applicable_states": [
+      "TN",
+      "KY",
+      "VA",
+      "NC",
+      "GA"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "SRVC",
+    "subregion_name": "SERC Virginia/Carolina",
+    "nerc_region": "SERC",
+    "applicable_states": [
+      "VA",
+      "NC",
+      "SC"
+    ],
+    "egrid_data_year": 2022,
+    "notes": null
+  },
+  {
+    "_id": "us-average",
+    "subregion_name": "us-average",
+    "nerc_region": "unknown",
+    "applicable_states": [],
+    "egrid_data_year": 2022,
+    "notes": "Auto-generated during migration \u2014 needs manual review of state mappings."
+  }
+]
