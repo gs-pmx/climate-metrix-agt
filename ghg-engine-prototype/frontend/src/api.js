@@ -47,7 +47,10 @@ async function request(path, options = {}) {
 
 export const api = {
   listRouting: () => request("/catalog/routing"),
+  listActivityTypes: (status = null) =>
+    request(`/catalog/activity-types${status == null ? "" : `?status=${encodeURIComponent(status)}`}`),
   getMethodSchema: (methodId) => request(`/schema/method/${methodId}`),
+  getActivitySchema: (activityTypeId) => request(`/schema/activity/${activityTypeId}`),
   calculate: (payload) => request("/calculate", { method: "POST", body: JSON.stringify(payload) }),
   calculateAudit: (payload) => request("/calculate/audit", { method: "POST", body: JSON.stringify(payload) }),
   listProjects: () => request("/projects"),

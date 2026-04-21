@@ -1,0 +1,1972 @@
+[
+  {
+    "activity_type_id": "scope2_purchased_electricity_grid_mix",
+    "source_id": "electricity_grid_mix_s2",
+    "legacy_source_ids": ["electricity_s2"],
+    "workbook_aliases": ["Average Utility Mix"],
+    "label": "Purchased Electricity - Grid Mix",
+    "description": "Purchased grid electricity for facility operations, reported under Scope 2 with location-based and market-based treatment.",
+    "category": "Stationary Energy",
+    "scope": "Scope 2",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "electricity",
+    "metric_group": "grid_energy",
+    "metric_subgroup": "electricity_mix",
+    "is_biogenic_default": false,
+    "default_unit": "kwh",
+    "allowed_units": ["kwh", "mwh"],
+    "method_id": "scope2_energy",
+    "emission_category": "purchased-electricity",
+    "factor_description": "us-grid",
+    "implementation_status": "implemented",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "consumption",
+          "label": "Electricity Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "kwh",
+          "allowed_units": ["kwh", "mwh"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter purchased electricity consumed during the reporting period."
+        }
+      ],
+      "notes": [
+        "Scope 2 reporting should preserve both location-based and market-based outputs where applicable."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
+        "accounting_method": "location_based",
+        "geography_preference": "subregion_to_national_fallback"
+      },
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
+        "accounting_method": "market_based",
+        "geography_preference": "contractual_instrument_to_residual_mix"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard", "scope2-guidance"],
+      "requires_dual_scope2_reporting": true
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope2_purchased_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope2_purchased_electricity_renewable_purchase",
+    "source_id": "electricity_renewable_s2",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Carbon Free or Renewable Purchases"],
+    "label": "Purchased Electricity - Renewable or Carbon-Free Claims",
+    "description": "Purchased electricity covered by renewable or other low-carbon procurement claims requiring explicit Scope 2 accounting treatment.",
+    "category": "Stationary Energy",
+    "scope": "Scope 2",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "electricity",
+    "metric_group": "grid_energy",
+    "metric_subgroup": "electricity_renewable",
+    "is_biogenic_default": false,
+    "default_unit": "kwh",
+    "allowed_units": ["kwh", "mwh"],
+    "method_id": "scope2_energy",
+    "emission_category": "purchased-electricity",
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "consumption",
+          "label": "Electricity Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "kwh",
+          "allowed_units": ["kwh", "mwh"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter electricity covered by renewable or low-carbon procurement."
+        },
+        {
+          "field_id": "procurement_instrument",
+          "label": "Procurement Instrument",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "procurement_instrument",
+          "help_text": "Capture REC, PPA, tariff, supplier-specific factor, or other contractual instrument details."
+        }
+      ],
+      "notes": [
+        "Do not assume zero emissions solely from the label; contractual evidence and market-based rules must be evaluated."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
+        "accounting_method": "market_based",
+        "geography_preference": "contractual_instrument_to_residual_mix"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard", "scope2-guidance"],
+      "requires_dual_scope2_reporting": true,
+      "requires_contractual_instrument_review": true
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope2_purchased_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_onsite_generation_electricity",
+    "source_id": "onsite_generation_electricity_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Onsite Generation"],
+    "label": "Onsite Electricity Generation",
+    "description": "Electricity generated onsite. This needs explicit treatment based on generation technology rather than a generic electricity factor.",
+    "category": "Stationary Energy",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "electricity",
+    "metric_group": "onsite_energy",
+    "metric_subgroup": "electricity_renewable",
+    "is_biogenic_default": false,
+    "default_unit": "kwh",
+    "allowed_units": ["kwh", "mwh"],
+    "method_id": "onsite_generation",
+    "emission_category": null,
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "generation",
+          "label": "Generated Electricity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "kwh",
+          "allowed_units": ["kwh", "mwh"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter electricity generated onsite during the reporting period."
+        },
+        {
+          "field_id": "generation_type",
+          "label": "Generation Type",
+          "kind": "enum",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": ["solar", "wind", "biogas", "fuel_based_other"],
+          "param_key": "generation_type",
+          "help_text": "Identify technology so emissions are calculated appropriately."
+        }
+      ],
+      "notes": [
+        "Onsite generation cannot be modeled safely as generic purchased electricity."
+      ]
+    },
+    "factor_query_templates": [],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"],
+      "requires_generation_technology": true
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_stationary_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_stationary_natural_gas",
+    "source_id": "stationary_natgas_s1",
+    "legacy_source_ids": ["fuel_natgas_s1"],
+    "workbook_aliases": ["Natural Gas"],
+    "label": "Stationary Natural Gas",
+    "description": "Combustion of natural gas in stationary equipment.",
+    "category": "Stationary Energy",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "natural-gas",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "scf",
+    "allowed_units": ["scf", "therm", "mmbtu"],
+    "method_id": "direct_factor",
+    "emission_category": "stationary-energy",
+    "factor_description": "us-weighted-avg",
+    "implementation_status": "implemented",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Natural Gas Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "scf",
+          "allowed_units": ["scf", "therm", "mmbtu"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter stationary natural gas consumption."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "natural-gas",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-weighted-avg",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_stationary_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_stationary_diesel",
+    "source_id": "stationary_diesel_s1",
+    "legacy_source_ids": ["fuel_diesel_s1"],
+    "workbook_aliases": ["Diesel (Stationary Sources)"],
+    "label": "Stationary Diesel",
+    "description": "Combustion of diesel in stationary equipment.",
+    "category": "Stationary Energy",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "diesel",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "stationary-energy",
+    "factor_description": "distillate-fuel-oil-2",
+    "implementation_status": "partial",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Diesel Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter diesel consumption for stationary equipment."
+        }
+      ],
+      "notes": [
+        "Legacy routing currently shares one diesel source between mobile and stationary use; canonical separation still needs to be implemented."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "diesel",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "distillate-fuel-oil-2",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_stationary_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_stationary_propane",
+    "source_id": "stationary_propane_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Propane (Stationary Sources)"],
+    "label": "Stationary Propane",
+    "description": "Combustion of propane in stationary equipment.",
+    "category": "Stationary Energy",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "propane",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "stationary-energy",
+    "factor_description": "liquid-propane",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Propane Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter propane consumption for stationary equipment."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "propane",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "liquid-propane",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_stationary_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope2_purchased_district_steam",
+    "source_id": "steam_mix_s2",
+    "legacy_source_ids": ["steam_s2"],
+    "workbook_aliases": ["Steam Usage"],
+    "label": "Purchased District Steam",
+    "description": "Purchased district steam for facility operations.",
+    "category": "Stationary Energy",
+    "scope": "Scope 2",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "district-steam",
+    "metric_group": "grid_energy",
+    "metric_subgroup": "steam_mix",
+    "is_biogenic_default": false,
+    "default_unit": "mmbtu",
+    "allowed_units": ["mmbtu", "klbs"],
+    "method_id": "direct_factor",
+    "emission_category": "purchased-steam",
+    "factor_description": "us-steam",
+    "implementation_status": "partial",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "steam_use",
+          "label": "Purchased Steam",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "mmbtu",
+          "allowed_units": ["mmbtu", "klbs"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter purchased steam consumed during the reporting period."
+        }
+      ],
+      "notes": [
+        "Legacy implementation supports purchased steam but still needs canonical subgroup and unit treatment aligned to the new catalog."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "district-steam",
+        "attributes": ["co2e-ef"],
+        "description": "global-default-co2e",
+        "life_cycle_stage": "delivered",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard", "scope2-guidance"]
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope2_purchased_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope2_purchased_district_steam_renewable",
+    "source_id": "steam_renewable_s2",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Renewable Steam Usage"],
+    "label": "Purchased District Steam - Renewable Claim",
+    "description": "Purchased district steam associated with renewable or lower-carbon claim logic requiring explicit accounting review.",
+    "category": "Stationary Energy",
+    "scope": "Scope 2",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "district-steam",
+    "metric_group": "grid_energy",
+    "metric_subgroup": "steam_renewable",
+    "is_biogenic_default": false,
+    "default_unit": "mmbtu",
+    "allowed_units": ["mmbtu", "klbs"],
+    "method_id": "scope2_energy",
+    "emission_category": "purchased-steam",
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "steam_use",
+          "label": "Purchased Steam",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "mmbtu",
+          "allowed_units": ["mmbtu", "klbs"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter purchased steam associated with renewable or low-carbon attributes."
+        },
+        {
+          "field_id": "claim_basis",
+          "label": "Claim Basis",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "claim_basis",
+          "help_text": "Capture the contractual or supplier-specific basis for a renewable steam claim."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "district-steam",
+        "attributes": ["co2e-ef"],
+        "description": null,
+        "life_cycle_stage": "delivered",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard", "scope2-guidance"],
+      "requires_contractual_instrument_review": true
+    },
+    "ui_metadata": {
+      "group": "Stationary Energy",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope2_purchased_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_gasoline",
+    "source_id": "mobile_gasoline_s1",
+    "legacy_source_ids": ["fuel_gasoline_s1"],
+    "workbook_aliases": ["Owned Gasoline"],
+    "label": "Owned Vehicle Gasoline",
+    "description": "Combustion of gasoline in owned or controlled vehicles.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "gasoline",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "motor-gasoline-default",
+    "implementation_status": "implemented",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Gasoline Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter gasoline consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "gasoline",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "motor-gasoline-default",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_ethanol",
+    "source_id": "mobile_ethanol_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned Ethanol 100"],
+    "label": "Owned Vehicle Ethanol (E100)",
+    "description": "Combustion of ethanol in owned or controlled vehicles with separate biogenic treatment where required.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "ethanol",
+    "metric_group": "fuel",
+    "metric_subgroup": "renewable_fuel",
+    "is_biogenic_default": true,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "us-default-e100",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Ethanol Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter ethanol consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": [
+        "Biogenic emissions should remain separately identifiable."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "ethanol",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-default-e100",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"],
+      "biogenic_reporting_mode": "separate"
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_diesel",
+    "source_id": "mobile_diesel_s1",
+    "legacy_source_ids": ["fuel_diesel_s1"],
+    "workbook_aliases": ["Owned Diesel"],
+    "label": "Owned Vehicle Diesel",
+    "description": "Combustion of diesel in owned or controlled vehicles.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "diesel",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "motor-diesel-default",
+    "implementation_status": "partial",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Diesel Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter diesel consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": [
+        "Legacy routing currently shares one diesel source between mobile and stationary use; canonical separation still needs to be implemented."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "diesel",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "motor-diesel-default",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_biodiesel",
+    "source_id": "mobile_biodiesel_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned Biodiesel 100"],
+    "label": "Owned Vehicle Biodiesel (B100)",
+    "description": "Combustion of biodiesel in owned or controlled vehicles with separate biogenic handling.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "biodiesel",
+    "metric_group": "fuel",
+    "metric_subgroup": "renewable_fuel",
+    "is_biogenic_default": true,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "us-default-b100",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Biodiesel Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter biodiesel consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": [
+        "Biogenic emissions should remain separately identifiable."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "biodiesel",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-default-b100",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"],
+      "biogenic_reporting_mode": "separate"
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_renewable_diesel",
+    "source_id": "mobile_renewable_diesel_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned Renewable Diesel 100"],
+    "label": "Owned Vehicle Renewable Diesel",
+    "description": "Combustion of renewable diesel in owned or controlled vehicles with separate biogenic treatment where required.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "renewable-diesel",
+    "metric_group": "fuel",
+    "metric_subgroup": "renewable_fuel",
+    "is_biogenic_default": true,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "us-tallow-r100",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Renewable Diesel Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter renewable diesel consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": [
+        "Biogenic emissions should remain separately identifiable if applicable."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "renewable-diesel",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-tallow-r100",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"],
+      "biogenic_reporting_mode": "separate"
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope2_mobile_electricity",
+    "source_id": "mobile_electricity_s2",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned Electric Vehicles"],
+    "label": "Owned Electric Vehicle Charging",
+    "description": "Electricity used to charge owned or controlled electric vehicles, reported under Scope 2.",
+    "category": "Transportation",
+    "scope": "Scope 2",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "electricity",
+    "metric_group": "grid_energy",
+    "metric_subgroup": "electricity_mix",
+    "is_biogenic_default": false,
+    "default_unit": "kwh",
+    "allowed_units": ["kwh", "mwh"],
+    "method_id": "scope2_energy",
+    "emission_category": "purchased-electricity",
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "charging_energy",
+          "label": "Charging Electricity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "kwh",
+          "allowed_units": ["kwh", "mwh"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter electricity used for EV charging."
+        }
+      ],
+      "notes": [
+        "Workbook source unit appeared inconsistent; canonical model uses electricity units."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
+        "accounting_method": "location_based",
+        "geography_preference": "subregion_to_national_fallback"
+      },
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
+        "accounting_method": "market_based",
+        "geography_preference": "contractual_instrument_to_residual_mix"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard", "scope2-guidance"],
+      "requires_dual_scope2_reporting": true
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope2_purchased_energy"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_cng",
+    "source_id": "mobile_cng_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned CNG"],
+    "label": "Owned Vehicle CNG",
+    "description": "Combustion of compressed natural gas in owned or controlled vehicles.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "cng",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "scf",
+    "allowed_units": ["scf"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "us-cng-scf",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "CNG Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "scf",
+          "allowed_units": ["scf"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter compressed natural gas consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "cng",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-cng-scf",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_lng",
+    "source_id": "mobile_lng_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned LNG"],
+    "label": "Owned Vehicle LNG",
+    "description": "Combustion of liquefied natural gas in owned or controlled vehicles.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "lng",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "us-lng",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "LNG Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter liquefied natural gas consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "lng",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-lng",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope1_mobile_propane",
+    "source_id": "mobile_propane_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Owned Propane"],
+    "label": "Owned Vehicle Propane",
+    "description": "Combustion of propane in owned or controlled vehicles.",
+    "category": "Transportation",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "propane",
+    "metric_group": "fuel",
+    "metric_subgroup": "fossil_fuel",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": "mobile-combustion",
+    "factor_description": "liquid-propane",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Propane Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter propane consumed by owned or controlled vehicles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "combustion",
+        "type": "propane",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "liquid-propane",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_mobile_combustion"
+    }
+  },
+  {
+    "activity_type_id": "scope3_upstream_transport_truck_freight",
+    "source_id": "freight_truck_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Contracted Truck Freight"],
+    "label": "Contracted Truck Freight",
+    "description": "Third-party freight movement by truck, typically reported in Scope 3 category 4.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "4",
+    "protocol_category_label": "Upstream transportation and distribution",
+    "source_type": "medium-heavy-truck",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.4_upstream_transportation",
+    "is_biogenic_default": false,
+    "default_unit": "ton-miles",
+    "allowed_units": ["ton-miles"],
+    "method_id": "freight_ton_mile",
+    "emission_category": "3.4-upstream-transportation-distribution",
+    "factor_description": "upstream-trucking",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "freight_distance",
+          "label": "Freight Activity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "ton-miles",
+          "allowed_units": ["ton-miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter freight movement in ton-miles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "freight-transport",
+        "type": "medium-heavy-truck",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "upstream-trucking",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category4"
+    }
+  },
+  {
+    "activity_type_id": "scope3_upstream_transport_rail_freight",
+    "source_id": "freight_rail_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Contracted Rail Freight"],
+    "label": "Contracted Rail Freight",
+    "description": "Third-party freight movement by rail, typically reported in Scope 3 category 4.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "4",
+    "protocol_category_label": "Upstream transportation and distribution",
+    "source_type": "rail",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.4_upstream_transportation",
+    "is_biogenic_default": false,
+    "default_unit": "ton-miles",
+    "allowed_units": ["ton-miles"],
+    "method_id": "freight_ton_mile",
+    "emission_category": "3.4-upstream-transportation-distribution",
+    "factor_description": "upstream-rail",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "freight_distance",
+          "label": "Freight Activity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "ton-miles",
+          "allowed_units": ["ton-miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter freight movement in ton-miles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "freight-transport",
+        "type": "rail",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "upstream-rail",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category4"
+    }
+  },
+  {
+    "activity_type_id": "scope3_upstream_transport_ocean_freight",
+    "source_id": "freight_ocean_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Contracted Ocean Freight"],
+    "label": "Contracted Ocean Freight",
+    "description": "Third-party freight movement by waterborne craft, typically reported in Scope 3 category 4.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "4",
+    "protocol_category_label": "Upstream transportation and distribution",
+    "source_type": "waterborne-craft",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.4_upstream_transportation",
+    "is_biogenic_default": false,
+    "default_unit": "ton-miles",
+    "allowed_units": ["ton-miles"],
+    "method_id": "freight_ton_mile",
+    "emission_category": "3.4-upstream-transportation-distribution",
+    "factor_description": "upstream-waterborne-craft",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "freight_distance",
+          "label": "Freight Activity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "ton-miles",
+          "allowed_units": ["ton-miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter freight movement in ton-miles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "freight-transport",
+        "type": "waterborne-craft",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "upstream-waterborne-craft",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category4"
+    }
+  },
+  {
+    "activity_type_id": "scope3_upstream_transport_air_freight",
+    "source_id": "freight_air_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Contracted Air Freight"],
+    "label": "Contracted Air Freight",
+    "description": "Third-party freight movement by air, typically reported in Scope 3 category 4.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "4",
+    "protocol_category_label": "Upstream transportation and distribution",
+    "source_type": "aircraft",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.4_upstream_transportation",
+    "is_biogenic_default": false,
+    "default_unit": "ton-miles",
+    "allowed_units": ["ton-miles"],
+    "method_id": "freight_ton_mile",
+    "emission_category": "3.4-upstream-transportation-distribution",
+    "factor_description": "upstream-aircraft",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "freight_distance",
+          "label": "Freight Activity",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "ton-miles",
+          "allowed_units": ["ton-miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter freight movement in ton-miles."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "freight-transport",
+        "type": "aircraft",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "upstream-aircraft",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category4"
+    }
+  },
+  {
+    "activity_type_id": "scope3_upstream_transport_other_freight_fuel",
+    "source_id": "freight_other_fuel_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Other Contracted Freight Fuel"],
+    "label": "Other Contracted Freight Fuel",
+    "description": "Fuel-based upstream freight activity where mode-specific treatment is not yet formally modeled.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "4",
+    "protocol_category_label": "Upstream transportation and distribution",
+    "source_type": "other-freight",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.4_upstream_transportation",
+    "is_biogenic_default": false,
+    "default_unit": "gallon",
+    "allowed_units": ["gallon"],
+    "method_id": "direct_factor",
+    "emission_category": null,
+    "factor_description": null,
+    "implementation_status": "deferred",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "fuel_use",
+          "label": "Fuel Consumption",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "gallon",
+          "allowed_units": ["gallon"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter fuel consumption where mode-specific freight factors are not available."
+        }
+      ],
+      "notes": [
+        "Deferred until a defensible factor and classification strategy is defined."
+      ]
+    },
+    "factor_query_templates": [],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category4"
+    }
+  },
+  {
+    "activity_type_id": "scope3_business_travel_rental_vehicle",
+    "source_id": "travel_rental_vehicle_s3",
+    "legacy_source_ids": ["travel_miles_s3"],
+    "workbook_aliases": ["Rented Vehicles - Gasoline"],
+    "label": "Business Travel - Rental Vehicle",
+    "description": "Business travel by rental vehicle, typically modeled from distance plus fuel efficiency or fuel consumption.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "6",
+    "protocol_category_label": "Business travel",
+    "source_type": "light-duty-vehicle",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.6_business_travel",
+    "is_biogenic_default": false,
+    "default_unit": "mile",
+    "allowed_units": ["mile"],
+    "method_id": "distance_plus_efficiency",
+    "emission_category": "mobile-combustion",
+    "factor_description": "motor-gasoline-default",
+    "implementation_status": "implemented",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "distance",
+          "label": "Vehicle Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "mile",
+          "allowed_units": ["mile"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter total business-travel vehicle miles."
+        },
+        {
+          "field_id": "fuel_efficiency",
+          "label": "Fuel Efficiency (MPG)",
+          "kind": "number",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "mpg",
+          "help_text": "Use actual or defensible default MPG."
+        },
+        {
+          "field_id": "fuel_type",
+          "label": "Fuel Type",
+          "kind": "enum",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": ["gasoline", "diesel"],
+          "param_key": "fuel_type",
+          "help_text": "Defaults to gasoline if not specified."
+        }
+      ],
+      "notes": [
+        "Current implementation supports the miles-plus-MPG pathway but still relies on legacy row behavior in the UI."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "light-duty-vehicle",
+        "attributes": ["mpg"],
+        "description": "fleet-avg-fuel-efficiency",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      },
+      {
+        "domain": "combustion",
+        "type": "gasoline",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "motor-gasoline-default",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category6"
+    }
+  },
+  {
+    "activity_type_id": "scope3_business_travel_employee_owned_vehicle",
+    "source_id": "travel_employee_owned_vehicle_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Employee Owned Vehicles - Gasoline"],
+    "label": "Business Travel - Employee-Owned Vehicle",
+    "description": "Business travel in employee-owned personal vehicles, modeled from distance plus fuel efficiency or fuel consumption.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "6",
+    "protocol_category_label": "Business travel",
+    "source_type": "light-duty-vehicle",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.6_business_travel",
+    "is_biogenic_default": false,
+    "default_unit": "mile",
+    "allowed_units": ["mile"],
+    "method_id": "distance_plus_efficiency",
+    "emission_category": "mobile-combustion",
+    "factor_description": "motor-gasoline-default",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "distance",
+          "label": "Vehicle Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "mile",
+          "allowed_units": ["mile"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter total business-travel miles in employee-owned vehicles."
+        },
+        {
+          "field_id": "fuel_efficiency",
+          "label": "Fuel Efficiency (MPG)",
+          "kind": "number",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "mpg",
+          "help_text": "Use actual or defensible default MPG."
+        },
+        {
+          "field_id": "fuel_type",
+          "label": "Fuel Type",
+          "kind": "enum",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": ["gasoline", "diesel"],
+          "param_key": "fuel_type",
+          "help_text": "Defaults to gasoline if not specified."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "light-duty-vehicle",
+        "attributes": ["mpg"],
+        "description": "fleet-avg-fuel-efficiency",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      },
+      {
+        "domain": "combustion",
+        "type": "gasoline",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "motor-gasoline-default",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category6"
+    }
+  },
+  {
+    "activity_type_id": "scope3_business_travel_air",
+    "source_id": "business_air_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Air Travel"],
+    "label": "Business Travel - Commercial Air",
+    "description": "Business air travel, typically reported in Scope 3 category 6.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "6",
+    "protocol_category_label": "Business travel",
+    "source_type": "commercial-air",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.6_business_travel",
+    "is_biogenic_default": false,
+    "default_unit": "passenger miles",
+    "allowed_units": ["passenger miles"],
+    "method_id": "passenger_distance",
+    "emission_category": "3.6-business-travel",
+    "factor_description": "air-travel-average-with-rf",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "travel_distance",
+          "label": "Passenger Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "passenger miles",
+          "allowed_units": ["passenger miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter passenger miles for business air travel."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "commercial-air",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "air-travel-average-with-rf",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category6"
+    }
+  },
+  {
+    "activity_type_id": "scope3_employee_commuting_bus",
+    "source_id": "commute_bus_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Bus (B5 Diesel)"],
+    "label": "Employee Commuting - Bus",
+    "description": "Employee commuting by bus, typically reported in Scope 3 category 7.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "7",
+    "protocol_category_label": "Employee commuting",
+    "source_type": "bus",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.7_employee_commute",
+    "is_biogenic_default": false,
+    "default_unit": "passenger miles",
+    "allowed_units": ["passenger miles"],
+    "method_id": "passenger_distance",
+    "emission_category": "3.7-employee-commuting",
+    "factor_description": "bus-commute",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "travel_distance",
+          "label": "Passenger Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "passenger miles",
+          "allowed_units": ["passenger miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter passenger miles for employee bus commuting."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "bus",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "bus-commute",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category7"
+    }
+  },
+  {
+    "activity_type_id": "scope3_business_travel_intercity_rail",
+    "source_id": "travel_intercity_rail_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Intercity Rail (e.g., Amtrak)"],
+    "label": "Business Travel - Intercity Rail",
+    "description": "Business travel by intercity rail, typically reported in Scope 3 category 6.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "6",
+    "protocol_category_label": "Business travel",
+    "source_type": "intercity-rail",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.6_business_travel",
+    "is_biogenic_default": false,
+    "default_unit": "passenger miles",
+    "allowed_units": ["passenger miles"],
+    "method_id": "passenger_distance",
+    "emission_category": "3.6-business-travel",
+    "factor_description": "us-average-intercity-rail-travel",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "travel_distance",
+          "label": "Passenger Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "passenger miles",
+          "allowed_units": ["passenger miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter passenger miles for business intercity rail travel."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "intercity-rail",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "us-average-intercity-rail-travel",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category6"
+    }
+  },
+  {
+    "activity_type_id": "scope3_employee_commuting_transit_rail",
+    "source_id": "commute_transit_rail_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Transit Rail (e.g., subway or tram)"],
+    "label": "Employee Commuting - Transit Rail",
+    "description": "Employee commuting by transit rail, typically reported in Scope 3 category 7.",
+    "category": "Transportation",
+    "scope": "Scope 3",
+    "protocol_category_code": "7",
+    "protocol_category_label": "Employee commuting",
+    "source_type": "transit-rail",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.7_employee_commute",
+    "is_biogenic_default": false,
+    "default_unit": "passenger miles",
+    "allowed_units": ["passenger miles"],
+    "method_id": "passenger_distance",
+    "emission_category": "3.7-employee-commuting",
+    "factor_description": "transit-rail-travel",
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "travel_distance",
+          "label": "Passenger Miles",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "passenger miles",
+          "allowed_units": ["passenger miles"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter passenger miles for employee transit rail commuting."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "passenger-transport",
+        "type": "transit-rail",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "transit-rail-travel",
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Transportation",
+      "detail_mode": "quantity_only"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category7"
+    }
+  },
+  {
+    "activity_type_id": "scope1_fugitive_refrigerant_release",
+    "source_id": "fugitive_refrigerant_s1",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Refrigerant 1", "Refrigerant 2", "Refrigerant 3", "Refrigerant 4", "Refrigerant 5"],
+    "label": "Fugitive Refrigerant Release",
+    "description": "Release of refrigerant mass under Scope 1, converted to CO2e using refrigerant-specific GWP values.",
+    "category": "Fugitive Emissions",
+    "scope": "Scope 1",
+    "protocol_category_code": null,
+    "protocol_category_label": null,
+    "source_type": "refrigerant",
+    "metric_group": "other_ghg",
+    "metric_subgroup": null,
+    "is_biogenic_default": false,
+    "default_unit": "pounds",
+    "allowed_units": ["pounds", "kg"],
+    "method_id": "refrigerant_mass_to_gwp",
+    "emission_category": "fugitive-emission",
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "mass_released",
+          "label": "Mass Released",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "pounds",
+          "allowed_units": ["pounds", "kg"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter mass of refrigerant released."
+        },
+        {
+          "field_id": "refrigerant_type",
+          "label": "Refrigerant Type",
+          "kind": "string",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "refrigerant_type",
+          "help_text": "Enter a canonical refrigerant identifier such as HFC-134a."
+        }
+      ],
+      "notes": [
+        "A generic repeatable activity type is preferable to fixed numbered refrigerant rows."
+      ]
+    },
+    "factor_query_templates": [
+      {
+        "domain": "refrigerant-release",
+        "type": null,
+        "attributes": ["gwp-100-ar6"],
+        "description": null,
+        "life_cycle_stage": null,
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["corporate-standard"],
+      "requires_gwp_set": true
+    },
+    "ui_metadata": {
+      "group": "Fugitive Emissions",
+      "detail_mode": "quantity_plus_details",
+      "repeatable": true
+    },
+    "audit_metadata": {
+      "audit_group": "scope1_fugitive"
+    }
+  },
+  {
+    "activity_type_id": "scope3_waste_generated_in_operations",
+    "source_id": "waste_operations_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": ["Solid Waste"],
+    "label": "Waste Generated in Operations",
+    "description": "Waste generated in operations, reported in Scope 3 category 5 with disposal-path-specific treatment.",
+    "category": "Solid Waste",
+    "scope": "Scope 3",
+    "protocol_category_code": "5",
+    "protocol_category_label": "Waste generated in operations",
+    "source_type": "waste",
+    "metric_group": "downstream",
+    "metric_subgroup": "3.5_waste_from_operations",
+    "is_biogenic_default": false,
+    "default_unit": "tons",
+    "allowed_units": ["tons"],
+    "method_id": "waste_mass",
+    "emission_category": "3.5-waste-operations",
+    "factor_description": null,
+    "implementation_status": "planned",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "waste_mass",
+          "label": "Waste Mass",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "tons",
+          "allowed_units": ["tons"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Enter waste generated in operations."
+        },
+        {
+          "field_id": "disposal_method",
+          "label": "Disposal Method",
+          "kind": "enum",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": ["landfill_no_recovery", "landfill_flaring", "landfill_electricity_recovery", "incineration"],
+          "param_key": "disposal_method",
+          "help_text": "Choose the treatment path because waste emissions vary materially by disposal method."
+        }
+      ],
+      "notes": []
+    },
+    "factor_query_templates": [
+      {
+        "domain": "waste-decomposition",
+        "type": "landfill",
+        "attributes": ["ch4-ef"],
+        "description": "landfill-no-ch4-recovery",
+        "life_cycle_stage": "downstream",
+        "accounting_method": null,
+        "geography_preference": null
+      },
+      {
+        "domain": "waste-decomposition",
+        "type": "incineration",
+        "attributes": ["co2e-ef"],
+        "description": "incineration",
+        "life_cycle_stage": "downstream",
+        "accounting_method": null,
+        "geography_preference": null
+      }
+    ],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"]
+    },
+    "ui_metadata": {
+      "group": "Solid Waste",
+      "detail_mode": "quantity_plus_details"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category5"
+    }
+  }
+]

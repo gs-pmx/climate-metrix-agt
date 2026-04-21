@@ -24,6 +24,9 @@ class MilesToFuelEQM(EQMPlugin):
     def applicability(self, activity: ActivityRecord, routing: RoutingRow) -> bool:
         return routing.metric_group in {"distance", "travel"} or activity.activity.unit.lower() in {"mile", "miles"}
 
+#TODO: Add in support for a wider range of vehicle fuel types, including electric (miles to kWh) and other fuels (e.g. CNG, propane). 
+# This may require changes to the output of this EQM and the expected input of the downstream EQMs, as well as changes to the factors and how they are categorized.
+
     def compute(
         self,
         activity: ActivityRecord,

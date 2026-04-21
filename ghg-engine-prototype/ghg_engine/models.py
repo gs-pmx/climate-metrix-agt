@@ -29,6 +29,7 @@ class InventoryPeriod(BaseModel):
 
 class ActivityRecord(BaseModel):
     facility_id: str
+    activity_type_id: str | None = None
     source_id: str | None = None
     source_type: str
     scope: Scope
@@ -72,7 +73,9 @@ class CalculationContext(BaseModel):
 
 
 class RoutingRow(BaseModel):
+    activity_type_id: str | None = None
     source_id: str
+    legacy_source_ids: list[str] = Field(default_factory=list)
     label: str
     source_type: str
     scope: Scope
@@ -80,9 +83,11 @@ class RoutingRow(BaseModel):
     metric_subgroup: str | None = None
     is_biogenic: bool = False
     default_unit: str
+    allowed_units: list[str] = Field(default_factory=list)
     method_id: str
     emission_category: str
     factor_description: str | None = None
+    implementation_status: str | None = None
 
 
 class GeoContext(BaseModel):

@@ -24,7 +24,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
-import { UNIT_OPTIONS_BY_SOURCE_TYPE, EMPTY_ACTIVITY, uid } from "./constants";
+import { EMPTY_ACTIVITY, uid, unitOptionsForSource } from "./constants";
 import { parseTSV } from "./usePasteHandler";
 
 /* ------------------------------------------------------------------ */
@@ -105,7 +105,7 @@ function RowByRowView({
         </Button>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Miles input for gasoline/diesel will prompt for MPG when needed.
+        Multi-input travel rows collect MPG only when the selected EQM requires it.
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
         Loaded sources from routing table: {routing.length}
@@ -129,7 +129,7 @@ function RowByRowView({
           <TableBody>
             {activities.map((row) => {
               const src = routingById[row.source_id];
-              const unitOptions = src ? UNIT_OPTIONS_BY_SOURCE_TYPE[src.source_type] || [src.default_unit] : [];
+              const unitOptions = unitOptionsForSource(src);
               return (
                 <TableRow key={row.id}>
                   <TableCell sx={{ minWidth: 210 }}>
@@ -204,24 +204,24 @@ function RowByRowView({
 
 function hydrateFromSource(src) {
   return {
+    activity_type_id: src.activity_type_id || "",
+    source_id: src.source_id || "",
     source_label: src.label || src.source_type,
     source_type: src.source_type,
     scope: src.scope,
     metric_group: src.metric_group,
     metric_subgroup: src.metric_subgroup || "",
+    method_id: src.method_id || "",
   };
 }
 
 function defaultUnitForSource(src) {
-  const units = UNIT_OPTIONS_BY_SOURCE_TYPE[src.source_type] || [src.default_unit];
+  const units = unitOptionsForSource(src);
   return units[0] || src.default_unit || "";
 }
 
-function isFuelWithMiles(sourceType, unit) {
-  return (
-    (sourceType === "gasoline" || sourceType === "diesel") &&
-    String(unit).toLowerCase().startsWith("mile")
-  );
+function sourceNeedsMpg(source, unit) {
+  return source?.method_id === "miles_to_fuel" && String(unit).toLowerCase().startsWith("mile");
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,7 +246,7 @@ function BySourceView({ activities, setActivities, facilities, routing, show }) 
           activity_value: value,
           activity_unit: unit || defaultUnitForSource(source),
         };
-        if (mpg && isFuelWithMiles(source.source_type, base.activity_unit)) {
+        if (mpg && sourceNeedsMpg(source, base.activity_unit)) {
           base.params = { mpg: Number(mpg), fuel_type: source.source_type };
         }
         if (idx >= 0) {
@@ -275,9 +275,9 @@ function BySourceView({ activities, setActivities, facilities, routing, show }) 
 }
 
 function SourceAccordion({ source, activities, facilities, upsertActivity, show }) {
-  const unitOptions = UNIT_OPTIONS_BY_SOURCE_TYPE[source.source_type] || [source.default_unit];
+  const unitOptions = unitOptionsForSource(source);
   const [sectionUnit, setSectionUnit] = React.useState(unitOptions[0] || source.default_unit || "");
-  const showMpg = isFuelWithMiles(source.source_type, sectionUnit);
+  const showMpg = sourceNeedsMpg(source, sectionUnit);
 
   const gridRows = React.useMemo(() => {
     return facilities.map((fac) => {
@@ -432,7 +432,7 @@ function ByFacilityView({ activities, setActivities, facilities, routing, show }
           activity_value: value,
           activity_unit: unit || defaultUnitForSource(source),
         };
-        if (mpg && isFuelWithMiles(source.source_type, base.activity_unit)) {
+        if (mpg && sourceNeedsMpg(source, base.activity_unit)) {
           base.params = { mpg: Number(mpg), fuel_type: source.source_type };
         }
         if (idx >= 0) {
@@ -466,13 +466,14 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
       const existing = activities.find(
         (a) => a.facility_id === facility.id && a.source_id === source.source_id,
       );
-      const unitOptions = UNIT_OPTIONS_BY_SOURCE_TYPE[source.source_type] || [source.default_unit];
+      const unitOptions = unitOptionsForSource(source);
       return {
         id: `${facility.id}__${source.source_id}`,
         source_id: source.source_id,
         source_label: source.label,
         scope: source.scope,
         source_type: source.source_type,
+        method_id: source.method_id || "",
         activity_value: existing?.activity_value ?? "",
         activity_unit: existing?.activity_unit || unitOptions[0] || source.default_unit || "",
         mpg: existing?.params?.mpg ?? "",
@@ -502,6 +503,7 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
         flex: 0.4,
         editable: true,
         type: "number",
+        valueGetter: (_, row) => (row?.method_id === "miles_to_fuel" ? row.mpg : ""),
       },
     ],
     [],
@@ -574,6 +576,7 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
             processRowUpdate={processRowUpdate}
             onProcessRowUpdateError={() => {}}
             onCellKeyDown={handleCellKeyDown}
+            isCellEditable={(params) => params.field !== "mpg" || params.row.method_id === "miles_to_fuel"}
             disableRowSelectionOnClick
             autoHeight
             hideFooter
@@ -617,22 +620,23 @@ export default function ActivityInputsPanel({
   const hydrateActivityFromSource = (row) => {
     const src = routingById[row.source_id];
     if (!src) return row;
-    const units = UNIT_OPTIONS_BY_SOURCE_TYPE[src.source_type] || [src.default_unit];
+    const units = unitOptionsForSource(src);
     return {
       ...row,
+      activity_type_id: src.activity_type_id || row.activity_type_id || "",
+      source_id: src.source_id || row.source_id || "",
       source_label: src.label || src.source_type,
       source_type: src.source_type,
       scope: src.scope,
       metric_group: src.metric_group,
       metric_subgroup: src.metric_subgroup || "",
+      method_id: src.method_id || row.method_id || "",
       activity_unit: units.includes(row.activity_unit) ? row.activity_unit : units[0] || row.activity_unit,
     };
   };
 
   const maybeCollectEqmParams = (row) => {
-    const isMiles = String(row.activity_unit).toLowerCase().startsWith("mile");
-    const isFuelVehicle = row.source_type === "gasoline" || row.source_type === "diesel";
-    if (!isMiles || !isFuelVehicle) return row;
+    if (row.method_id !== "miles_to_fuel") return row;
     const existingMpg = row.params?.mpg;
     if (existingMpg && Number(existingMpg) > 0) return row;
     const mpgInput = window.prompt(
