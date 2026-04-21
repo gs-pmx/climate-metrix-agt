@@ -22,7 +22,7 @@
   "expected": [
     {
       "facility_id": "F1",
-      "source_id": "travel_miles_s3",
+      "source_id": "travel_rental_vehicle_s3",
       "scope": "Scope 3",
       "accounting_method": "none",
       "gas": "co2",

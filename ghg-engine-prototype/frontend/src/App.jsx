@@ -530,11 +530,41 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     [projects, activeProjectId],
   );
 
-  const routingById = React.useMemo(() => Object.fromEntries(routing.map((r) => [r.source_id, r])), [routing]);
-  const sourceLabelById = React.useMemo(
-    () => Object.fromEntries(routing.map((r) => [r.source_id, r.label || r.source_type || r.source_id])),
-    [routing],
-  );
+  const routingById = React.useMemo(() => {
+    const legacyCounts = {};
+    for (const row of routing) {
+      for (const legacySourceId of row.legacy_source_ids || []) {
+        legacyCounts[legacySourceId] = (legacyCounts[legacySourceId] || 0) + 1;
+      }
+    }
+    const pairs = [];
+    for (const row of routing) {
+      pairs.push([row.source_id, row]);
+      for (const legacySourceId of row.legacy_source_ids || []) {
+        if (legacyCounts[legacySourceId] !== 1) continue;
+        pairs.push([legacySourceId, row]);
+      }
+    }
+    return Object.fromEntries(pairs);
+  }, [routing]);
+  const sourceLabelById = React.useMemo(() => {
+    const legacyCounts = {};
+    for (const row of routing) {
+      for (const legacySourceId of row.legacy_source_ids || []) {
+        legacyCounts[legacySourceId] = (legacyCounts[legacySourceId] || 0) + 1;
+      }
+    }
+    const pairs = [];
+    for (const row of routing) {
+      const label = row.label || row.source_type || row.source_id;
+      pairs.push([row.source_id, label]);
+      for (const legacySourceId of row.legacy_source_ids || []) {
+        if (legacyCounts[legacySourceId] !== 1) continue;
+        pairs.push([legacySourceId, label]);
+      }
+    }
+    return Object.fromEntries(pairs);
+  }, [routing]);
   const facilityNameById = React.useMemo(
     () => Object.fromEntries(facilities.map((f) => [f.id, f.facility_name || f.id])),
     [facilities],
@@ -546,6 +576,32 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const facilityOptions = React.useMemo(
     () => facilities.map((f) => ({ value: f.id, label: f.facility_name || f.id })),
     [facilities],
+  );
+  const normalizeActivityAgainstRouting = React.useCallback(
+    (row) => {
+      if (!row?.source_id) return row;
+      const source = routingById[row.source_id];
+      if (!source) return row;
+      const allowedUnits = Array.isArray(source.allowed_units) && source.allowed_units.length
+        ? source.allowed_units
+        : [source.default_unit].filter(Boolean);
+      const nextUnit = allowedUnits.includes(row.activity_unit)
+        ? row.activity_unit
+        : (row.activity_unit || allowedUnits[0] || source.default_unit || "");
+      return {
+        ...row,
+        activity_type_id: source.activity_type_id || row.activity_type_id || "",
+        source_id: source.source_id || row.source_id,
+        source_label: source.label || row.source_label || source.source_type || row.source_id,
+        source_type: source.source_type || row.source_type,
+        scope: source.scope || row.scope,
+        metric_group: source.metric_group || row.metric_group,
+        metric_subgroup: source.metric_subgroup || row.metric_subgroup || "",
+        method_id: source.method_id || row.method_id || "",
+        activity_unit: nextUnit,
+      };
+    },
+    [routingById],
   );
   const co2eRows = React.useMemo(
     () =>
@@ -807,6 +863,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   }, [show]);
 
   React.useEffect(() => {
+    if (!routing.length) return;
+    setActivities((prev) => prev.map((row) => normalizeActivityAgainstRouting(row)));
+  }, [routing.length, normalizeActivityAgainstRouting]);
+
+  React.useEffect(() => {
     let mounted = true;
     const loadProjectsAndSelect = async () => {
       try {
@@ -1005,21 +1066,27 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
               egrid_subregion: fac?.egrid_subregion || undefined,
             },
           },
-          activities: facilityRows.map((r) => ({
-            ...(() => {
-              const normalized = normalizeActivityForSubmit(r);
-              return {
-                activity: normalized.activity,
-                params: normalized.params,
-              };
-            })(),
-            facility_id: r.facility_id,
-            source_id: r.source_id,
-            source_type: r.source_type,
-            scope: r.scope,
-            metric_group: r.metric_group,
-            metric_subgroup: r.metric_subgroup || null,
-          })),
+          activities: facilityRows.map((r) => {
+            const sourceMeta = routingById[r.source_id] || {};
+            const preparedRow = {
+              ...sourceMeta,
+              ...r,
+              activity_type_id: r.activity_type_id || sourceMeta.activity_type_id || "",
+              method_id: r.method_id || sourceMeta.method_id || "",
+            };
+            const normalized = normalizeActivityForSubmit(preparedRow);
+            return {
+              activity_type_id: preparedRow.activity_type_id || null,
+              activity: normalized.activity,
+              params: normalized.params,
+              facility_id: preparedRow.facility_id,
+              source_id: preparedRow.source_id,
+              source_type: preparedRow.source_type,
+              scope: preparedRow.scope,
+              metric_group: preparedRow.metric_group,
+              metric_subgroup: preparedRow.metric_subgroup || null,
+            };
+          }),
         };
         const response = await api.calculateAudit(payload);
         for (const rr of response.results || []) mergedResults.push(rr);

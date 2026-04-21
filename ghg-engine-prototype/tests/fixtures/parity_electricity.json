@@ -24,7 +24,7 @@
   "expected": [
     {
       "facility_id": "F1",
-      "source_id": "electricity_s2",
+      "source_id": "electricity_grid_mix_s2",
       "scope": "Scope 2",
       "accounting_method": "location_based",
       "gas": "co2",
@@ -33,7 +33,7 @@
     },
     {
       "facility_id": "F1",
-      "source_id": "electricity_s2",
+      "source_id": "electricity_grid_mix_s2",
       "scope": "Scope 2",
       "accounting_method": "market_based",
       "gas": "co2",

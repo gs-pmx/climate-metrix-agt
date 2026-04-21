@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+from ghg_engine.activity_catalog import ActivityCatalog
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
 from ghg_engine.models import ActivityRecord, CalculationContext
@@ -9,7 +10,9 @@ from ghg_engine.time_utils import aggregate_results
 
 
 def _engine() -> GHGEngine:
-    routing = RoutingCatalog.from_csv("data/routing.csv")
+    legacy_routing = RoutingCatalog.from_csv("data/routing.csv")
+    activity_catalog = ActivityCatalog.from_json("data/activity_types.json")
+    routing = RoutingCatalog.from_activity_catalog(activity_catalog, legacy_catalog=legacy_routing)
     factors = FactorRepository.from_csv("data/factors.csv")
     return GHGEngine(routing, factors)
 

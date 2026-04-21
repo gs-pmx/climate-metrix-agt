@@ -4,6 +4,7 @@ import logging
 from functools import lru_cache
 
 from config import Settings, get_settings
+from ghg_engine.activity_catalog import ActivityCatalog
 from ghg_engine.document_factors import DocumentFactorRepository
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
@@ -14,10 +15,14 @@ log = logging.getLogger(__name__)
 
 
 @lru_cache(maxsize=1)
-def _build(settings: Settings | None = None) -> tuple[RoutingCatalog, FactorRepository | DocumentFactorRepository, GHGEngine, ProjectStore]:
+def _build(
+    settings: Settings | None = None,
+) -> tuple[RoutingCatalog, FactorRepository | DocumentFactorRepository, GHGEngine, ProjectStore, ActivityCatalog]:
     if settings is None:
         settings = get_settings()
-    routing = RoutingCatalog.from_csv(str(settings.data_dir / "routing.csv"))
+    legacy_routing = RoutingCatalog.from_csv(str(settings.data_dir / "routing.csv"))
+    activity_catalog = ActivityCatalog.from_json(settings.data_dir / "activity_types.json")
+    routing = RoutingCatalog.from_activity_catalog(activity_catalog, legacy_catalog=legacy_routing)
     store = ProjectStore(settings.db_path)
 
     if settings.factor_backend == "document":
@@ -34,7 +39,7 @@ def _build(settings: Settings | None = None) -> tuple[RoutingCatalog, FactorRepo
         log.info("Using CSV-based factor repository.")
 
     engine = GHGEngine(routing, factors)
-    return routing, factors, engine, store
+    return routing, factors, engine, store, activity_catalog
 
 
 def get_routing() -> RoutingCatalog:
@@ -51,3 +56,7 @@ def get_engine() -> GHGEngine:
 
 def get_project_store() -> ProjectStore:
     return _build()[3]
+
+
+def get_activity_catalog() -> ActivityCatalog:
+    return _build()[4]

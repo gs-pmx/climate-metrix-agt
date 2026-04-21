@@ -4,6 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from ghg_engine.activity_catalog import ActivityInputSchema, ActivityTypeDefinition, ImplementationStatus
 from ghg_engine.models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 
 
@@ -61,6 +62,24 @@ class CalculationAuditRow(BaseModel):
 
 class CalculationAuditResponse(CalculationResponse):
     audit_rows: list[CalculationAuditRow]
+
+
+class ActivityTypeResponse(ActivityTypeDefinition):
+    pass
+
+
+class ActivitySchemaResponse(BaseModel):
+    activity_type_id: str
+    source_id: str
+    label: str
+    scope: str
+    protocol_category_code: str | None = None
+    protocol_category_label: str | None = None
+    implementation_status: ImplementationStatus
+    method_id: str
+    input_schema: ActivityInputSchema
+    accounting_metadata: dict[str, Any]
+    ui_metadata: dict[str, Any]
 
 
 class ProjectCreateRequest(BaseModel):
