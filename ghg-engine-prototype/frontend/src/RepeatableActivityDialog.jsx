@@ -19,24 +19,34 @@ import {
 } from "@mui/material";
 import {
   EMPTY_ACTIVITY,
+  getActivitySupportNotice,
   getAllowedUnits,
   getCompletionState,
   getDetailFields,
+  getFieldUnits,
+  hasMeaningfulParamValue,
   getPrimaryField,
-  getPartialReason,
   uid,
   withActivityTypeDefaults,
 } from "./activityDrafts";
 
 function hasMeaningfulData(draft) {
   if (draft?.activity?.value !== "" && draft?.activity?.value != null) return true;
-  return Object.values(draft?.params || {}).some((value) => value !== "" && value != null);
+  return Object.values(draft?.params || {}).some((value) => hasMeaningfulParamValue(value));
 }
 
 function normalizeFieldValue(field, rawValue) {
   if (field.kind === "number") return rawValue;
   if (field.kind === "boolean") return Boolean(rawValue);
   return rawValue;
+}
+
+function normalizeQuantityParam(field, rawValue) {
+  const unitOptions = getFieldUnits(field);
+  return {
+    value: rawValue?.value ?? "",
+    unit: rawValue?.unit || unitOptions[0] || "",
+  };
 }
 
 export default function RepeatableActivityDialog({
@@ -75,7 +85,7 @@ export default function RepeatableActivityDialog({
   const unitOptions = getAllowedUnits(activityType);
   const detailFields = getDetailFields(activityType);
   const primaryField = getPrimaryField(activityType);
-  const partialReason = getPartialReason(activityType);
+  const supportNotice = getActivitySupportNotice(activityType);
 
   const updateDraft = (draftId, updater) => {
     setLocalDrafts((prev) => prev.map((draft) => (draft.id === draftId ? updater(draft) : draft)));
@@ -123,9 +133,9 @@ export default function RepeatableActivityDialog({
           <Typography variant="body2" color="text.secondary">
             {activityType.description}
           </Typography>
-          {activityType.implementation_status === "partial" ? (
-            <Alert severity="warning">
-              {partialReason || "This activity is usable, but catalog metadata marks it as partial support."}
+          {supportNotice ? (
+            <Alert severity={supportNotice.severity}>
+              {supportNotice.message}
             </Alert>
           ) : null}
           {(activityType.input_schema?.notes || []).map((note) => (
@@ -178,6 +188,59 @@ export default function RepeatableActivityDialog({
                   {detailFields.map((field) => {
                     const key = field.param_key || field.field_id;
                     const value = draft.params?.[key] ?? "";
+                    if (field.kind === "quantity") {
+                      const quantityValue = normalizeQuantityParam(field, value);
+                      const unitOptions = getFieldUnits(field);
+                      return (
+                        <Box key={key}>
+                          <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                            {field.label}
+                          </Typography>
+                          <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
+                            <TextField
+                              type="number"
+                              value={quantityValue.value}
+                              onChange={(event) => updateDraft(draft.id, (current) => ({
+                                ...current,
+                                params: {
+                                  ...current.params,
+                                  [key]: normalizeFieldValue(field, {
+                                    ...quantityValue,
+                                    value: event.target.value,
+                                  }),
+                                },
+                              }))}
+                              fullWidth
+                            />
+                            <Select
+                              value={quantityValue.unit}
+                              onChange={(event) => updateDraft(draft.id, (current) => ({
+                                ...current,
+                                params: {
+                                  ...current.params,
+                                  [key]: normalizeFieldValue(field, {
+                                    ...quantityValue,
+                                    unit: event.target.value,
+                                  }),
+                                },
+                              }))}
+                              sx={{ minWidth: 180 }}
+                            >
+                              {unitOptions.map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </Select>
+                          </Stack>
+                          {field.help_text ? (
+                            <Typography variant="caption" color="text.secondary">
+                              {field.help_text}
+                            </Typography>
+                          ) : null}
+                        </Box>
+                      );
+                    }
                     if (field.kind === "enum") {
                       return (
                         <Box key={key}>

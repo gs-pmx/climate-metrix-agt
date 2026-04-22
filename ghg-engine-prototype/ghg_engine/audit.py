@@ -10,12 +10,24 @@ from .models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
 
 def _eqm_description(method_id: str) -> str:
     descriptions = {
-        "direct_factor": "Applies factor templates from the activity catalog to the reported quantity and computes gas rows and CO2e.",
-        "scope2_energy": "Runs the Scope 2 factor templates and preserves location-based and market-based reporting where required.",
-        "distance_plus_efficiency": "Converts reported distance and fuel efficiency into an intermediate fuel quantity, then applies combustion factors.",
+        "direct_factor": (
+            "Applies factor templates from the activity catalog to the reported quantity "
+            "and computes gas rows and CO2e."
+        ),
+        "scope2_energy": (
+            "Runs the Scope 2 factor templates and preserves location-based and "
+            "market-based reporting where required."
+        ),
+        "distance_plus_efficiency": (
+            "Converts reported distance and fuel efficiency into an intermediate fuel "
+            "quantity, then applies combustion factors."
+        ),
         "freight_ton_mile": "Applies freight transport factors to reported ton-mile activity.",
         "passenger_distance": "Applies passenger travel factors to reported passenger-mile activity.",
-        "refrigerant_mass_to_gwp": "Converts released refrigerant mass to CO2e using refrigerant-specific AR6 GWP values.",
+        "refrigerant_mass_to_gwp": (
+            "Converts released refrigerant mass to CO2e using refrigerant-specific AR6 "
+            "GWP values."
+        ),
         "waste_mass": "Applies disposal-path-specific waste factors to reported waste mass.",
     }
     return descriptions.get(method_id, "No method description available.")

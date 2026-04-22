@@ -4,7 +4,7 @@ import sqlite3
 from pathlib import Path
 
 from ghg_engine.activity_catalog import ActivityCatalog
-from ghg_engine.models import ActivityDraft, ProjectSnapshot
+from ghg_engine.models import ActivityDraft, ProjectSnapshot, ResultRecord, TraceRecord
 from project_store import ProjectStore
 
 
@@ -12,7 +12,7 @@ def _catalog() -> ActivityCatalog:
     return ActivityCatalog.from_json(Path(__file__).resolve().parents[1] / "data" / "activity_types.json")
 
 
-def test_project_store_saves_and_loads_typed_snapshot(tmp_path: Path):
+def test_project_store_saves_and_loads_workspace_snapshot_and_inventory_version(tmp_path: Path):
     store = ProjectStore(tmp_path / "projects.sqlite")
     catalog = _catalog()
     project = store.create_project(project_id="prj_test", name="Test Project", inventory_year=2024)
@@ -42,17 +42,51 @@ def test_project_store_saves_and_loads_typed_snapshot(tmp_path: Path):
     loaded = store.get_version_snapshot(project["project_id"], version_number=saved["version_number"])
     assert loaded["snapshot"].snapshot_version == 2
     assert loaded["snapshot"].activities[0].activity_type_id == "scope1_mobile_gasoline"
-    with store._connect() as conn:  # noqa: SLF001 - explicit verification of fact schema
-        entity = conn.execute(
-            "SELECT activity_type_id, activity_label FROM dim_entity WHERE project_id = ?",
-            (project["project_id"],),
+    with store._connect() as conn:  # noqa: SLF001 - explicit verification of canonical inventory tables
+        inventory = conn.execute(
+            """
+            SELECT inventory_version_id
+            FROM inventory_versions
+            WHERE workspace_version_id = ?
+            """,
+            (saved["version_id"],),
         ).fetchone()
-    assert entity is not None
-    assert entity["activity_type_id"] == "scope1_mobile_gasoline"
-    assert entity["activity_label"] == "Owned Vehicle Gasoline"
+        locus = conn.execute(
+            """
+            SELECT locus_id, facility_name
+            FROM inventory_loci
+            WHERE inventory_version_id = ?
+            """,
+            (inventory["inventory_version_id"],),
+        ).fetchone()
+        activity = conn.execute(
+            """
+            SELECT activity_type_id, quantity_value, quantity_unit
+            FROM inventory_activities
+            WHERE inventory_version_id = ?
+            """,
+            (inventory["inventory_version_id"],),
+        ).fetchone()
+        run_count = conn.execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM calculation_runs
+            WHERE inventory_version_id = ?
+            """,
+            (inventory["inventory_version_id"],),
+        ).fetchone()["c"]
+    assert inventory is not None
+    assert locus is not None
+    assert locus["locus_id"] == "F1"
+    assert locus["facility_name"] == "Facility 1"
+    assert activity is not None
+    assert activity["activity_type_id"] == "scope1_mobile_gasoline"
+    assert activity["quantity_value"] == 10.0
+    assert activity["quantity_unit"] == "gallon"
+    assert run_count == 0
 
 
-def test_project_store_preserves_incomplete_drafts_without_materializing_facts(tmp_path: Path):
+def test_project_store_preserves_incomplete_drafts_without_materializing_inventory_activities(tmp_path: Path):
     store = ProjectStore(tmp_path / "projects.sqlite")
     catalog = _catalog()
     project = store.create_project(project_id="prj_incomplete", name="Incomplete Drafts", inventory_year=2024)
@@ -82,15 +116,107 @@ def test_project_store_preserves_incomplete_drafts_without_materializing_facts(t
 
     loaded = store.get_version_snapshot(project["project_id"], version_number=saved["version_number"])
     assert loaded["snapshot"].activities[0].activity.value is None
-    with store._connect() as conn:  # noqa: SLF001 - verifying incomplete drafts are not materialized
-        fact_count = conn.execute(
-            "SELECT COUNT(*) AS c FROM fact_actuals WHERE version_id = ?",
+    with store._connect() as conn:  # noqa: SLF001 - verifying incomplete drafts are not canonicalized as observations
+        inventory = conn.execute(
+            "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
             (saved["version_id"],),
+        ).fetchone()
+        locus_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM inventory_loci WHERE inventory_version_id = ?",
+            (inventory["inventory_version_id"],),
         ).fetchone()["c"]
-    assert fact_count == 0
+        activity_count = conn.execute(
+            "SELECT COUNT(*) AS c FROM inventory_activities WHERE inventory_version_id = ?",
+            (inventory["inventory_version_id"],),
+        ).fetchone()["c"]
+    assert locus_count == 1
+    assert activity_count == 0
 
 
-def test_schema_reset_migration_rebuilds_typed_tables(tmp_path: Path):
+def test_project_store_persists_calculation_runs_separately_from_workspace_snapshot(tmp_path: Path):
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    catalog = _catalog()
+    project = store.create_project(project_id="prj_calc", name="Calculated", inventory_year=2024)
+    snapshot = ProjectSnapshot(
+        facilities=[{"id": "F1", "facility_name": "Facility 1"}],
+        activities=[
+            ActivityDraft(
+                id="a1",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+                params={},
+            )
+        ],
+        result_rows=[
+            ResultRecord(
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity_label="Owned Vehicle Gasoline",
+                scope="Scope 1",
+                protocol_category_code=None,
+                protocol_category_label=None,
+                activity_group="Mobile Combustion",
+                source_type="gasoline",
+                accounting_method="none",
+                gas="co2e",
+                value=88.0,
+                unit="kg",
+                is_biogenic=False,
+                method_id="direct_factor",
+                factor_ids=["factor_1"],
+            )
+        ],
+        trace_rows=[
+            TraceRecord(
+                activity_type_id="scope1_mobile_gasoline",
+                activity_label="Owned Vehicle Gasoline",
+                selected_method="direct_factor",
+                factor_matches=["factor_1"],
+            )
+        ],
+    )
+
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+        activity_catalog=catalog,
+        note="calculated snapshot",
+    )
+
+    with store._connect() as conn:  # noqa: SLF001 - verifying calculation runs are separated from workspace storage
+        inventory = conn.execute(
+            "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
+            (saved["version_id"],),
+        ).fetchone()
+        run = conn.execute(
+            """
+            SELECT run_id, engine_version
+            FROM calculation_runs
+            WHERE inventory_version_id = ?
+            """,
+            (inventory["inventory_version_id"],),
+        ).fetchone()
+        result = conn.execute(
+            """
+            SELECT gas, value, method_id
+            FROM calculation_results
+            WHERE run_id = ?
+            """,
+            (run["run_id"],),
+        ).fetchone()
+    assert run is not None
+    assert run["engine_version"] == "workspace_snapshot"
+    assert result is not None
+    assert result["gas"] == "co2e"
+    assert result["value"] == 88.0
+    assert result["method_id"] == "direct_factor"
+
+
+def test_schema_reset_migration_rebuilds_split_storage_tables(tmp_path: Path):
     db_path = tmp_path / "legacy.sqlite"
     with sqlite3.connect(db_path) as conn:
         conn.executescript(
@@ -124,7 +250,9 @@ def test_schema_reset_migration_rebuilds_typed_tables(tmp_path: Path):
                 note TEXT,
                 snapshot_json TEXT NOT NULL
             );
-            INSERT INTO project_versions (project_id, version_number, created_at, inventory_year, gwp_set, include_trace, snapshot_json)
+            INSERT INTO project_versions (
+                project_id, version_number, created_at, inventory_year, gwp_set, include_trace, snapshot_json
+            )
             VALUES ('prj_old', 1, '2026-01-01T00:00:00Z', 2024, 'AR6', 1, '{}');
 
             CREATE TABLE dim_date (
@@ -168,11 +296,6 @@ def test_schema_reset_migration_rebuilds_typed_tables(tmp_path: Path):
                 is_emission INTEGER NOT NULL,
                 row_json TEXT NOT NULL
             );
-            INSERT INTO dim_date (calendar_date, year, month, day) VALUES ('2026-01-01', 2026, 1, 1);
-            INSERT INTO dim_entity (project_id, facility_id, source_id) VALUES ('prj_old', 'F1', 'fuel_gasoline_s1');
-            INSERT INTO dim_measure (measure_type, unit, scope) VALUES ('activity', 'gallon', 'Scope 1');
-            INSERT INTO fact_actuals (version_id, date_id, entity_id, measure_id, value, is_emission, row_json)
-            VALUES (1, 1, 1, 1, 10.0, 0, '{}');
 
             CREATE TABLE factors (
                 factor_key TEXT PRIMARY KEY,
@@ -192,19 +315,25 @@ def test_schema_reset_migration_rebuilds_typed_tables(tmp_path: Path):
 
     store = ProjectStore(db_path)
     info = store.schema_info()
-    assert info["current_version"] >= 5
+    assert info["current_version"] >= 6
     with store._connect() as conn:  # noqa: SLF001 - verifying migration output tables
+        tables = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+        }
         factor_count = conn.execute("SELECT COUNT(*) AS c FROM factors").fetchone()["c"]
         version_count = conn.execute("SELECT COUNT(*) AS c FROM project_versions").fetchone()["c"]
-        fact_count = conn.execute("SELECT COUNT(*) AS c FROM fact_actuals").fetchone()["c"]
-        columns = {
-            row["name"] for row in conn.execute("PRAGMA table_info(dim_entity)").fetchall()
-        }
-        measure_columns = {
-            row["name"] for row in conn.execute("PRAGMA table_info(dim_measure)").fetchall()
-        }
     assert factor_count == 1
     assert version_count == 0
-    assert fact_count == 0
-    assert {"activity_type_id", "activity_label"}.issubset(columns)
-    assert "is_biogenic" in measure_columns
+    assert "fact_actuals" not in tables
+    assert {
+        "inventory_versions",
+        "inventory_loci",
+        "inventory_activities",
+        "calculation_runs",
+        "calculation_results",
+        "factor_datasets",
+        "factor_lineages",
+        "factor_versions",
+        "factor_source_docs",
+    }.issubset(tables)

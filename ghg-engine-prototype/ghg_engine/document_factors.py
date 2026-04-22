@@ -146,7 +146,17 @@ class DocumentFactorRepository:
                 _get(doc, "provenance", "source_detail", default=""),
             ]
         )
-        if any(token in text for token in ["residual-mix", "residual mix", "supplier-specific", "supplier specific", "contractual", "ppa", "rec", "tariff"]):
+        market_keywords = [
+            "residual-mix",
+            "residual mix",
+            "supplier-specific",
+            "supplier specific",
+            "contractual",
+            "ppa",
+            "rec",
+            "tariff",
+        ]
+        if any(token in text for token in market_keywords):
             return "market_based"
         return "location_based"
 

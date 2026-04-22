@@ -1,5 +1,0 @@
-api
-api_main
-config
-ghg_engine
-project_store

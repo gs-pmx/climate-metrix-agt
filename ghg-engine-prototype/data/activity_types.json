@@ -33,6 +33,30 @@
           "options": [],
           "param_key": null,
           "help_text": "Enter purchased electricity consumed during the reporting period."
+        },
+        {
+          "field_id": "market_based_emission_factor",
+          "label": "Market-Based Emission Factor",
+          "kind": "quantity",
+          "required": false,
+          "is_primary": false,
+          "default_unit": "kg/kwh",
+          "allowed_units": ["kg/kwh", "kg/mwh", "lb/kwh", "lb/mwh"],
+          "options": [],
+          "param_key": "market_based_emission_factor",
+          "help_text": "Optional supplier- or product-specific Scope 2 factor. If provided, this replaces the default market-based factor path."
+        },
+        {
+          "field_id": "market_based_emission_factor_source",
+          "label": "Market-Based Factor Source",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "market_based_emission_factor_source",
+          "help_text": "Capture the utility, tariff, product, or document supporting the override factor."
         }
       ],
       "notes": [
@@ -65,7 +89,7 @@
     },
     "ui_metadata": {
       "group": "Stationary Energy",
-      "detail_mode": "quantity_only"
+      "detail_mode": "quantity_plus_details"
     },
     "audit_metadata": {
       "audit_group": "scope2_purchased_energy"
@@ -117,6 +141,30 @@
           "options": [],
           "param_key": "procurement_instrument",
           "help_text": "Capture REC, PPA, tariff, supplier-specific factor, or other contractual instrument details."
+        },
+        {
+          "field_id": "market_based_emission_factor",
+          "label": "Market-Based Emission Factor",
+          "kind": "quantity",
+          "required": false,
+          "is_primary": false,
+          "default_unit": "kg/kwh",
+          "allowed_units": ["kg/kwh", "kg/mwh", "lb/kwh", "lb/mwh"],
+          "options": [],
+          "param_key": "market_based_emission_factor",
+          "help_text": "Optional supplier- or product-specific Scope 2 factor. If provided, this replaces the default market-based factor path."
+        },
+        {
+          "field_id": "market_based_emission_factor_source",
+          "label": "Market-Based Factor Source",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "market_based_emission_factor_source",
+          "help_text": "Capture the utility, tariff, product, or document supporting the override factor."
         }
       ],
       "notes": [
@@ -256,6 +304,30 @@
           "options": [],
           "param_key": null,
           "help_text": "Enter stationary natural gas consumption."
+        },
+        {
+          "field_id": "emission_factor_override",
+          "label": "Emission Factor Override",
+          "kind": "quantity",
+          "required": false,
+          "is_primary": false,
+          "default_unit": "kg/mmbtu",
+          "allowed_units": ["kg/scf", "lb/scf", "kg/therm", "lb/therm", "kg/mmbtu", "lb/mmbtu"],
+          "options": [],
+          "param_key": "emission_factor_override",
+          "help_text": "Optional fuel carbon-intensity or supplier-specific factor. If provided, this replaces the default combustion factor."
+        },
+        {
+          "field_id": "emission_factor_override_source",
+          "label": "Override Factor Source",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "emission_factor_override_source",
+          "help_text": "Capture the supplier, certificate, utility, or analysis supporting the override factor."
         }
       ],
       "notes": []
@@ -277,7 +349,7 @@
     },
     "ui_metadata": {
       "group": "Stationary Energy",
-      "detail_mode": "quantity_only"
+      "detail_mode": "quantity_plus_details"
     },
     "audit_metadata": {
       "audit_group": "scope1_stationary_energy"
@@ -317,6 +389,30 @@
           "options": [],
           "param_key": null,
           "help_text": "Enter diesel consumption for stationary equipment."
+        },
+        {
+          "field_id": "emission_factor_override",
+          "label": "Emission Factor Override",
+          "kind": "quantity",
+          "required": false,
+          "is_primary": false,
+          "default_unit": "kg/gallon",
+          "allowed_units": ["kg/gallon", "lb/gallon", "kg/mmbtu", "lb/mmbtu"],
+          "options": [],
+          "param_key": "emission_factor_override",
+          "help_text": "Optional fuel carbon-intensity or supplier-specific factor. If provided, this replaces the default combustion factor."
+        },
+        {
+          "field_id": "emission_factor_override_source",
+          "label": "Override Factor Source",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "emission_factor_override_source",
+          "help_text": "Capture the supplier, certificate, utility, or analysis supporting the override factor."
         }
       ],
       "notes": [
@@ -340,7 +436,7 @@
     },
     "ui_metadata": {
       "group": "Stationary Energy",
-      "detail_mode": "quantity_only"
+      "detail_mode": "quantity_plus_details"
     },
     "audit_metadata": {
       "audit_group": "scope1_stationary_energy"
@@ -380,6 +476,30 @@
           "options": [],
           "param_key": null,
           "help_text": "Enter propane consumption for stationary equipment."
+        },
+        {
+          "field_id": "emission_factor_override",
+          "label": "Emission Factor Override",
+          "kind": "quantity",
+          "required": false,
+          "is_primary": false,
+          "default_unit": "kg/gallon",
+          "allowed_units": ["kg/gallon", "lb/gallon", "kg/mmbtu", "lb/mmbtu"],
+          "options": [],
+          "param_key": "emission_factor_override",
+          "help_text": "Optional fuel carbon-intensity or supplier-specific factor. If provided, this replaces the default combustion factor."
+        },
+        {
+          "field_id": "emission_factor_override_source",
+          "label": "Override Factor Source",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "emission_factor_override_source",
+          "help_text": "Capture the supplier, certificate, utility, or analysis supporting the override factor."
         }
       ],
       "notes": []
@@ -400,7 +520,7 @@
     },
     "ui_metadata": {
       "group": "Stationary Energy",
-      "detail_mode": "quantity_only"
+      "detail_mode": "quantity_plus_details"
     },
     "audit_metadata": {
       "audit_group": "scope1_stationary_energy"

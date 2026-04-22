@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 
 from ..activity_catalog import ActivityTypeDefinition, FactorQueryTemplate
+from ..domain import ResolvedActivity
 from ..factors import FactorRepository
 from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from .base import EQMPlugin
@@ -17,7 +18,31 @@ class Scope2EnergyMethod(EQMPlugin):
         self._direct = DirectFactorMethod()
 
     def required_params_schema(self) -> dict[str, object]:
-        return {"type": "object", "properties": {}, "required": []}
+        return {
+            "type": "object",
+            "properties": {
+                "procurement_instrument": {"type": "string"},
+                "market_based_emission_factor": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "number"},
+                        "unit": {"type": "string"},
+                    },
+                    "required": ["value", "unit"],
+                },
+                "market_based_emission_factor_source": {"type": "string"},
+                "location_based_emission_factor": {
+                    "type": "object",
+                    "properties": {
+                        "value": {"type": "number"},
+                        "unit": {"type": "string"},
+                    },
+                    "required": ["value", "unit"],
+                },
+                "location_based_emission_factor_source": {"type": "string"},
+            },
+            "required": [],
+        }
 
     def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
         del activity
@@ -29,6 +54,8 @@ class Scope2EnergyMethod(EQMPlugin):
         activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
+        *,
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         template_groups = self._group_templates(activity_def)
         requires_dual = bool(activity_def.accounting_metadata.get("requires_dual_scope2_reporting"))
@@ -46,6 +73,7 @@ class Scope2EnergyMethod(EQMPlugin):
             template_groups={"location_based": template_groups.get("location_based", [])},
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )
         results = list(location_results)
         market_results, market_trace = self._compute_market_based(
@@ -55,6 +83,7 @@ class Scope2EnergyMethod(EQMPlugin):
             factors=factors,
             template_groups=template_groups,
             location_results=location_results,
+            resolved=resolved,
         )
         results.extend(market_results)
         trace.factor_matches.extend(market_trace.factor_matches)
@@ -76,6 +105,7 @@ class Scope2EnergyMethod(EQMPlugin):
         factors: FactorRepository,
         template_groups: dict[str, list[FactorQueryTemplate]],
         location_results: list[ResultRecord],
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         market_trace = TraceRecord(
             activity_type_id=activity.activity_type_id,
@@ -100,6 +130,7 @@ class Scope2EnergyMethod(EQMPlugin):
                 template_groups={"market_based": supplier_templates},
                 selected_method=self.id,
                 result_method_id=self.id,
+                resolved=resolved,
             )
             if supplier_results and not any(
                 "relaxed description filter" in note for note in supplier_trace.defaults_applied
@@ -121,6 +152,7 @@ class Scope2EnergyMethod(EQMPlugin):
             template_groups={"market_based": residual_templates},
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )
         if residual_results and not any(
             "relaxed description filter" in note for note in residual_trace.defaults_applied
@@ -136,18 +168,23 @@ class Scope2EnergyMethod(EQMPlugin):
             template_groups={"market_based": market_templates},
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )
         if generic_results:
             if self._same_factor_path(generic_results, location_results):
                 generic_trace.defaults_applied.append(
-                    "market-based precedence: no supplier-specific or residual mix factor matched; used location-based proxy"
+                    "market-based precedence: no supplier-specific or residual mix "
+                    "factor matched; used location-based proxy"
                 )
             else:
                 generic_trace.defaults_applied.append("market-based precedence: used market-based factor path")
             return generic_results, generic_trace
 
         if not location_results:
-            market_trace.defaults_applied.append("market-based precedence: no supplier-specific, residual mix, or proxy factor matched")
+            market_trace.defaults_applied.append(
+                "market-based precedence: no supplier-specific, residual mix, or proxy "
+                "factor matched"
+            )
             return [], market_trace
 
         market_trace.defaults_applied.append(

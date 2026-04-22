@@ -15,12 +15,25 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { getCompletionState, getDetailFields, getPartialReason } from "./activityDrafts";
+import {
+  getActivitySupportNotice,
+  getCompletionState,
+  getDetailFields,
+  getFieldUnits,
+} from "./activityDrafts";
 
 function normalizeFieldValue(field, rawValue) {
   if (field.kind === "number") return rawValue;
   if (field.kind === "boolean") return Boolean(rawValue);
   return rawValue;
+}
+
+function normalizeQuantityParam(field, rawValue) {
+  const unitOptions = getFieldUnits(field);
+  return {
+    value: rawValue?.value ?? "",
+    unit: rawValue?.unit || unitOptions[0] || "",
+  };
 }
 
 export default function ActivityDetailDialog({
@@ -40,7 +53,7 @@ export default function ActivityDetailDialog({
 
   const detailFields = getDetailFields(activityType);
   const completion = getCompletionState({ ...draft, params }, activityType);
-  const partialReason = getPartialReason(activityType);
+  const supportNotice = getActivitySupportNotice(activityType);
 
   const setFieldValue = (field, nextValue) => {
     const key = field.param_key || field.field_id;
@@ -55,9 +68,9 @@ export default function ActivityDetailDialog({
           <Typography variant="body2" color="text.secondary">
             {activityType.description}
           </Typography>
-          {activityType.implementation_status === "partial" ? (
-            <Alert severity="warning">
-              {partialReason || "This activity is usable, but catalog metadata marks it as partial support. Review the notes below before finalizing."}
+          {supportNotice ? (
+            <Alert severity={supportNotice.severity}>
+              {supportNotice.message}
             </Alert>
           ) : null}
           {(activityType.input_schema?.notes || []).map((note) => (
@@ -73,6 +86,47 @@ export default function ActivityDetailDialog({
           {detailFields.map((field) => {
             const key = field.param_key || field.field_id;
             const value = params[key] ?? "";
+            if (field.kind === "quantity") {
+              const quantityValue = normalizeQuantityParam(field, value);
+              const unitOptions = getFieldUnits(field);
+              return (
+                <Box key={key}>
+                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+                    {field.label}
+                  </Typography>
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                    <TextField
+                      value={quantityValue.value}
+                      type="number"
+                      onChange={(event) => setFieldValue(field, {
+                        ...quantityValue,
+                        value: event.target.value,
+                      })}
+                      fullWidth
+                    />
+                    <Select
+                      value={quantityValue.unit}
+                      onChange={(event) => setFieldValue(field, {
+                        ...quantityValue,
+                        unit: event.target.value,
+                      })}
+                      sx={{ minWidth: 180 }}
+                    >
+                      {unitOptions.map((option) => (
+                        <MenuItem key={option} value={option}>
+                          {option}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </Stack>
+                  {field.help_text ? (
+                    <Typography variant="caption" color="text.secondary">
+                      {field.help_text}
+                    </Typography>
+                  ) : null}
+                </Box>
+              );
+            }
             if (field.kind === "enum") {
               return (
                 <Box key={key}>

@@ -4,6 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from ..activity_catalog import ActivityTypeDefinition
+from ..domain import ResolvedActivity
 from ..factors import FactorRepository
 from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from ..units import build_unit_registry
@@ -28,6 +29,8 @@ class EQMPlugin(ABC):
         activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
+        *,
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         pass
 

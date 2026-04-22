@@ -1,0 +1,16 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATA_DIR: /app/data
+      DB_PATH: /app/state/ghg_projects.sqlite
+      FRONTEND_DIST_DIR: /app/frontend/dist
+    ports:
+      - "8000:8000"
+    volumes:
+      - ghg_state:/app/state
+
+volumes:
+  ghg_state:

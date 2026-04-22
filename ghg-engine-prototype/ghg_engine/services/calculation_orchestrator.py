@@ -47,4 +47,10 @@ class CalculationOrchestrator:
             raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
         if not plugin.applicability(plugin_activity, activity_def):
             raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
-        return plugin.compute(plugin_activity, activity_def, plugin_ctx, self.factors)
+        return plugin.compute(
+            plugin_activity,
+            activity_def,
+            plugin_ctx,
+            self.factors,
+            resolved=resolved.model_copy(update={"locus": resolved_locus}),
+        )

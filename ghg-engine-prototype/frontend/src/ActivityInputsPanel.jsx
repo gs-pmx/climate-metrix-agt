@@ -31,11 +31,16 @@ import {
   EMPTY_ACTIVITY,
   activityRequiresDetails,
   createEmptyDraft,
+  getActivitySupportNotice,
   getAllowedUnits,
   getCompletionState,
   getDefaultUnit,
+  hasMeaningfulParamValue,
   getPartialReason,
+  isCalculableActivity,
+  isEntryVisibleActivity,
   isRepeatableActivity,
+  sanitizeParams,
   uid,
   withActivityTypeDefaults,
 } from "./activityDrafts";
@@ -48,7 +53,7 @@ function CompletionChip({ draft, activityType }) {
 
 function hasMeaningfulData(draft) {
   if (draft?.activity?.value !== "" && draft?.activity?.value != null) return true;
-  return Object.values(draft?.params || {}).some((value) => value !== "" && value != null);
+  return Object.values(draft?.params || {}).some((value) => hasMeaningfulParamValue(value));
 }
 
 function pairKey(facilityId, activityTypeId) {
@@ -57,6 +62,17 @@ function pairKey(facilityId, activityTypeId) {
 
 function RepeatableCompletionChip({ drafts, activityType }) {
   const meaningfulDrafts = drafts.filter(hasMeaningfulData);
+  const completion = getCompletionState({}, activityType);
+  if (!isCalculableActivity(activityType)) {
+    return (
+      <Chip
+        label={meaningfulDrafts.length ? `${meaningfulDrafts.length} entries, ${completion.label.toLowerCase()}` : completion.label}
+        color={completion.color}
+        size="small"
+        variant="outlined"
+      />
+    );
+  }
   if (!meaningfulDrafts.length) {
     return <Chip label="No entries" color="default" size="small" variant="outlined" />;
   }
@@ -473,7 +489,20 @@ function ActivityAccordion({
             {activityType.label}
           </Typography>
           <Chip label={activityType.scope} size="small" variant="outlined" />
-          <Chip label={activityType.implementation_status} size="small" variant="outlined" />
+          <Chip
+            label={activityType.implementation_status}
+            size="small"
+            variant="outlined"
+            color={
+              activityType.implementation_status === "implemented"
+                ? "success"
+                : activityType.implementation_status === "partial"
+                  ? "warning"
+                  : activityType.implementation_status === "planned"
+                    ? "info"
+                    : "default"
+            }
+          />
           <Box sx={{ flexGrow: 1 }} />
           <Typography variant="body2" color="text.secondary">
             {filledCount}/{facilities.length} facilities
@@ -708,7 +737,7 @@ export default function ActivityInputsPanel({
   const [repeatableDialog, setRepeatableDialog] = React.useState(null);
 
   const selectableActivities = React.useMemo(
-    () => activityCatalog.filter((activityType) => ["implemented", "partial"].includes(activityType.implementation_status)),
+    () => activityCatalog.filter((activityType) => isEntryVisibleActivity(activityType)),
     [activityCatalog],
   );
   const visibleFacilityIds = React.useMemo(() => new Set(facilities.map((facility) => facility.id)), [facilities]);
@@ -739,9 +768,31 @@ export default function ActivityInputsPanel({
         return true;
       });
   }, [activityTypesById, visibleActivities]);
+  const activeUnsupportedActivities = React.useMemo(() => {
+    const seen = new Set();
+    return visibleActivities
+      .filter((draft) => hasMeaningfulData(draft))
+      .map((draft) => activityTypesById[draft.activity_type_id])
+      .filter((activityType) => activityType?.implementation_status === "planned")
+      .filter((activityType) => {
+        if (!activityType || seen.has(activityType.activity_type_id)) return false;
+        seen.add(activityType.activity_type_id);
+        return true;
+      });
+  }, [activityTypesById, visibleActivities]);
+  const unsupportedActivityNotices = React.useMemo(
+    () => activeUnsupportedActivities.map((activityType) => ({
+      activityType,
+      notice: getActivitySupportNotice(activityType),
+    })),
+    [activeUnsupportedActivities],
+  );
 
   const activityOptions = React.useMemo(
-    () => selectableActivities.map((activityType) => ({ value: activityType.activity_type_id, label: activityType.label })),
+    () => selectableActivities.map((activityType) => ({
+      value: activityType.activity_type_id,
+      label: `${activityType.label}${activityType.implementation_status === "partial" ? " (partial)" : activityType.implementation_status === "planned" ? " (unsupported)" : ""}`,
+    })),
     [selectableActivities],
   );
 
@@ -756,7 +807,7 @@ export default function ActivityInputsPanel({
           ...draft,
           ...patch,
           activity: patch.activity ? patch.activity : draft.activity,
-          params: patch.params ? patch.params : draft.params,
+          params: patch.params ? sanitizeParams(patch.params) : draft.params,
         };
         if (patch.activity_type_id) {
           const activityType = activityTypesById[patch.activity_type_id];
@@ -917,6 +968,11 @@ export default function ActivityInputsPanel({
           <strong>{activityType.label}:</strong> {getPartialReason(activityType) || "Catalog metadata marks this activity as partial support."}
         </Alert>
       ))}
+      {unsupportedActivityNotices.map(({ activityType, notice }) => (
+        <Alert key={activityType.activity_type_id} severity={notice?.severity || "info"}>
+          <strong>{activityType.label}:</strong> {notice?.message || "Visible for draft entry and snapshotting, but not available for calculation yet."}
+        </Alert>
+      ))}
 
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
@@ -945,7 +1001,7 @@ export default function ActivityInputsPanel({
           Paste from spreadsheets in the By Activity and By Facility views with `Ctrl+V`, use `Tab` to move across, and use `Enter` to move down the next row in the same column.
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Only catalog rows marked implemented or partial are available for calculation in this phase.
+          Implemented and partial rows are calculable in this phase. Planned rows remain visible for draft entry, save/load, and completeness tracking, but are skipped during calculation.
         </Typography>
       </Paper>
 

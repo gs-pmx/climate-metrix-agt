@@ -1,7 +1,6 @@
 import * as React from "react";
 import {
   Alert,
-  Autocomplete,
   Box,
   Button,
   Chip,
@@ -22,116 +21,33 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import { api } from "./api";
 import {
   EMPTY_ACTIVITY,
   buildSnapshot,
   createEmptyDraft,
   hydrateDraft,
+  isCalculableActivity,
   normalizeActivityForSubmit,
   uid,
   withActivityTypeDefaults,
 } from "./activityDrafts";
-import ActivityInputsPanel from "./ActivityInputsPanel";
 
-const US_STATE_OPTIONS = [
-  "Alabama",
-  "Alaska",
-  "Arizona",
-  "Arkansas",
-  "California",
-  "Colorado",
-  "Connecticut",
-  "Delaware",
-  "Florida",
-  "Georgia",
-  "Hawaii",
-  "Idaho",
-  "Illinois",
-  "Indiana",
-  "Iowa",
-  "Kansas",
-  "Kentucky",
-  "Louisiana",
-  "Maine",
-  "Maryland",
-  "Massachusetts",
-  "Michigan",
-  "Minnesota",
-  "Mississippi",
-  "Missouri",
-  "Montana",
-  "Nebraska",
-  "Nevada",
-  "New Hampshire",
-  "New Jersey",
-  "New Mexico",
-  "New York",
-  "North Carolina",
-  "North Dakota",
-  "Ohio",
-  "Oklahoma",
-  "Oregon",
-  "Pennsylvania",
-  "Rhode Island",
-  "South Carolina",
-  "South Dakota",
-  "Tennessee",
-  "Texas",
-  "Utah",
-  "Vermont",
-  "Virginia",
-  "Washington",
-  "West Virginia",
-  "Wisconsin",
-  "Wyoming",
-  "District of Columbia",
-];
+const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
+const FacilitiesTab = React.lazy(() => import("./FacilitiesTab"));
+const ResultsTab = React.lazy(() => import("./ResultsTab"));
+const DashboardTab = React.lazy(() => import("./DashboardTab"));
+const AuditTab = React.lazy(() => import("./AuditTab"));
 
-const EGRID_SUBREGION_OPTIONS = [
-  "AKGD",
-  "AKMS",
-  "AZNM",
-  "CAMX",
-  "ERCT",
-  "FRCC",
-  "HIMS",
-  "HIOA",
-  "MROE",
-  "MROW",
-  "NEWE",
-  "NWPP",
-  "NYCW",
-  "NYLI",
-  "NYUP",
-  "RFCE",
-  "RFCM",
-  "RFCW",
-  "RMPA",
-  "SPNO",
-  "SPSO",
-  "SRMV",
-  "SRMW",
-  "SRSO",
-  "SRTV",
-  "SRVC",
-];
-
-const DATA_VIZ_COLORS = {
-  categorical: [
-    "#1f77b4",
-    "#2ca02c",
-    "#17becf",
-    "#ff7f0e",
-    "#9467bd",
-    "#8c564b",
-    "#e377c2",
-    "#7f7f7f",
-    "#bcbd22",
-    "#d62728",
-  ],
-};
+function LazyTabFallback() {
+  return (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="body2" color="text.secondary">
+        Loading tab...
+      </Typography>
+    </Paper>
+  );
+}
 
 const EMPTY_FACILITY = {
   id: "",
@@ -175,18 +91,6 @@ function formatTimestamp(value) {
   return dt.toLocaleString();
 }
 
-function formatNumber(value, digits = 2) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "";
-  return n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-
-function formatPercent(value, digits = 1) {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return "";
-  return `${n.toLocaleString(undefined, { minimumFractionDigits: digits, maximumFractionDigits: digits })}%`;
-}
-
 function toMetricTons(value, unit = "kg") {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
@@ -210,287 +114,6 @@ function toMetricTonFactor(value, unit) {
     value: mtValue,
     unit: mtValue == null ? "" : `metric ton/${denominatorRaw}`,
   };
-}
-
-function wrapText(value, maxChars = 30) {
-  const text = String(value ?? "");
-  if (!text) return "";
-  const words = text.split(/\s+/);
-  const lines = [];
-  let line = "";
-  for (const word of words) {
-    if ((line + (line ? " " : "") + word).length <= maxChars) {
-      line = line ? `${line} ${word}` : word;
-      continue;
-    }
-    if (line) lines.push(line);
-    if (word.length <= maxChars) {
-      line = word;
-    } else {
-      const chunks = word.match(new RegExp(`.{1,${maxChars}}`, "g")) || [word];
-      lines.push(...chunks.slice(0, -1));
-      line = chunks[chunks.length - 1];
-    }
-  }
-  if (line) lines.push(line);
-  return lines.join("\n");
-}
-
-function GridAutocompleteEditCell(props) {
-  const { id, field, value, hasFocus, options, normalizeValue } = props;
-  const apiRef = useGridApiContext();
-  const inputRef = React.useRef(null);
-  const safeValue = typeof value === "string" ? value : "";
-
-  React.useEffect(() => {
-    if (hasFocus) {
-      inputRef.current?.focus();
-    }
-  }, [hasFocus]);
-
-  const toCellValue = React.useCallback(
-    (nextRawValue) => {
-      const normalized = normalizeValue ? normalizeValue(nextRawValue) : nextRawValue;
-      apiRef.current.setEditCellValue({ id, field, value: normalized });
-    },
-    [apiRef, field, id, normalizeValue],
-  );
-
-  return (
-    <Autocomplete
-      freeSolo
-      fullWidth
-      options={options}
-      value={safeValue}
-      inputValue={safeValue}
-      autoHighlight
-      blurOnSelect
-      selectOnFocus
-      clearOnBlur={false}
-      filterOptions={(opts, state) =>
-        opts.filter((opt) => opt.toLowerCase().startsWith(state.inputValue.toLowerCase()))
-      }
-      onChange={(_, nextValue) => {
-        const raw = typeof nextValue === "string" ? nextValue : nextValue || "";
-        toCellValue(raw);
-      }}
-      onInputChange={(_, nextInputValue, reason) => {
-        if (reason === "reset") return;
-        toCellValue(nextInputValue);
-      }}
-      renderInput={(params) => <TextField {...params} variant="standard" inputRef={inputRef} />}
-    />
-  );
-}
-
-function SourceBarChart({ rows }) {
-  if (!rows.length) {
-    return <Typography color="text.secondary">No CO2e data available yet.</Typography>;
-  }
-  const width = Math.max(760, rows.length * 110);
-  const height = 320;
-  const padding = { top: 24, right: 24, bottom: 92, left: 80 };
-  const plotWidth = width - padding.left - padding.right;
-  const plotHeight = height - padding.top - padding.bottom;
-  const maxValue = Math.max(1, ...rows.map((r) => Number(r.value || 0)));
-  const barWidth = rows.length > 0 ? plotWidth / rows.length : plotWidth;
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((k) => maxValue * k);
-
-  return (
-    <Box sx={{ width: "100%", overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Emissions by source bar chart">
-        {ticks.map((tick) => {
-          const y = height - padding.bottom - (tick / maxValue) * plotHeight;
-          return (
-            <g key={`tick-${tick}`}>
-              <line x1={padding.left} y1={y} x2={width - padding.right} y2={y} stroke="currentColor" strokeOpacity="0.14" />
-              <text x={padding.left - 8} y={y + 4} textAnchor="end" fontSize="10" fill="currentColor">
-                {formatNumber(tick)}
-              </text>
-            </g>
-          );
-        })}
-        <line
-          x1={padding.left}
-          y1={height - padding.bottom}
-          x2={width - padding.right}
-          y2={height - padding.bottom}
-          stroke="currentColor"
-          strokeOpacity="0.35"
-        />
-        <line
-          x1={padding.left}
-          y1={padding.top}
-          x2={padding.left}
-          y2={height - padding.bottom}
-          stroke="currentColor"
-          strokeOpacity="0.35"
-        />
-        {rows.map((row, idx) => {
-          const value = Number(row.value || 0);
-          const h = (value / maxValue) * plotHeight;
-          const x = padding.left + idx * barWidth + barWidth * 0.12;
-          const y = height - padding.bottom - h;
-          const w = barWidth * 0.76;
-          const color = DATA_VIZ_COLORS.categorical[idx % DATA_VIZ_COLORS.categorical.length];
-          return (
-            <g key={row.id}>
-              <rect x={x} y={y} width={w} height={h} fill={color} rx="4">
-                <title>
-                  {`${row.activity_label}: ${formatNumber(value)} MTCO2e`}
-                </title>
-              </rect>
-              <text x={x + w / 2} y={y - 6} textAnchor="middle" fontSize="10" fill="currentColor">
-                {formatNumber(value)}
-              </text>
-              <text x={x + w / 2} y={height - padding.bottom + 14} textAnchor="middle" fontSize="10" fill="currentColor">
-                {wrapText(row.activity_label, 12).split("\n")[0]}
-              </text>
-            </g>
-          );
-        })}
-        <text x={padding.left + plotWidth / 2} y={height - 10} textAnchor="middle" fontSize="11" fill="currentColor">
-          Source
-        </text>
-        <text
-          x={18}
-          y={padding.top + plotHeight / 2}
-          textAnchor="middle"
-          fontSize="11"
-          fill="currentColor"
-          transform={`rotate(-90 18 ${padding.top + plotHeight / 2})`}
-        >
-          Emissions (MTCO2e)
-        </text>
-      </svg>
-    </Box>
-  );
-}
-
-function ScopeDonutChart({ rows }) {
-  if (!rows.length) {
-    return <Typography color="text.secondary">No CO2e scope totals available yet.</Typography>;
-  }
-  const total = rows.reduce((acc, r) => acc + Number(r.value || 0), 0);
-  const cx = 170;
-  const cy = 170;
-  const radius = 110;
-  const strokeWidth = 46;
-  const circumference = 2 * Math.PI * radius;
-  let offset = 0;
-
-  return (
-    <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="center">
-      <svg width="340" height="340" viewBox="0 0 340 340" role="img" aria-label="Emissions by scope donut chart">
-        <circle cx={cx} cy={cy} r={radius} fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth={strokeWidth} />
-        {rows.map((row, idx) => {
-          const value = Number(row.value || 0);
-          const fraction = total > 0 ? value / total : 0;
-          const dash = fraction * circumference;
-          const color = DATA_VIZ_COLORS.categorical[idx % DATA_VIZ_COLORS.categorical.length];
-          const segment = (
-            <circle
-              key={row.id}
-              cx={cx}
-              cy={cy}
-              r={radius}
-              fill="none"
-              stroke={color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${dash} ${circumference - dash}`}
-              strokeDashoffset={-offset}
-              transform={`rotate(-90 ${cx} ${cy})`}
-            >
-              <title>{`${row.scope}: ${formatNumber(value)} MTCO2e`}</title>
-            </circle>
-          );
-          offset += dash;
-          return segment;
-        })}
-        <text x={cx} y={cy - 6} textAnchor="middle" fontSize="12" fill="currentColor">
-          Total MTCO2e
-        </text>
-        <text x={cx} y={cy + 18} textAnchor="middle" fontSize="18" fontWeight="700" fill="currentColor">
-          {formatNumber(total)}
-        </text>
-      </svg>
-      <Stack spacing={0.5}>
-        {rows.map((row, idx) => (
-          <Stack key={row.id} direction="row" spacing={1} alignItems="center">
-            <Box sx={{ width: 12, height: 12, borderRadius: "2px", bgcolor: DATA_VIZ_COLORS.categorical[idx % DATA_VIZ_COLORS.categorical.length] }} />
-            <Typography variant="body2">
-              {row.scope}: {formatNumber(row.value)} MTCO2e
-            </Typography>
-          </Stack>
-        ))}
-      </Stack>
-    </Stack>
-  );
-}
-
-function FacilitySourceTreemap({ rows }) {
-  if (!rows.length) {
-    return <Typography color="text.secondary">No CO2e facility/source data available yet.</Typography>;
-  }
-  const width = 900;
-  const height = 360;
-  const facilityMap = {};
-  for (const row of rows) {
-    const facility = row.facility_name || row.facility_id || "Unknown";
-    const source = row.activity_label || row.activity_type_id || "Unknown";
-    const value = Number(row.value || 0);
-    if (!facilityMap[facility]) facilityMap[facility] = {};
-    facilityMap[facility][source] = (facilityMap[facility][source] || 0) + value;
-  }
-  const facilities = Object.entries(facilityMap).map(([facility, bySource]) => {
-    const sources = Object.entries(bySource).map(([source, value]) => ({ source, value }));
-    const total = sources.reduce((acc, s) => acc + s.value, 0);
-    return { facility, sources, total };
-  });
-  const total = facilities.reduce((acc, f) => acc + f.total, 0) || 1;
-  let xCursor = 0;
-
-  return (
-    <Box sx={{ width: "100%", overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Treemap by facility and source">
-        {facilities.map((facility, fIdx) => {
-          const w = (facility.total / total) * width;
-          let yCursor = 0;
-          const x0 = xCursor;
-          xCursor += w;
-          return (
-            <g key={facility.facility}>
-              {facility.sources.map((src, sIdx) => {
-                const h = facility.total > 0 ? (src.value / facility.total) * height : 0;
-                const y0 = yCursor;
-                yCursor += h;
-                const color = DATA_VIZ_COLORS.categorical[(fIdx + sIdx) % DATA_VIZ_COLORS.categorical.length];
-                return (
-                  <g key={`${facility.facility}-${src.source}`}>
-                    <rect x={x0} y={y0} width={w} height={h} fill={color} fillOpacity="0.78" stroke="#ffffff" strokeWidth="1" />
-                    <title>{`${facility.facility} | ${src.source}: ${formatNumber(src.value)} MTCO2e`}</title>
-                    {w > 80 && h > 44 ? (
-                      <>
-                        <text x={x0 + 6} y={y0 + 16} fontSize="11" fill="#ffffff" fontWeight="700">
-                          {facility.facility}
-                        </text>
-                        <text x={x0 + 6} y={y0 + 30} fontSize="10" fill="#ffffff">
-                          {wrapText(src.source, 20).split("\n")[0]}
-                        </text>
-                        <text x={x0 + 6} y={y0 + 42} fontSize="10" fill="#ffffff">
-                          {formatNumber(src.value)} MTCO2e
-                        </text>
-                      </>
-                    ) : null}
-                  </g>
-                );
-              })}
-            </g>
-          );
-        })}
-      </svg>
-    </Box>
-  );
 }
 
 export default function App({ colorMode = "light", onToggleColorMode = () => {} }) {
@@ -517,20 +140,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [catalogError, setCatalogError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
-
-  const facilityEditableFields = React.useMemo(
-    () => [
-      "facility_name",
-      "location",
-      "region",
-      "country",
-      "state",
-      "egrid_subregion",
-      "reporting_group",
-      "owned_leased",
-    ],
-    [],
-  );
 
   const hasActiveProject = Boolean(activeProjectId);
   const activeProject = React.useMemo(
@@ -561,105 +170,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const facilityOptions = React.useMemo(
     () => dataEntryFacilities.map((f) => ({ value: f.id, label: f.facility_name })),
     [dataEntryFacilities],
-  );
-  const co2eRows = React.useMemo(
-    () =>
-      resultRows
-        .filter((r) => String(r.gas).toLowerCase() === "co2e")
-        .map((r) => ({ ...r, value: toMetricTons(r.value, r.unit), unit: "metric ton" })),
-    [resultRows],
-  );
-  const dashboardByFacilityRows = React.useMemo(() => {
-    const byKey = {};
-    for (const row of co2eRows) {
-      const key = row.facility_name || row.facility_id || "Unknown";
-      byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
-    }
-    return Object.entries(byKey)
-      .map(([facility_name, value], i) => ({ id: `f_${i}`, facility_name, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [co2eRows]);
-  const dashboardByScopeRows = React.useMemo(() => {
-    const byKey = {};
-    for (const row of co2eRows) {
-      const key = row.scope || "Unknown";
-      byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
-    }
-    return Object.entries(byKey)
-      .map(([scope, value], i) => ({ id: `s_${i}`, scope, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [co2eRows]);
-  const dashboardBySourceRows = React.useMemo(() => {
-    const byKey = {};
-    for (const row of co2eRows) {
-      const key = row.activity_label || row.activity_type_id || "Unknown";
-      byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
-    }
-    return Object.entries(byKey)
-      .map(([activity_label, value], i) => ({ id: `src_${i}`, activity_label, value }))
-      .sort((a, b) => b.value - a.value);
-  }, [co2eRows]);
-  const totalCo2e = React.useMemo(
-    () => co2eRows.reduce((acc, row) => acc + Number(row.value || 0), 0),
-    [co2eRows],
-  );
-  const dashboardKpis = React.useMemo(() => {
-    const topFacility = dashboardByFacilityRows[0];
-    const topSource = dashboardBySourceRows[0];
-    const topScope = dashboardByScopeRows[0];
-    return [
-      {
-        id: "total",
-        label: "Total Emissions",
-        value: `${formatNumber(totalCo2e)} MTCO2e`,
-        detail: `${co2eRows.length} CO2e result rows`,
-      },
-      {
-        id: "facility",
-        label: "Top Facility",
-        value: topFacility?.facility_name || "No data",
-        detail:
-          topFacility && totalCo2e > 0
-            ? `${formatNumber(topFacility.value)} MTCO2e (${formatPercent((topFacility.value / totalCo2e) * 100)})`
-            : "No facility totals yet",
-      },
-      {
-        id: "source",
-        label: "Top Source",
-        value: topSource?.activity_label || "No data",
-        detail:
-          topSource && totalCo2e > 0
-            ? `${formatNumber(topSource.value)} MTCO2e (${formatPercent((topSource.value / totalCo2e) * 100)})`
-            : "No source totals yet",
-      },
-      {
-        id: "scope",
-        label: "Largest Scope",
-        value: topScope?.scope || "No data",
-        detail:
-          topScope && totalCo2e > 0
-            ? `${formatNumber(topScope.value)} MTCO2e (${formatPercent((topScope.value / totalCo2e) * 100)})`
-            : "No scope totals yet",
-      },
-    ];
-  }, [co2eRows.length, dashboardByFacilityRows, dashboardByScopeRows, dashboardBySourceRows, totalCo2e]);
-  const dashboardTableRows = React.useMemo(
-    () =>
-      co2eRows
-        .map((row, i) => {
-          const value = Number(row.value || 0);
-          return {
-            id: row.id || `dashboard_${i}`,
-            facility_name: row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
-            activity_label: row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
-            scope: row.scope || "Unknown",
-            accounting_method: row.accounting_method || "",
-            value,
-            share_pct: totalCo2e > 0 ? (value / totalCo2e) * 100 : 0,
-          };
-        })
-        .sort((a, b) => b.value - a.value),
-    [activityLabelById, co2eRows, facilityNameById, totalCo2e],
   );
 
   const refreshProjects = React.useCallback(async () => {
@@ -990,10 +500,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   };
 
   const addFacility = () => setFacilities((prev) => [...prev, { ...EMPTY_FACILITY, id: uid() }]);
-  const processFacilityUpdate = (newRow) => {
-    setFacilities((prev) => prev.map((r) => (r.id === newRow.id ? newRow : r)));
-    return newRow;
-  };
 
   const runCalculation = async () => {
     if (!hasActiveProject) {
@@ -1017,7 +523,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       return;
     }
 
-    const grouped = groupByFacility(rows);
+    const calculableRows = rows.filter((draft) => isCalculableActivity(activityTypesById[draft.activity_type_id]));
+    const skippedRows = rows.filter((draft) => !isCalculableActivity(activityTypesById[draft.activity_type_id]));
+    if (!calculableRows.length) {
+      show(
+        skippedRows.length
+          ? "Only unsupported activities have data right now. Add at least one implemented or partial activity to calculate."
+          : "Add at least one calculable activity row before running the inventory.",
+        "warning",
+      );
+      return;
+    }
+
+    const grouped = groupByFacility(calculableRows);
     const mergedResults = [];
     const mergedTrace = [];
     const mergedAudit = [];
@@ -1077,166 +595,18 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       }
       setSummaryRows(Object.entries(metricTonSummary).map(([key, value], i) => ({ id: `${i}`, key, value })));
       setTab(3);
-      show("Calculation complete", "success");
+      show(
+        skippedRows.length
+          ? `Calculation complete. Skipped ${skippedRows.length} unsupported activity row${skippedRows.length === 1 ? "" : "s"} that are not calculable yet.`
+          : "Calculation complete",
+        skippedRows.length ? "warning" : "success",
+      );
     } catch (e) {
       show(`Calculation failed: ${e.message}`, "error");
     } finally {
       setCalculating(false);
     }
   };
-
-  const handleFacilityCellKeyDown = React.useCallback(
-    (params, event) => {
-      if (event.key !== "Tab") return;
-
-      const rowIds =
-        typeof params.api.getSortedRowIds === "function"
-          ? params.api.getSortedRowIds()
-          : facilities.map((f) => f.id);
-      const rowIndex = rowIds.findIndex((rowId) => rowId === params.id);
-      const fieldIndex = facilityEditableFields.indexOf(params.field);
-      if (rowIndex < 0 || fieldIndex < 0) return;
-
-      const isShiftTab = event.shiftKey;
-      const atFirstCell = rowIndex === 0 && fieldIndex === 0;
-      const atLastCell = rowIndex === rowIds.length - 1 && fieldIndex === facilityEditableFields.length - 1;
-      if ((isShiftTab && atFirstCell) || (!isShiftTab && atLastCell)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.defaultMuiPrevented = true;
-
-      let nextRowIndex = rowIndex;
-      let nextFieldIndex = fieldIndex;
-
-      if (isShiftTab) {
-        if (fieldIndex === 0) {
-          nextRowIndex -= 1;
-          nextFieldIndex = facilityEditableFields.length - 1;
-        } else {
-          nextFieldIndex -= 1;
-        }
-      } else if (fieldIndex === facilityEditableFields.length - 1) {
-        nextRowIndex += 1;
-        nextFieldIndex = 0;
-      } else {
-        nextFieldIndex += 1;
-      }
-
-      const nextRowId = rowIds[nextRowIndex];
-      const nextField = facilityEditableFields[nextFieldIndex];
-      if (nextRowId === undefined || !nextField) return;
-
-      if (params.cellMode === "edit") {
-        params.api.stopCellEditMode({ id: params.id, field: params.field });
-      }
-      params.api.setCellFocus(nextRowId, nextField);
-      params.api.startCellEditMode({ id: nextRowId, field: nextField });
-    },
-    [facilities, facilityEditableFields],
-  );
-
-  const facilityColumns = React.useMemo(
-    () => [
-      { field: "facility_name", headerName: "Facility Name", flex: 1, editable: true },
-      { field: "location", headerName: "Location", flex: 1, editable: true },
-      { field: "region", headerName: "Region", flex: 0.7, editable: true },
-      { field: "country", headerName: "Country", flex: 0.6, editable: true },
-      {
-        field: "state",
-        headerName: "State",
-        flex: 0.6,
-        editable: true,
-        renderEditCell: (params) => <GridAutocompleteEditCell {...params} options={US_STATE_OPTIONS} />,
-      },
-      {
-        field: "egrid_subregion",
-        headerName: "eGRID Subregion",
-        flex: 0.8,
-        editable: true,
-        renderEditCell: (params) => (
-          <GridAutocompleteEditCell
-            {...params}
-            options={EGRID_SUBREGION_OPTIONS}
-            normalizeValue={(v) => String(v || "").toUpperCase()}
-          />
-        ),
-      },
-      { field: "reporting_group", headerName: "Group", flex: 0.6, editable: true },
-      {
-        field: "owned_leased",
-        headerName: "Owned/Leased",
-        flex: 0.7,
-        editable: true,
-        type: "singleSelect",
-        valueOptions: ["Owned", "Leased"],
-      },
-    ],
-    [],
-  );
-
-  const resultColumns = [
-    {
-      field: "facility_name",
-      headerName: "Facility",
-      flex: 1,
-      valueGetter: (_, row) => row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
-    },
-    {
-      field: "activity_label",
-      headerName: "Activity",
-      flex: 1,
-      valueGetter: (_, row) => row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
-    },
-    { field: "scope", headerName: "Scope", flex: 0.6 },
-    { field: "accounting_method", headerName: "Accounting", flex: 0.8 },
-    { field: "gas", headerName: "Gas", flex: 0.4 },
-    { field: "value", headerName: "Value", type: "number", flex: 0.7, valueFormatter: (value) => formatNumber(value) },
-    { field: "unit", headerName: "Unit", flex: 0.4 },
-  ];
-  const renderWrappedCell = React.useCallback(
-    (params) => (
-      <Box
-        title={String(params.value ?? "")}
-        sx={{
-          whiteSpace: "pre-wrap",
-          lineHeight: 1.25,
-          maxWidth: "30ch",
-          overflowWrap: "anywhere",
-          py: 0.5,
-        }}
-      >
-        {wrapText(params.value, 30)}
-      </Box>
-    ),
-    [],
-  );
-  const dashboardTableColumns = React.useMemo(
-    () => [
-      { field: "facility_name", headerName: "Facility", flex: 0.95, minWidth: 160, renderCell: renderWrappedCell },
-      { field: "activity_label", headerName: "Activity", flex: 1.1, minWidth: 180, renderCell: renderWrappedCell },
-      { field: "scope", headerName: "Scope", flex: 0.7, minWidth: 120 },
-      { field: "accounting_method", headerName: "Accounting", flex: 0.85, minWidth: 140 },
-      {
-        field: "value",
-        headerName: "MTCO2e",
-        type: "number",
-        flex: 0.6,
-        minWidth: 120,
-        valueFormatter: (value) => formatNumber(value),
-      },
-      {
-        field: "share_pct",
-        headerName: "Share",
-        type: "number",
-        flex: 0.55,
-        minWidth: 110,
-        valueFormatter: (value) => formatPercent(value),
-      },
-    ],
-    [renderWrappedCell],
-  );
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
@@ -1411,330 +781,66 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       )}
 
       {tab === 1 && hasActiveProject && (
-        <Paper sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
-            <Typography variant="h6">Facilities (with Geo Context)</Typography>
-            <Button variant="contained" onClick={addFacility}>
-              Add Facility
-            </Button>
-          </Stack>
-          <Box sx={{ height: 520 }}>
-            <DataGrid
-              rows={facilities}
-              columns={facilityColumns}
-              processRowUpdate={processFacilityUpdate}
-              onProcessRowUpdateError={() => {}}
-              onCellKeyDown={handleFacilityCellKeyDown}
-              disableRowSelectionOnClick
-            />
-          </Box>
-        </Paper>
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <FacilitiesTab
+            facilities={facilities}
+            setFacilities={setFacilities}
+            onAddFacility={addFacility}
+          />
+        </React.Suspense>
       )}
 
       {tab === 2 && hasActiveProject && (
-        <ActivityInputsPanel
-          activities={activities}
-          setActivities={setActivities}
-          facilities={dataEntryFacilities}
-          activityCatalog={activityCatalog}
-          activityTypesById={activityTypesById}
-          facilityOptions={facilityOptions}
-          inventoryYear={inventoryYear}
-          setInventoryYear={setInventoryYear}
-          gwpSet={gwpSet}
-          setGwpSet={setGwpSet}
-          includeTrace={includeTrace}
-          setIncludeTrace={setIncludeTrace}
-          runCalculation={runCalculation}
-          calculating={calculating}
-          saveCurrentVersion={saveCurrentVersion}
-          catalogError={catalogError}
-          show={show}
-        />
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <ActivityInputsPanel
+            activities={activities}
+            setActivities={setActivities}
+            facilities={dataEntryFacilities}
+            activityCatalog={activityCatalog}
+            activityTypesById={activityTypesById}
+            facilityOptions={facilityOptions}
+            inventoryYear={inventoryYear}
+            setInventoryYear={setInventoryYear}
+            gwpSet={gwpSet}
+            setGwpSet={setGwpSet}
+            includeTrace={includeTrace}
+            setIncludeTrace={setIncludeTrace}
+            runCalculation={runCalculation}
+            calculating={calculating}
+            saveCurrentVersion={saveCurrentVersion}
+            catalogError={catalogError}
+            show={show}
+          />
+        </React.Suspense>
       )}
 
       {tab === 3 && hasActiveProject && (
-        <Stack spacing={2}>
-          <Paper sx={{ p: 2 }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-              <Typography variant="h6">Results</Typography>
-              <Button variant="outlined" onClick={() => saveCurrentVersion("Saved with calculated results.")}>
-                Save Results Snapshot
-              </Button>
-            </Stack>
-            <Box sx={{ height: 420 }}>
-              <DataGrid rows={resultRows} columns={resultColumns} disableRowSelectionOnClick />
-            </Box>
-          </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Summary Totals
-            </Typography>
-            <Box sx={{ height: 240 }}>
-              <DataGrid
-                rows={summaryRows}
-                columns={[
-                  { field: "key", headerName: "Key", flex: 1.5 },
-                  { field: "value", headerName: "Value (metric tons)", type: "number", flex: 0.5, valueFormatter: (value) => formatNumber(value) },
-                ]}
-                disableRowSelectionOnClick
-              />
-            </Box>
-          </Paper>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Trace
-            </Typography>
-            <Box sx={{ maxHeight: 220, overflow: "auto", background: "rgba(0,0,0,0.04)", borderRadius: 1, p: 1 }}>
-              <pre style={{ margin: 0 }}>{JSON.stringify(traceRows, null, 2)}</pre>
-            </Box>
-          </Paper>
-        </Stack>
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <ResultsTab
+            resultRows={resultRows}
+            summaryRows={summaryRows}
+            traceRows={traceRows}
+            onSaveResults={saveCurrentVersion}
+          />
+        </React.Suspense>
       )}
 
       {tab === 4 && hasActiveProject && (
-        <Stack spacing={2}>
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 0.5 }}>
-              Dashboard Summary (MTCO2e)
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Dashboard shows CO2-equivalent emissions only, in metric tons.
-            </Typography>
-          </Paper>
-          <Box
-            sx={{
-              display: "grid",
-              gap: 2,
-              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
-            }}
-          >
-            {dashboardKpis.map((kpi) => (
-              <Paper key={kpi.id} sx={{ p: 2 }}>
-                <Typography variant="overline" color="text.secondary">
-                  {kpi.label}
-                </Typography>
-                <Typography variant="h5" sx={{ mt: 0.25 }}>
-                  {kpi.value}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
-                  {kpi.detail}
-                </Typography>
-              </Paper>
-            ))}
-          </Box>
-          <Paper sx={{ p: 2, minHeight: 420 }}>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>
-              Emissions by Source (Column Chart)
-            </Typography>
-            <SourceBarChart rows={dashboardBySourceRows} />
-          </Paper>
-          <Box
-            sx={{
-              display: "grid",
-              gap: 2,
-              gridTemplateColumns: { xs: "1fr", lg: "minmax(0, 0.95fr) minmax(0, 1.25fr)" },
-              alignItems: "stretch",
-            }}
-          >
-            <Paper sx={{ p: 2, minHeight: 420 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                Emissions by Scope (Donut Chart)
-              </Typography>
-              <ScopeDonutChart rows={dashboardByScopeRows} />
-            </Paper>
-            <Paper sx={{ p: 2, minHeight: 420 }}>
-              <Typography variant="subtitle1" sx={{ mb: 1 }}>
-                Emissions by Facility and Source (Treemap)
-              </Typography>
-              <FacilitySourceTreemap rows={co2eRows} />
-            </Paper>
-          </Box>
-          <Paper sx={{ p: 2 }}>
-            <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1} sx={{ mb: 1 }}>
-              <Typography variant="subtitle1">Detailed CO2e Results</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Use sorting, pagination, and keyboard navigation to inspect the heaviest rows.
-              </Typography>
-            </Stack>
-            <Box sx={{ height: 420 }}>
-              <DataGrid
-                rows={dashboardTableRows}
-                columns={dashboardTableColumns}
-                disableRowSelectionOnClick
-                pageSizeOptions={[10, 25, 50]}
-                initialState={{
-                  sorting: { sortModel: [{ field: "value", sort: "desc" }] },
-                  pagination: { paginationModel: { pageSize: 10, page: 0 } },
-                }}
-              />
-            </Box>
-          </Paper>
-        </Stack>
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <DashboardTab
+            resultRows={resultRows}
+            onSaveResults={saveCurrentVersion}
+          />
+        </React.Suspense>
       )}
 
       {tab === 5 && hasActiveProject && (
-        <Paper sx={{ p: 2 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-            <Typography variant="h6">Audit Pathway</Typography>
-            <Button variant="outlined" onClick={downloadAuditCsv}>
-              Export Audit CSV
-            </Button>
-          </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-            Linear audit rows by facility and source with inputs, selected factors, conversions, and gas-level outputs.
-          </Typography>
-          <Box sx={{ height: 560 }}>
-            <DataGrid
-              rows={auditRows}
-              columns={[
-                {
-                  field: "facility_name",
-                  headerName: "Facility",
-                  flex: 0.85,
-                  valueGetter: (_, row) => row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
-                  renderCell: renderWrappedCell,
-                },
-                {
-                  field: "activity_label",
-                  headerName: "Activity",
-                  flex: 1.1,
-                  valueGetter: (_, row) => row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
-                  renderCell: renderWrappedCell,
-                },
-                { field: "scope", headerName: "Scope", flex: 0.55, renderCell: renderWrappedCell },
-                { field: "accounting_method", headerName: "Accounting", flex: 0.7, renderCell: renderWrappedCell },
-                {
-                  field: "input_activity_value",
-                  headerName: "Input Value",
-                  type: "number",
-                  flex: 0.65,
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                { field: "input_activity_unit", headerName: "Input Unit", flex: 0.65, renderCell: renderWrappedCell },
-                { field: "eqm_method", headerName: "EQM", flex: 0.65, renderCell: renderWrappedCell },
-                { field: "factor_co2_id", headerName: "CO2 Factor ID", flex: 0.85, renderCell: renderWrappedCell },
-                { field: "factor_co2_value", headerName: "CO2 Factor", type: "number", flex: 0.65, valueFormatter: (value) => formatNumber(value) },
-                { field: "factor_co2_unit", headerName: "CO2 Unit", flex: 0.7, renderCell: renderWrappedCell },
-                {
-                  field: "factor_co2_mt",
-                  headerName: "CO2 Factor (MT)",
-                  type: "number",
-                  flex: 0.75,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_co2_value, row.factor_co2_unit).value,
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "factor_co2_mt_unit",
-                  headerName: "CO2 Factor MT Unit",
-                  flex: 0.85,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_co2_value, row.factor_co2_unit).unit,
-                  renderCell: renderWrappedCell,
-                },
-                { field: "factor_co2_source", headerName: "CO2 Source", flex: 0.75, renderCell: renderWrappedCell },
-                { field: "factor_ch4_id", headerName: "CH4 Factor ID", flex: 0.85, renderCell: renderWrappedCell },
-                { field: "factor_ch4_value", headerName: "CH4 Factor", type: "number", flex: 0.65, valueFormatter: (value) => formatNumber(value) },
-                { field: "factor_ch4_unit", headerName: "CH4 Unit", flex: 0.7, renderCell: renderWrappedCell },
-                {
-                  field: "factor_ch4_mt",
-                  headerName: "CH4 Factor (MT)",
-                  type: "number",
-                  flex: 0.75,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_ch4_value, row.factor_ch4_unit).value,
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "factor_ch4_mt_unit",
-                  headerName: "CH4 Factor MT Unit",
-                  flex: 0.85,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_ch4_value, row.factor_ch4_unit).unit,
-                  renderCell: renderWrappedCell,
-                },
-                { field: "factor_ch4_source", headerName: "CH4 Source", flex: 0.75, renderCell: renderWrappedCell },
-                { field: "factor_n2o_id", headerName: "N2O Factor ID", flex: 0.85, renderCell: renderWrappedCell },
-                { field: "factor_n2o_value", headerName: "N2O Factor", type: "number", flex: 0.65, valueFormatter: (value) => formatNumber(value) },
-                { field: "factor_n2o_unit", headerName: "N2O Unit", flex: 0.7, renderCell: renderWrappedCell },
-                {
-                  field: "factor_n2o_mt",
-                  headerName: "N2O Factor (MT)",
-                  type: "number",
-                  flex: 0.75,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_n2o_value, row.factor_n2o_unit).value,
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "factor_n2o_mt_unit",
-                  headerName: "N2O Factor MT Unit",
-                  flex: 0.85,
-                  valueGetter: (_, row) => toMetricTonFactor(row.factor_n2o_value, row.factor_n2o_unit).unit,
-                  renderCell: renderWrappedCell,
-                },
-                { field: "factor_n2o_source", headerName: "N2O Source", flex: 0.75, renderCell: renderWrappedCell },
-                {
-                  field: "co2_result_kg",
-                  headerName: "CO2 mt",
-                  type: "number",
-                  flex: 0.55,
-                  valueGetter: (_, row) => toMetricTons(row.co2_result_kg, "kg"),
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "ch4_result_kg",
-                  headerName: "CH4 mt",
-                  type: "number",
-                  flex: 0.55,
-                  valueGetter: (_, row) => toMetricTons(row.ch4_result_kg, "kg"),
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "n2o_result_kg",
-                  headerName: "N2O mt",
-                  type: "number",
-                  flex: 0.55,
-                  valueGetter: (_, row) => toMetricTons(row.n2o_result_kg, "kg"),
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "co2e_result_kg",
-                  headerName: "CO2e mt",
-                  type: "number",
-                  flex: 0.6,
-                  valueGetter: (_, row) => toMetricTons(row.co2e_result_kg, "kg"),
-                  valueFormatter: (value) => formatNumber(value),
-                },
-                {
-                  field: "activity_conversion_notes",
-                  headerName: "Activity Conversions",
-                  flex: 1.2,
-                  valueGetter: (_, row) => (Array.isArray(row.activity_conversion_notes) ? row.activity_conversion_notes.join("; ") : ""),
-                  renderCell: renderWrappedCell,
-                },
-                {
-                  field: "factor_conversion_notes",
-                  headerName: "Factor Conversions",
-                  flex: 1.2,
-                  valueGetter: (_, row) => (Array.isArray(row.factor_conversion_notes) ? row.factor_conversion_notes.join("; ") : ""),
-                  renderCell: renderWrappedCell,
-                },
-                {
-                  field: "eqm_steps",
-                  headerName: "EQM Steps",
-                  flex: 1.25,
-                  valueGetter: (_, row) => (Array.isArray(row.eqm_steps) ? row.eqm_steps.join("; ") : ""),
-                  renderCell: renderWrappedCell,
-                },
-              ]}
-              getRowHeight={() => "auto"}
-              sx={{
-                "& .MuiDataGrid-cell": {
-                  alignItems: "flex-start",
-                  py: 0.4,
-                },
-              }}
-              disableRowSelectionOnClick
-            />
-          </Box>
-        </Paper>
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <AuditTab
+            auditRows={auditRows}
+            onExportAuditCsv={downloadAuditCsv}
+          />
+        </React.Suspense>
       )}
 
       {!hasActiveProject && tab !== 0 ? (

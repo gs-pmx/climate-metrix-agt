@@ -2,16 +2,25 @@ function normalizeBase(value) {
   return String(value || "").trim().replace(/\/+$/, "");
 }
 
-function apiBaseCandidates() {
+function localDevBaseCandidates() {
+  if (!import.meta.env.DEV) {
+    return [];
+  }
+
   const host = typeof window !== "undefined" ? window.location.hostname : "";
   const protocol = typeof window !== "undefined" ? window.location.protocol : "http:";
   const dynamicHostBase = host ? `${protocol}//${host}:8000` : "";
+
+  return [dynamicHostBase, "http://127.0.0.1:8000", "http://localhost:8000"];
+}
+
+function apiBaseCandidates() {
+  const configuredBase = normalizeBase(import.meta.env.VITE_API_BASE || "");
+  const canonicalBase = configuredBase || "/api";
+
   return [
-    import.meta.env.VITE_API_BASE || "",
-    "/api",
-    dynamicHostBase,
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
+    canonicalBase,
+    ...localDevBaseCandidates(),
   ]
     .map(normalizeBase)
     .filter((v, i, arr) => Boolean(v) && arr.indexOf(v) === i);
