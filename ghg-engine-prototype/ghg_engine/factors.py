@@ -7,9 +7,9 @@ from hashlib import sha1
 import pandas as pd
 from pydantic import BaseModel, Field
 
+from .domain import CanonicalFactorRecord
 from .models import AccountingMethod, EmissionFactorRow, FactorRole, GeoContext
-
-_CONFIDENCE_MAP = {"high": 3, "moderate": 2, "medium": 2, "low": 1}
+from .services import FactorSelectionService
 
 
 class FactorQuery(BaseModel):
@@ -40,6 +40,7 @@ class FactorQuery(BaseModel):
 class FactorRepository:
     def __init__(self, df: pd.DataFrame):
         self.df = self._normalize_df(df)
+        self._selector = FactorSelectionService()
         self._index: dict[tuple[str, str, str], list[int]] = {}
         self._by_factor_id: dict[str, int] = {}
         for i, row in self.df.iterrows():
@@ -150,154 +151,104 @@ class FactorRepository:
         )
         return f"derived_{sha1(payload.encode('utf-8')).hexdigest()[:12]}"
 
-    def _valid_for_period(self, row: pd.Series, q: FactorQuery) -> bool:
-        start, end = q.resolved_period()
-        if start is None and end is None:
-            return True
-        valid_from = row.get("valid_from")
-        valid_to = row.get("valid_to")
-        if pd.notna(valid_from) or pd.notna(valid_to):
-            if pd.notna(valid_from) and end is not None and valid_from > end:
-                return False
-            if pd.notna(valid_to) and start is not None and valid_to < start:
-                return False
-            return True
-        data_year = row.get("data_year")
-        if pd.notna(data_year) and q.inventory_year is not None:
-            return int(data_year) <= q.inventory_year
-        return True
-
-    def _most_specific_query_geo_field(self, q: FactorQuery) -> str | None:
-        if q.geo.egrid_subregion:
-            return "egrid_subregion"
-        if q.geo.state:
-            return "state"
-        if q.geo.country:
-            return "country"
-        if q.geo.region:
-            return "region"
-        return None
-
-    def _geo_score(self, row: pd.Series, q: FactorQuery) -> int:
-        query_geo = {
-            "egrid_subregion": q.geo.egrid_subregion,
-            "state": q.geo.state,
-            "country": q.geo.country,
-            "region": q.geo.region,
-        }
-        row_geo = {
-            "egrid_subregion": row.get("egrid_subregion"),
-            "state": row.get("state"),
-            "country": row.get("country"),
-            "region": row.get("region"),
-        }
-        score = 0
-        for field, field_score in [("egrid_subregion", 40), ("state", 30), ("country", 20), ("region", 10)]:
-            rv = row_geo[field]
-            if pd.isna(rv):
-                continue
-            qv = query_geo[field]
-            if qv is None or str(rv) != qv:
-                return -1
-            score = max(score, field_score)
-        if q.allow_fallback_geography is False:
-            target = self._most_specific_query_geo_field(q)
-            if target is not None:
-                rv = row_geo[target]
-                if pd.isna(rv) or str(rv) != str(query_geo[target]):
-                    return -1
-        if score == 0 and bool(row.get("geography_global", False)):
-            return 0
-        return score
-
-    def _normalize_unit(self, raw: str) -> str:
-        alias = {
-            "gallons": "gal",
-            "gallon": "gal",
-            "gal": "gal",
-            "kwh": "kwh",
-            "kilowatt_hour": "kwh",
-            "mmbtu": "mmbtu",
-            "scf": "scf",
-        }
-        token = raw.strip().lower().replace(" ", "_")
-        return alias.get(token, token)
-
-    def _unit_preference_score(self, row: pd.Series, q: FactorQuery) -> int:
-        if not q.preferred_denominator_units:
-            return 0
-        unit = str(row.get("unit") or row.get("unit_label") or "")
-        if "/" not in unit:
-            return 0
-        denom = self._normalize_unit(unit.split("/")[1])
-        preferred = {self._normalize_unit(x) for x in q.preferred_denominator_units}
-        return 5 if denom in preferred else 0
-
-    def _confidence_score(self, row: pd.Series) -> float:
-        level = str(row.get("confidence_level") or "").strip().lower()
-        if level:
-            return float(_CONFIDENCE_MAP.get(level, 0))
-        confidence = row.get("confidence")
-        if pd.notna(confidence):
-            return float(confidence)
-        return 0.0
-
-    def _to_model(self, row: pd.Series) -> EmissionFactorRow:
+    def _canonical_from_row(self, row: pd.Series) -> CanonicalFactorRecord:
         data = row.to_dict()
-        cleaned = {k: (None if pd.isna(v) else v) for k, v in data.items()}
-        cleaned["factor_id"] = self._derive_factor_id(cleaned)
-        if cleaned.get("gas") is None and cleaned.get("greenhouse_gas") is not None:
-            cleaned["gas"] = cleaned["greenhouse_gas"]
-        if cleaned.get("greenhouse_gas") is None and cleaned.get("gas") is not None:
-            cleaned["greenhouse_gas"] = cleaned["gas"]
-        if cleaned.get("unit") is None and cleaned.get("unit_label") is not None:
-            cleaned["unit"] = cleaned["unit_label"]
-        if cleaned.get("unit_label") is None and cleaned.get("unit") is not None:
-            cleaned["unit_label"] = cleaned["unit"]
-        cleaned["accounting_method"] = cleaned.get("accounting_method") or "none"
-        if cleaned.get("factor_source") is None and cleaned.get("source_entity_short") is not None:
-            cleaned["factor_source"] = cleaned["source_entity_short"]
-        if cleaned.get("source_entity_short") is None and cleaned.get("factor_source") is not None:
-            cleaned["source_entity_short"] = cleaned["factor_source"]
-        if cleaned.get("unit") and "/" in str(cleaned["unit"]):
-            numerator, denominator = str(cleaned["unit"]).split("/", 1)
-            cleaned["unit_1"] = cleaned.get("unit_1") or numerator.strip()
-            cleaned["unit_2"] = cleaned.get("unit_2") or denominator.strip()
-        return EmissionFactorRow(**cleaned)
+        cleaned = {key: (None if pd.isna(value) else value) for key, value in data.items()}
+        factor_id = self._derive_factor_id(cleaned)
+        greenhouse_gas = cleaned.get("greenhouse_gas") or cleaned.get("gas")
+        gas = cleaned.get("gas") or greenhouse_gas
+        unit = cleaned.get("unit") or cleaned.get("unit_label")
+        unit_label = cleaned.get("unit_label") or unit
+        unit_1 = cleaned.get("unit_1")
+        unit_2 = cleaned.get("unit_2")
+        if unit and "/" in str(unit):
+            numerator, denominator = str(unit).split("/", 1)
+            unit_1 = unit_1 or numerator.strip()
+            unit_2 = unit_2 or denominator.strip()
+        attribute = str(cleaned.get("attribute") or "")
+        factor_role = cleaned.get("factor_role")
+        if factor_role is None:
+            factor_role = "heat_content" if attribute == "heat_content" else "emission_factor"
+        return CanonicalFactorRecord(
+            factor_id=factor_id,
+            emission_category=str(cleaned.get("emission_category") or ""),
+            type=str(cleaned.get("type") or ""),
+            description=cleaned.get("description"),
+            attribute=attribute,
+            greenhouse_gas=greenhouse_gas,
+            gas=gas,
+            value=float(cleaned.get("value")),
+            unit=str(unit),
+            unit_label=unit_label,
+            unit_1=unit_1,
+            unit_2=unit_2,
+            life_cycle_stage=cleaned.get("life_cycle_stage"),
+            geography_global=bool(cleaned.get("geography_global", False)),
+            region=cleaned.get("region"),
+            country=cleaned.get("country"),
+            state=cleaned.get("state"),
+            egrid_subregion=cleaned.get("egrid_subregion"),
+            factor_source=cleaned.get("factor_source"),
+            source_entity_short=cleaned.get("source_entity_short"),
+            data_year=int(cleaned["data_year"]) if cleaned.get("data_year") is not None else None,
+            priority=float(cleaned["priority"]) if cleaned.get("priority") is not None else None,
+            confidence=float(cleaned["confidence"]) if cleaned.get("confidence") is not None else None,
+            confidence_level=cleaned.get("confidence_level"),
+            updated_at=cleaned.get("updated_at"),
+            last_updated=cleaned.get("last_updated"),
+            valid_from=cleaned.get("valid_from"),
+            valid_to=cleaned.get("valid_to"),
+            accounting_method=cleaned.get("accounting_method") or "none",
+            factor_role=factor_role,
+        )
+
+    @staticmethod
+    def _model_from_canonical(record: CanonicalFactorRecord) -> EmissionFactorRow:
+        return EmissionFactorRow(
+            factor_id=record.factor_id,
+            emission_category=record.emission_category,
+            type=record.type,
+            life_cycle_stage=record.life_cycle_stage,
+            description=record.description or "",
+            attribute=record.attribute,
+            gas=record.gas,
+            greenhouse_gas=record.greenhouse_gas,
+            value=record.value,
+            unit=record.unit,
+            unit_label=record.unit_label,
+            unit_1=record.unit_1,
+            unit_2=record.unit_2,
+            valid_from=record.valid_from,
+            valid_to=record.valid_to,
+            geography_global=record.geography_global,
+            region=record.region,
+            country=record.country,
+            state=record.state,
+            egrid_subregion=record.egrid_subregion,
+            source_entity_short=record.source_entity_short,
+            factor_source=record.factor_source,
+            data_year=record.data_year,
+            confidence=record.confidence,
+            confidence_level=record.confidence_level,
+            priority=record.priority,
+            updated_at=record.updated_at,
+            last_updated=record.last_updated,
+            accounting_method=record.accounting_method,
+        )
 
     def get_by_factor_id(self, factor_id: str) -> EmissionFactorRow | None:
         idx = self._by_factor_id.get(str(factor_id))
         if idx is None:
             return None
         row = self.df.loc[idx]
-        return self._to_model(row)
+        return self._model_from_canonical(self._canonical_from_row(row))
 
     def candidates(self, q: FactorQuery) -> list[EmissionFactorRow]:
         base = self._coarse_rows(q)
         if base.empty:
             return []
-        rows = base.copy()
-        if q.description is not None:
-            rows = rows[rows["description"] == q.description]
-        if q.life_cycle_stage is not None:
-            rows = rows[rows["life_cycle_stage"] == q.life_cycle_stage]
-        if q.greenhouse_gas is not None:
-            rows = rows[rows["greenhouse_gas"] == q.greenhouse_gas]
-        if q.accounting_method != "none":
-            rows = rows[rows["accounting_method"] == q.accounting_method]
-        if "factor_role" in rows.columns:
-            rows = rows[(rows["factor_role"].isna()) | (rows["factor_role"] == q.role)]
-        if rows.empty:
-            return []
-        rows = rows[rows.apply(lambda row: self._valid_for_period(row, q), axis=1)]
-        if rows.empty:
-            return []
-        if q.inventory_year is not None and "data_year" in rows.columns:
-            year_rows = rows[pd.notna(rows["data_year"])]
-            if not year_rows.empty:
-                best_year = int(year_rows["data_year"].max())
-                rows = rows[(pd.isna(rows["data_year"])) | (rows["data_year"] == best_year)]
-        return [self._to_model(row) for _, row in rows.iterrows()]
+        records = [self._canonical_from_row(row) for _, row in base.iterrows()]
+        return [self._model_from_canonical(record) for record in self._selector.candidates(records, q)]
 
     def select_best(self, q: FactorQuery, *, trace: list[str] | None = None) -> EmissionFactorRow | None:
         base = self._coarse_rows(q)
@@ -305,57 +256,11 @@ class FactorRepository:
             if trace is not None:
                 trace.append("factor select: 0 coarse candidates")
             return None
-        filtered = base.copy()
-        if q.description is not None:
-            filtered = filtered[filtered["description"] == q.description]
-        if q.life_cycle_stage is not None:
-            filtered = filtered[filtered["life_cycle_stage"] == q.life_cycle_stage]
-        if q.greenhouse_gas is not None:
-            filtered = filtered[filtered["greenhouse_gas"] == q.greenhouse_gas]
-        if q.accounting_method != "none":
-            filtered = filtered[filtered["accounting_method"] == q.accounting_method]
-        filtered = filtered[filtered.apply(lambda row: self._valid_for_period(row, q), axis=1)]
-        if filtered.empty:
-            if trace is not None:
-                trace.append("factor select: no candidates after filtering")
+        records = [self._canonical_from_row(row) for _, row in base.iterrows()]
+        chosen = self._selector.select_best(records, q, trace=trace, trace_prefix="factor select")
+        if chosen is None:
             return None
-        scored: list[tuple[tuple[float, ...], pd.Series]] = []
-        for _, row in filtered.iterrows():
-            geo_score = self._geo_score(row, q)
-            if geo_score < 0:
-                continue
-            row_source = str(row.get("source_entity_short", "")).lower()
-            user_pref = 1000.0 if (q.allow_user_factors and row_source == "user") else 0.0
-            unit_score = float(self._unit_preference_score(row, q))
-            priority = float(row.get("priority")) if pd.notna(row.get("priority")) else 0.0
-            confidence = self._confidence_score(row)
-            data_year = float(row.get("data_year")) if pd.notna(row.get("data_year")) else -1.0
-            last_updated = row.get("last_updated") or row.get("updated_at")
-            last_updated_ord = -1.0
-            if pd.notna(last_updated) and isinstance(last_updated, date):
-                last_updated_ord = float(last_updated.toordinal())
-            sort_key = (
-                user_pref + geo_score + unit_score + (priority / 100.0),
-                geo_score,
-                unit_score,
-                priority,
-                confidence,
-                data_year,
-                last_updated_ord,
-            )
-            scored.append((sort_key, row))
-        if not scored:
-            if trace is not None:
-                trace.append("factor select: no candidates after geography rules")
-            return None
-        scored.sort(key=lambda x: x[0], reverse=True)
-        chosen = self._to_model(scored[0][1])
-        if trace is not None:
-            trace.append(
-                f"factor select: candidates={len(filtered)} chosen={chosen.factor_id} "
-                f"score={scored[0][0][0]:.2f} geo={scored[0][0][1]:.0f} unit={scored[0][0][2]:.0f}"
-            )
-        return chosen
+        return self._model_from_canonical(chosen)
 
     def find(self, q: FactorQuery) -> list[EmissionFactorRow]:
         return self.candidates(q)
@@ -370,8 +275,8 @@ class FactorRepository:
             mask = df.apply(lambda col: col.astype(str).str.lower().str.contains(needle, na=False))
             df = df[mask.any(axis=1)]
         cols = [
-            c
-            for c in [
+            col
+            for col in [
                 "factor_id",
                 "emission_category",
                 "type",
@@ -381,6 +286,6 @@ class FactorRepository:
                 "unit",
                 "factor_source",
             ]
-            if c in df.columns
+            if col in df.columns
         ]
         return df[cols].head(100).to_dict(orient="records")
