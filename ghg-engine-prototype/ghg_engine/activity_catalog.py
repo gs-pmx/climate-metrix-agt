@@ -5,10 +5,19 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from .models import AccountingMethod, Scope
+from .models import ActivityRecord, AccountingMethod, Scope
 
 ImplementationStatus = Literal["implemented", "partial", "planned", "deferred"]
 InputKind = Literal["quantity", "number", "enum", "string", "boolean"]
+RUNTIME_METHODS = {
+    "direct_factor",
+    "scope2_energy",
+    "distance_plus_efficiency",
+    "freight_ton_mile",
+    "passenger_distance",
+    "refrigerant_mass_to_gwp",
+    "waste_mass",
+}
 
 
 class ActivityInputField(BaseModel):
@@ -62,8 +71,6 @@ class FactorQueryTemplate(BaseModel):
 
 class ActivityTypeDefinition(BaseModel):
     activity_type_id: str
-    source_id: str
-    legacy_source_ids: list[str] = Field(default_factory=list)
     workbook_aliases: list[str] = Field(default_factory=list)
     label: str
     description: str
@@ -93,19 +100,27 @@ class ActivityTypeDefinition(BaseModel):
             raise ValueError(f"default_unit '{self.default_unit}' must exist in allowed_units")
         return self
 
+    def primary_field(self) -> ActivityInputField:
+        for field in self.input_schema.fields:
+            if field.is_primary:
+                return field
+        raise ValueError(f"activity_type_id '{self.activity_type_id}' is missing a primary input field")
+
+    def allowed_primary_units(self) -> list[str]:
+        primary = self.primary_field()
+        units = primary.allowed_units or ([primary.default_unit] if primary.default_unit else [])
+        return [unit for unit in units if unit]
+
 
 class ActivityCatalog:
     def __init__(self, rows: list[ActivityTypeDefinition]):
         self.rows = rows
         self._by_activity_type_id: dict[str, ActivityTypeDefinition] = {}
-        self._by_source_id: dict[str, ActivityTypeDefinition] = {}
         for row in rows:
             if row.activity_type_id in self._by_activity_type_id:
                 raise ValueError(f"duplicate activity_type_id '{row.activity_type_id}'")
-            if row.source_id in self._by_source_id:
-                raise ValueError(f"duplicate source_id '{row.source_id}'")
             self._by_activity_type_id[row.activity_type_id] = row
-            self._by_source_id[row.source_id] = row
+        self._validate_runtime_rows()
 
     @classmethod
     def from_json(cls, path: str | Path) -> ActivityCatalog:
@@ -127,6 +142,99 @@ class ActivityCatalog:
             raise KeyError(f"unknown activity_type_id {activity_type_id}")
         return row
 
-    def get_by_source_id(self, source_id: str) -> ActivityTypeDefinition | None:
-        return self._by_source_id.get(source_id)
+    def validate_activity(self, activity_def: ActivityTypeDefinition, activity: ActivityRecord) -> None:
+        allowed_units = set(activity_def.allowed_primary_units())
+        if allowed_units and activity.activity.unit not in allowed_units:
+            raise ValueError(
+                f"{activity_def.activity_type_id} activity unit '{activity.activity.unit}' "
+                f"is not one of {sorted(allowed_units)}"
+            )
+        for field in activity_def.input_schema.fields:
+            if field.is_primary:
+                continue
+            key = field.param_key or field.field_id
+            value = activity.params.get(key)
+            if field.required and value in (None, ""):
+                raise ValueError(f"{activity_def.activity_type_id} requires params.{key}")
+            if value in (None, ""):
+                continue
+            self._validate_field_value(activity_def, field, key, value)
 
+    def _validate_runtime_rows(self) -> None:
+        for row in self.rows:
+            if row.implementation_status not in {"implemented", "partial"}:
+                continue
+            errors: list[str] = []
+            if not row.source_type:
+                errors.append("source_type")
+            if row.method_id in RUNTIME_METHODS and not row.emission_category:
+                errors.append("emission_category")
+            if row.method_id in {
+                "direct_factor",
+                "scope2_energy",
+                "freight_ton_mile",
+                "passenger_distance",
+                "waste_mass",
+                "refrigerant_mass_to_gwp",
+            } and not row.factor_query_templates:
+                errors.append("factor_query_templates")
+            if row.method_id == "distance_plus_efficiency":
+                param_keys = {field.param_key or field.field_id for field in row.input_schema.fields}
+                if "mpg" not in param_keys:
+                    errors.append("input_schema.params.mpg")
+            if row.method_id == "waste_mass":
+                param_keys = {field.param_key or field.field_id for field in row.input_schema.fields}
+                if "disposal_method" not in param_keys:
+                    errors.append("input_schema.params.disposal_method")
+            if row.method_id == "refrigerant_mass_to_gwp":
+                param_keys = {field.param_key or field.field_id for field in row.input_schema.fields}
+                if "refrigerant_type" not in param_keys:
+                    errors.append("input_schema.params.refrigerant_type")
+            if row.implementation_status == "partial" and not row.accounting_metadata.get("partial_reason"):
+                errors.append("accounting_metadata.partial_reason")
+            row.primary_field()
+            if errors:
+                raise ValueError(
+                    f"activity_type_id '{row.activity_type_id}' is {row.implementation_status} "
+                    f"but missing runtime fields: {', '.join(errors)}"
+                )
+
+    def _validate_field_value(
+        self,
+        activity_def: ActivityTypeDefinition,
+        field: ActivityInputField,
+        key: str,
+        value: Any,
+    ) -> None:
+        prefix = f"{activity_def.activity_type_id} params.{key}"
+        if field.kind == "number":
+            try:
+                number = float(value)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{prefix} must be numeric") from exc
+            if number <= 0:
+                raise ValueError(f"{prefix} must be > 0")
+            return
+        if field.kind == "enum":
+            if str(value) not in field.options:
+                raise ValueError(f"{prefix} must be one of {field.options}")
+            return
+        if field.kind == "boolean":
+            if not isinstance(value, bool):
+                raise ValueError(f"{prefix} must be boolean")
+            return
+        if field.kind == "string":
+            if not isinstance(value, str):
+                raise ValueError(f"{prefix} must be a string")
+            return
+        if field.kind == "quantity":
+            if not isinstance(value, dict):
+                raise ValueError(f"{prefix} must be an object with value and unit")
+            qty = value.get("value")
+            unit = value.get("unit")
+            try:
+                float(qty)
+            except (TypeError, ValueError) as exc:
+                raise ValueError(f"{prefix}.value must be numeric") from exc
+            if field.allowed_units and unit not in field.allowed_units:
+                raise ValueError(f"{prefix}.unit must be one of {field.allowed_units}")

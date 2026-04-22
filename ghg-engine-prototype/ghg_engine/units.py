@@ -5,6 +5,7 @@ import pint
 
 def build_unit_registry() -> pint.UnitRegistry:
     ureg = pint.UnitRegistry(autoconvert_offset_to_baseunit=True)
+    ureg.define("btu = british_thermal_unit")
     ureg.define("scf = cubic_foot = standard_cubic_foot")
     ureg.define("mmbtu = 1000000 * btu")
     ureg.define("therm = 100000 * btu = therms")
@@ -38,6 +39,7 @@ def build_unit_registry() -> pint.UnitRegistry:
         "therms": "therm",
         "tons": "short_ton",
         "short ton": "short_ton",
+        "short-ton": "short_ton",
         "klbs": "klbs",
         "pounds": "pound",
         "kg/kwh": "kilogram / kilowatt_hour",
@@ -49,6 +51,13 @@ def build_unit_registry() -> pint.UnitRegistry:
         "kg/scf": "kilogram / scf",
         "g/scf": "gram / scf",
         "passenger miles": "passenger_miles",
+        "passenger-mile": "passenger_miles",
+        "short-ton-mile": "ton_miles",
+        "kg/short-ton-mile": "kilogram / ton_miles",
+        "g/short-ton-mile": "gram / ton_miles",
+        "kg/passenger-mile": "kilogram / passenger_miles",
+        "g/passenger-mile": "gram / passenger_miles",
+        "mt/short-ton": "metric_ton / short_ton",
         "ton-miles / year": "ton_miles",
         "ton-miles": "ton_miles",
     }

@@ -24,77 +24,168 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
-import { EMPTY_ACTIVITY, uid, unitOptionsForSource } from "./constants";
+import ActivityDetailDialog from "./ActivityDetailDialog";
+import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
+import RepeatableActivityDialog from "./RepeatableActivityDialog";
+import {
+  EMPTY_ACTIVITY,
+  activityRequiresDetails,
+  createEmptyDraft,
+  getAllowedUnits,
+  getCompletionState,
+  getDefaultUnit,
+  getPartialReason,
+  isRepeatableActivity,
+  uid,
+  withActivityTypeDefaults,
+} from "./activityDrafts";
 import { parseTSV } from "./usePasteHandler";
 
-/* ------------------------------------------------------------------ */
-/*  Clipboard paste handler for DataGrid                               */
-/* ------------------------------------------------------------------ */
+function CompletionChip({ draft, activityType }) {
+  const completion = getCompletionState(draft, activityType);
+  return <Chip label={completion.label} color={completion.color} size="small" variant="outlined" />;
+}
 
-function makePasteHandler({ gridRows, columns, onPasteApply, show }) {
+function hasMeaningfulData(draft) {
+  if (draft?.activity?.value !== "" && draft?.activity?.value != null) return true;
+  return Object.values(draft?.params || {}).some((value) => value !== "" && value != null);
+}
+
+function pairKey(facilityId, activityTypeId) {
+  return `${facilityId}::${activityTypeId}`;
+}
+
+function RepeatableCompletionChip({ drafts, activityType }) {
+  const meaningfulDrafts = drafts.filter(hasMeaningfulData);
+  if (!meaningfulDrafts.length) {
+    return <Chip label="No entries" color="default" size="small" variant="outlined" />;
+  }
+  const invalidCount = meaningfulDrafts.filter((draft) => {
+    const state = getCompletionState(draft, activityType).state;
+    return !["complete", "partial"].includes(state);
+  }).length;
+  if (invalidCount > 0) {
+    return <Chip label={`${meaningfulDrafts.length} entries, ${invalidCount} incomplete`} color="warning" size="small" variant="outlined" />;
+  }
+  if (activityType?.implementation_status === "partial") {
+    return <Chip label={`${meaningfulDrafts.length} entries, partial`} color="warning" size="small" variant="outlined" />;
+  }
+  return <Chip label={`${meaningfulDrafts.length} entries`} color="success" size="small" variant="outlined" />;
+}
+
+function makePasteAndNavigationHandler({ getRows, editableFields, onPasteApply, show, canEditCell = () => true }) {
+  function advancePosition(rowIndex, fieldIndex, isReverse, key) {
+    let nextRowIndex = rowIndex;
+    let nextFieldIndex = fieldIndex;
+    if (key === "Enter") {
+      nextRowIndex += isReverse ? -1 : 1;
+    } else if (isReverse) {
+      if (fieldIndex === 0) {
+        nextRowIndex -= 1;
+        nextFieldIndex = editableFields.length - 1;
+      } else {
+        nextFieldIndex -= 1;
+      }
+    } else if (fieldIndex === editableFields.length - 1) {
+      nextRowIndex += 1;
+      nextFieldIndex = 0;
+    } else {
+      nextFieldIndex += 1;
+    }
+    return { nextRowIndex, nextFieldIndex };
+  }
+
   return (params, event) => {
-    if (!((event.ctrlKey || event.metaKey) && event.key === "v")) return;
+    const key = String(event.key || "");
+
+    if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "v") {
+      event.preventDefault();
+      event.defaultMuiPrevented = true;
+
+      navigator.clipboard.readText().then((text) => {
+        const parsed = parseTSV(text);
+        if (!parsed.length) return;
+
+        const gridRows = getRows();
+        const rowIds = gridRows.map((row) => row.id);
+        const startRowIndex = rowIds.indexOf(params.id);
+        if (startRowIndex < 0) return;
+
+        let startColumnIndex = editableFields.indexOf(params.field);
+        if (startColumnIndex < 0) startColumnIndex = 0;
+
+        const updates = [];
+        for (let rowOffset = 0; rowOffset < parsed.length; rowOffset += 1) {
+          const rowIndex = startRowIndex + rowOffset;
+          if (rowIndex >= gridRows.length) break;
+          const nextRow = { ...gridRows[rowIndex] };
+          let changed = false;
+          for (let columnOffset = 0; columnOffset < parsed[rowOffset].length; columnOffset += 1) {
+            const columnIndex = startColumnIndex + columnOffset;
+            if (columnIndex >= editableFields.length) break;
+            const field = editableFields[columnIndex];
+            if (!canEditCell(nextRow, field)) continue;
+            const cellValue = parsed[rowOffset][columnOffset];
+            if (cellValue === "") continue;
+            nextRow[field] = cellValue;
+            changed = true;
+          }
+          if (changed) updates.push(nextRow);
+        }
+
+        if (updates.length) {
+          onPasteApply(updates);
+          show(`Pasted ${updates.length} row(s).`, "success");
+        }
+      }).catch(() => {
+        show("Could not read clipboard. Check browser permissions.", "warning");
+      });
+      return;
+    }
+
+    if (key !== "Tab" && key !== "Enter") return;
+
+    const rowIds = getRows().map((row) => row.id);
+    const rowIndex = rowIds.indexOf(params.id);
+    const fieldIndex = editableFields.indexOf(params.field);
+    if (rowIndex < 0 || fieldIndex < 0) return;
+
+    const isReverse = event.shiftKey;
+    let { nextRowIndex, nextFieldIndex } = advancePosition(rowIndex, fieldIndex, isReverse, key);
+
+    let attempts = 0;
+    const rows = getRows();
+    while (rows[nextRowIndex] && editableFields[nextFieldIndex] && !canEditCell(rows[nextRowIndex], editableFields[nextFieldIndex])) {
+      ({ nextRowIndex, nextFieldIndex } = advancePosition(nextRowIndex, nextFieldIndex, isReverse, key));
+      attempts += 1;
+      if (attempts > rows.length * Math.max(editableFields.length, 1)) return;
+    }
+
+    const nextRowId = rowIds[nextRowIndex];
+    const nextField = editableFields[nextFieldIndex];
+    if (nextRowId === undefined || !nextField) return;
+
     event.preventDefault();
     event.defaultMuiPrevented = true;
 
-    navigator.clipboard.readText().then((text) => {
-      const parsed = parseTSV(text);
-      if (!parsed.length) return;
-
-      const editableFields = columns.filter((c) => c.editable).map((c) => c.field);
-      if (!editableFields.length) return;
-
-      const rowIds = gridRows.map((r) => r.id);
-      const startRowIdx = rowIds.indexOf(params.id);
-      if (startRowIdx < 0) return;
-
-      // If focused on a read-only column, start from the first editable column
-      let startColIdx = editableFields.indexOf(params.field);
-      if (startColIdx < 0) startColIdx = 0;
-
-      const updates = [];
-      for (let r = 0; r < parsed.length; r++) {
-        const rowIdx = startRowIdx + r;
-        if (rowIdx >= gridRows.length) break;
-        const targetRow = { ...gridRows[rowIdx] };
-        let changed = false;
-        for (let c = 0; c < parsed[r].length; c++) {
-          const colIdx = startColIdx + c;
-          if (colIdx >= editableFields.length) break;
-          const field = editableFields[colIdx];
-          const cellValue = parsed[r][c];
-          if (cellValue !== "") {
-            targetRow[field] = cellValue;
-            changed = true;
-          }
-        }
-        if (changed) updates.push(targetRow);
-      }
-
-      if (updates.length) {
-        onPasteApply(updates);
-        show(`Pasted ${updates.length} row(s).`, "success");
-      }
-    }).catch(() => {
-      show("Could not read clipboard. Check browser permissions.", "warning");
-    });
+    if (params.cellMode === "edit") {
+      params.api.stopCellEditMode({ id: params.id, field: params.field });
+    }
+    params.api.setCellFocus(nextRowId, nextField);
+    params.api.startCellEditMode({ id: nextRowId, field: nextField });
   };
 }
 
-/* ------------------------------------------------------------------ */
-/*  Row-by-Row View (port of existing code)                            */
-/* ------------------------------------------------------------------ */
-
 function RowByRowView({
   activities,
-  routingById,
+  activityTypesById,
   facilityOptions,
-  sourceOptions,
-  updateActivityField,
+  activityOptions,
+  updateDraft,
   addActivity,
   removeActivity,
-  routingError,
-  routing,
+  openDetails,
+  catalogError,
 }) {
   return (
     <Paper sx={{ p: 2 }}>
@@ -105,14 +196,11 @@ function RowByRowView({
         </Button>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Multi-input travel rows collect MPG only when the selected EQM requires it.
+        Use this view for one-off edits. Bulk paste, spreadsheet-style entry, and Enter-to-next-row navigation are available in the By Activity and By Facility views.
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Loaded sources from routing table: {routing.length}
-      </Typography>
-      {routingError ? (
+      {catalogError ? (
         <Alert severity="error" sx={{ mb: 1 }}>
-          Failed to load routing sources: {routingError}
+          Failed to load activity catalog: {catalogError}
         </Alert>
       ) : null}
       <TableContainer sx={{ maxHeight: 520, border: "1px solid", borderColor: "divider", borderRadius: 2 }}>
@@ -120,42 +208,44 @@ function RowByRowView({
           <TableHead>
             <TableRow>
               <TableCell>Facility</TableCell>
-              <TableCell>Source</TableCell>
+              <TableCell>Activity</TableCell>
               <TableCell>Activity Value</TableCell>
               <TableCell>Unit</TableCell>
+              <TableCell>Status</TableCell>
+              <TableCell>Details</TableCell>
               <TableCell>Actions</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {activities.map((row) => {
-              const src = routingById[row.source_id];
-              const unitOptions = unitOptionsForSource(src);
+            {activities.map((draft) => {
+              const activityType = activityTypesById[draft.activity_type_id];
+              const unitOptions = getAllowedUnits(activityType);
               return (
-                <TableRow key={row.id}>
+                <TableRow key={draft.id}>
                   <TableCell sx={{ minWidth: 210 }}>
                     <Select
                       size="small"
-                      value={row.facility_id}
-                      onChange={(e) => updateActivityField(row.id, "facility_id", e.target.value)}
+                      value={draft.facility_id}
+                      onChange={(event) => updateDraft(draft.id, { facility_id: event.target.value })}
                       fullWidth
                     >
-                      {facilityOptions.map((opt) => (
-                        <MenuItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {facilityOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
                         </MenuItem>
                       ))}
                     </Select>
                   </TableCell>
-                  <TableCell sx={{ minWidth: 260 }}>
+                  <TableCell sx={{ minWidth: 280 }}>
                     <Select
                       size="small"
-                      value={row.source_id}
-                      onChange={(e) => updateActivityField(row.id, "source_id", e.target.value)}
+                      value={draft.activity_type_id}
+                      onChange={(event) => updateDraft(draft.id, { activity_type_id: event.target.value })}
                       fullWidth
                     >
-                      {sourceOptions.map((opt) => (
-                        <MenuItem key={opt.value} value={opt.value}>
-                          {opt.label}
+                      {activityOptions.map((option) => (
+                        <MenuItem key={option.value} value={option.value}>
+                          {option.label}
                         </MenuItem>
                       ))}
                     </Select>
@@ -164,27 +254,40 @@ function RowByRowView({
                     <TextField
                       size="small"
                       type="number"
-                      value={row.activity_value}
-                      onChange={(e) => updateActivityField(row.id, "activity_value", e.target.value)}
+                      value={draft.activity.value}
+                      onChange={(event) => updateDraft(draft.id, { activity: { ...draft.activity, value: event.target.value } })}
                       fullWidth
                     />
                   </TableCell>
                   <TableCell sx={{ minWidth: 170 }}>
                     <Select
                       size="small"
-                      value={row.activity_unit}
-                      onChange={(e) => updateActivityField(row.id, "activity_unit", e.target.value)}
+                      value={draft.activity.unit}
+                      onChange={(event) => updateDraft(draft.id, { activity: { ...draft.activity, unit: event.target.value } })}
                       fullWidth
                     >
-                      {unitOptions.map((u) => (
-                        <MenuItem key={u} value={u}>
-                          {u}
+                      {unitOptions.map((unit) => (
+                        <MenuItem key={unit} value={unit}>
+                          {unit}
                         </MenuItem>
                       ))}
                     </Select>
                   </TableCell>
+                  <TableCell sx={{ minWidth: 140 }}>
+                    <CompletionChip draft={draft} activityType={activityType} />
+                  </TableCell>
                   <TableCell sx={{ minWidth: 120 }}>
-                    <Button color="error" size="small" onClick={() => removeActivity(row.id)}>
+                    <Button
+                      size="small"
+                      variant="outlined"
+                      disabled={!activityType}
+                      onClick={() => openDetails(draft.id)}
+                    >
+                      {isRepeatableActivity(activityType) ? "Entry Details" : activityRequiresDetails(activityType) ? "Edit" : "View"}
+                    </Button>
+                  </TableCell>
+                  <TableCell sx={{ minWidth: 120 }}>
+                    <Button color="error" size="small" onClick={() => removeActivity(draft.id)}>
                       Remove
                     </Button>
                   </TableCell>
@@ -198,75 +301,25 @@ function RowByRowView({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Helpers shared by bulk views                                       */
-/* ------------------------------------------------------------------ */
-
-function hydrateFromSource(src) {
-  return {
-    activity_type_id: src.activity_type_id || "",
-    source_id: src.source_id || "",
-    source_label: src.label || src.source_type,
-    source_type: src.source_type,
-    scope: src.scope,
-    metric_group: src.metric_group,
-    metric_subgroup: src.metric_subgroup || "",
-    method_id: src.method_id || "",
-  };
-}
-
-function defaultUnitForSource(src) {
-  const units = unitOptionsForSource(src);
-  return units[0] || src.default_unit || "";
-}
-
-function sourceNeedsMpg(source, unit) {
-  return source?.method_id === "miles_to_fuel" && String(unit).toLowerCase().startsWith("mile");
-}
-
-/* ------------------------------------------------------------------ */
-/*  By Source View                                                     */
-/* ------------------------------------------------------------------ */
-
-function BySourceView({ activities, setActivities, facilities, routing, show }) {
-  const upsertActivity = React.useCallback(
-    (facilityId, source, value, unit, mpg) => {
-      setActivities((prev) => {
-        const idx = prev.findIndex((a) => a.facility_id === facilityId && a.source_id === source.source_id);
-        if (value === "" || value == null) {
-          if (idx >= 0) return prev.filter((_, i) => i !== idx);
-          return prev;
-        }
-        const base = {
-          ...EMPTY_ACTIVITY,
-          id: idx >= 0 ? prev[idx].id : uid(),
-          facility_id: facilityId,
-          source_id: source.source_id,
-          ...hydrateFromSource(source),
-          activity_value: value,
-          activity_unit: unit || defaultUnitForSource(source),
-        };
-        if (mpg && sourceNeedsMpg(source, base.activity_unit)) {
-          base.params = { mpg: Number(mpg), fuel_type: source.source_type };
-        }
-        if (idx >= 0) {
-          return prev.map((r, i) => (i === idx ? { ...prev[idx], ...base } : r));
-        }
-        return [...prev, base];
-      });
-    },
-    [setActivities],
-  );
-
+function BulkByActivityView({
+  activitiesByPair,
+  facilities,
+  selectableActivities,
+  upsertActivity,
+  openDetailsForPair,
+  show,
+}) {
   return (
     <Stack spacing={1}>
-      {routing.map((source) => (
-        <SourceAccordion
-          key={source.source_id}
-          source={source}
-          activities={activities}
+      {selectableActivities.map((activityType) => (
+        <ActivityAccordion
+          key={activityType.activity_type_id}
+          activityType={activityType}
+          activitiesByPair={activitiesByPair}
           facilities={facilities}
+          totalActivities={selectableActivities.length}
           upsertActivity={upsertActivity}
+          openDetailsForPair={openDetailsForPair}
           show={show}
         />
       ))}
@@ -274,121 +327,157 @@ function BySourceView({ activities, setActivities, facilities, routing, show }) 
   );
 }
 
-function SourceAccordion({ source, activities, facilities, upsertActivity, show }) {
-  const unitOptions = unitOptionsForSource(source);
-  const [sectionUnit, setSectionUnit] = React.useState(unitOptions[0] || source.default_unit || "");
-  const showMpg = sourceNeedsMpg(source, sectionUnit);
-
-  const gridRows = React.useMemo(() => {
-    return facilities.map((fac) => {
-      const existing = activities.find(
-        (a) => a.facility_id === fac.id && a.source_id === source.source_id,
-      );
+function ActivityAccordion({
+  activityType,
+  activitiesByPair,
+  facilities,
+  totalActivities,
+  upsertActivity,
+  openDetailsForPair,
+  show,
+}) {
+  const repeatable = isRepeatableActivity(activityType);
+  const unitOptions = getAllowedUnits(activityType);
+  const gridRows = React.useMemo(
+    () => facilities.map((facility) => {
+      const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
+      const draft = drafts[0]
+        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
       return {
-        id: `${source.source_id}__${fac.id}`,
-        facility_id: fac.id,
-        facility_name: fac.facility_name || fac.id,
-        activity_value: existing?.activity_value ?? "",
-        activity_unit: existing?.activity_unit || sectionUnit,
-        mpg: existing?.params?.mpg ?? "",
+        id: `${activityType.activity_type_id}__${facility.id}`,
+        facility_id: facility.id,
+        facility_name: facility.facility_name,
+        activity_value: draft.activity.value,
+        activity_unit: draft.activity.unit || getDefaultUnit(activityType),
+        draft,
+        drafts,
+        draft_count: drafts.filter(hasMeaningfulData).length,
+        _repeatable: repeatable,
+        _unitOptions: unitOptions,
       };
-    });
-  }, [facilities, activities, source.source_id, sectionUnit]);
+    }),
+    [activitiesByPair, activityType, facilities, repeatable, unitOptions],
+  );
 
-  const filledCount = gridRows.filter((r) => r.activity_value !== "").length;
-
-  const columns = React.useMemo(() => {
-    const cols = [
-      { field: "facility_name", headerName: "Facility", flex: 1, editable: false },
-      { field: "activity_value", headerName: "Activity Value", flex: 0.8, editable: true, type: "number" },
-      {
-        field: "activity_unit",
-        headerName: "Unit",
-        flex: 0.6,
-        editable: true,
-        type: "singleSelect",
-        valueOptions: unitOptions,
-      },
-    ];
-    if (showMpg) {
-      cols.push({
-        field: "mpg",
-        headerName: "MPG",
-        flex: 0.4,
-        editable: true,
-        type: "number",
-      });
-    }
-    return cols;
-  }, [unitOptions, showMpg]);
+  const filledCount = gridRows.filter((row) => (repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
+  const columns = React.useMemo(
+    () => repeatable
+      ? [
+        { field: "facility_name", headerName: "Facility", flex: 1, editable: false },
+        {
+          field: "draft_count",
+          headerName: "Entries",
+          flex: 0.7,
+          editable: false,
+          sortable: false,
+          renderCell: (params) => (
+            <Typography variant="body2">
+              {params.row.draft_count ? `${params.row.draft_count} entries` : "No entries"}
+            </Typography>
+          ),
+        },
+        {
+          field: "status",
+          headerName: "Status",
+          flex: 0.85,
+          editable: false,
+          sortable: false,
+          renderCell: (params) => <RepeatableCompletionChip drafts={params.row.drafts} activityType={activityType} />,
+        },
+        {
+          field: "details",
+          headerName: "Details",
+          flex: 0.7,
+          editable: false,
+          sortable: false,
+          renderCell: (params) => (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => openDetailsForPair(params.row.facility_id, activityType.activity_type_id)}
+            >
+              Manage
+            </Button>
+          ),
+        },
+      ]
+      : [
+        { field: "facility_name", headerName: "Facility", flex: 1, editable: false },
+        { field: "activity_value", headerName: "Activity Value", flex: 0.8, editable: true, type: "number" },
+        {
+          field: "activity_unit",
+          headerName: "Unit",
+          flex: 0.6,
+          editable: true,
+          type: "singleSelect",
+          valueOptions: unitOptions,
+        },
+        {
+          field: "status",
+          headerName: "Status",
+          flex: 0.75,
+          editable: false,
+          sortable: false,
+          renderCell: (params) => <CompletionChip draft={params.row.draft} activityType={activityType} />,
+        },
+        {
+          field: "details",
+          headerName: "Details",
+          flex: 0.6,
+          editable: false,
+          sortable: false,
+          renderCell: (params) => (
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => openDetailsForPair(params.row.facility_id, activityType.activity_type_id)}
+            >
+              {activityRequiresDetails(activityType) ? "Edit" : "View"}
+            </Button>
+          ),
+        },
+      ],
+    [activityType, openDetailsForPair, repeatable, unitOptions],
+  );
 
   const processRowUpdate = React.useCallback(
     (newRow) => {
-      upsertActivity(
-        newRow.facility_id,
-        source,
-        newRow.activity_value === "" || newRow.activity_value == null ? "" : String(newRow.activity_value),
-        newRow.activity_unit,
-        newRow.mpg,
-      );
+      upsertActivity(newRow.facility_id, activityType, newRow.activity_value, newRow.activity_unit);
       return newRow;
     },
-    [upsertActivity, source],
+    [activityType, upsertActivity],
   );
 
-  // Keep a ref so the async paste handler always sees current rows
-  const gridRowsRef = React.useRef(gridRows);
-  gridRowsRef.current = gridRows;
+  const rowsRef = React.useRef(gridRows);
+  rowsRef.current = gridRows;
 
   const handleCellKeyDown = React.useMemo(
-    () =>
-      makePasteHandler({
-        get gridRows() { return gridRowsRef.current; },
-        columns,
-        onPasteApply: (updatedRows) => {
-          for (const row of updatedRows) {
-            upsertActivity(
-              row.facility_id,
-              source,
-              row.activity_value === "" || row.activity_value == null ? "" : String(row.activity_value),
-              row.activity_unit,
-              row.mpg,
-            );
-          }
-        },
-        show,
-      }),
-    [columns, upsertActivity, source, show],
+    () => (repeatable ? null : makePasteAndNavigationHandler({
+      getRows: () => rowsRef.current,
+      editableFields: ["activity_value", "activity_unit"],
+      onPasteApply: (updatedRows) => {
+        updatedRows.forEach((row) => {
+          upsertActivity(row.facility_id, activityType, row.activity_value, row.activity_unit);
+        });
+      },
+      show,
+    })),
+    [activityType, repeatable, show, upsertActivity],
   );
 
   return (
-    <Accordion defaultExpanded={facilities.length <= 8}>
+    <Accordion defaultExpanded={totalActivities <= 8}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {source.label}
+            {activityType.label}
           </Typography>
-          <Chip label={source.scope} size="small" variant="outlined" />
+          <Chip label={activityType.scope} size="small" variant="outlined" />
+          <Chip label={activityType.implementation_status} size="small" variant="outlined" />
           <Box sx={{ flexGrow: 1 }} />
           <Typography variant="body2" color="text.secondary">
             {filledCount}/{facilities.length} facilities
           </Typography>
-          <Select
-            size="small"
-            value={sectionUnit}
-            onChange={(e) => {
-              e.stopPropagation();
-              setSectionUnit(e.target.value);
-            }}
-            onClick={(e) => e.stopPropagation()}
-            sx={{ minWidth: 120 }}
-          >
-            {unitOptions.map((u) => (
-              <MenuItem key={u} value={u}>
-                {u}
-              </MenuItem>
-            ))}
-          </Select>
         </Stack>
       </AccordionSummary>
       <AccordionDetails sx={{ p: 0 }}>
@@ -398,11 +487,11 @@ function SourceAccordion({ source, activities, facilities, upsertActivity, show 
             columns={columns}
             processRowUpdate={processRowUpdate}
             onProcessRowUpdateError={() => {}}
-            onCellKeyDown={handleCellKeyDown}
+            onCellKeyDown={handleCellKeyDown || undefined}
             disableRowSelectionOnClick
             autoHeight
-            hideFooter={facilities.length <= 25}
             density="compact"
+            hideFooter={facilities.length <= 25}
           />
         </Box>
       </AccordionDetails>
@@ -410,49 +499,25 @@ function SourceAccordion({ source, activities, facilities, upsertActivity, show 
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  By Facility View                                                   */
-/* ------------------------------------------------------------------ */
-
-function ByFacilityView({ activities, setActivities, facilities, routing, show }) {
-  const upsertActivity = React.useCallback(
-    (facilityId, source, value, unit, mpg) => {
-      setActivities((prev) => {
-        const idx = prev.findIndex((a) => a.facility_id === facilityId && a.source_id === source.source_id);
-        if (value === "" || value == null) {
-          if (idx >= 0) return prev.filter((_, i) => i !== idx);
-          return prev;
-        }
-        const base = {
-          ...EMPTY_ACTIVITY,
-          id: idx >= 0 ? prev[idx].id : uid(),
-          facility_id: facilityId,
-          source_id: source.source_id,
-          ...hydrateFromSource(source),
-          activity_value: value,
-          activity_unit: unit || defaultUnitForSource(source),
-        };
-        if (mpg && sourceNeedsMpg(source, base.activity_unit)) {
-          base.params = { mpg: Number(mpg), fuel_type: source.source_type };
-        }
-        if (idx >= 0) {
-          return prev.map((r, i) => (i === idx ? { ...prev[idx], ...base } : r));
-        }
-        return [...prev, base];
-      });
-    },
-    [setActivities],
-  );
-
+function BulkByFacilityView({
+  activitiesByPair,
+  facilities,
+  selectableActivities,
+  upsertActivity,
+  openDetailsForPair,
+  show,
+}) {
   return (
     <Stack spacing={1}>
       {facilities.map((facility) => (
         <FacilityAccordion
           key={facility.id}
           facility={facility}
-          activities={activities}
-          routing={routing}
+          activitiesByPair={activitiesByPair}
+          selectableActivities={selectableActivities}
+          facilityCount={facilities.length}
           upsertActivity={upsertActivity}
+          openDetailsForPair={openDetailsForPair}
           show={show}
         />
       ))}
@@ -460,35 +525,58 @@ function ByFacilityView({ activities, setActivities, facilities, routing, show }
   );
 }
 
-function FacilityAccordion({ facility, activities, routing, upsertActivity, show }) {
-  const gridRows = React.useMemo(() => {
-    return routing.map((source) => {
-      const existing = activities.find(
-        (a) => a.facility_id === facility.id && a.source_id === source.source_id,
-      );
-      const unitOptions = unitOptionsForSource(source);
+function FacilityAccordion({
+  facility,
+  activitiesByPair,
+  selectableActivities,
+  facilityCount,
+  upsertActivity,
+  openDetailsForPair,
+  show,
+}) {
+  const gridRows = React.useMemo(
+    () => selectableActivities.map((activityType) => {
+      const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
+      const draft = drafts[0]
+        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
       return {
-        id: `${facility.id}__${source.source_id}`,
-        source_id: source.source_id,
-        source_label: source.label,
-        scope: source.scope,
-        source_type: source.source_type,
-        method_id: source.method_id || "",
-        activity_value: existing?.activity_value ?? "",
-        activity_unit: existing?.activity_unit || unitOptions[0] || source.default_unit || "",
-        mpg: existing?.params?.mpg ?? "",
-        _unitOptions: unitOptions,
+        id: `${facility.id}__${activityType.activity_type_id}`,
+        facility_id: facility.id,
+        activity_type_id: activityType.activity_type_id,
+        activity_label: activityType.label,
+        scope: activityType.scope,
+        activity_value: draft.activity.value,
+        activity_unit: draft.activity.unit || getDefaultUnit(activityType),
+        draft,
+        drafts,
+        draft_count: drafts.filter(hasMeaningfulData).length,
+        _repeatable: isRepeatableActivity(activityType),
+        _unitOptions: getAllowedUnits(activityType),
+        _activityType: activityType,
       };
-    });
-  }, [routing, activities, facility.id]);
+    }),
+    [activitiesByPair, facility.id, selectableActivities],
+  );
 
-  const filledCount = gridRows.filter((r) => r.activity_value !== "").length;
-
+  const filledCount = gridRows.filter((row) => (row._repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
   const columns = React.useMemo(
     () => [
-      { field: "source_label", headerName: "Source", flex: 1, editable: false },
-      { field: "scope", headerName: "Scope", flex: 0.5, editable: false },
-      { field: "activity_value", headerName: "Activity Value", flex: 0.8, editable: true, type: "number" },
+      { field: "activity_label", headerName: "Activity", flex: 1, editable: false },
+      { field: "scope", headerName: "Scope", flex: 0.55, editable: false },
+      {
+        field: "activity_value",
+        headerName: "Activity Value",
+        flex: 0.8,
+        editable: true,
+        type: "number",
+        renderCell: (params) => (
+          params.row._repeatable ? (
+            <Typography variant="body2" color="text.secondary">
+              {params.row.draft_count ? `${params.row.draft_count} entries` : "Manage in details"}
+            </Typography>
+          ) : params.value
+        ),
+      },
       {
         field: "activity_unit",
         headerName: "Unit",
@@ -496,75 +584,83 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
         editable: true,
         type: "singleSelect",
         valueOptions: ({ row }) => row?._unitOptions || [],
+        renderCell: (params) => (
+          params.row._repeatable ? (
+            <Typography variant="body2" color="text.secondary">Details</Typography>
+          ) : params.value
+        ),
       },
       {
-        field: "mpg",
-        headerName: "MPG",
-        flex: 0.4,
-        editable: true,
-        type: "number",
-        valueGetter: (_, row) => (row?.method_id === "miles_to_fuel" ? row.mpg : ""),
+        field: "status",
+        headerName: "Status",
+        flex: 0.75,
+        editable: false,
+        sortable: false,
+        renderCell: (params) => (
+          params.row._repeatable
+            ? <RepeatableCompletionChip drafts={params.row.drafts} activityType={params.row._activityType} />
+            : <CompletionChip draft={params.row.draft} activityType={params.row._activityType} />
+        ),
+      },
+      {
+        field: "details",
+        headerName: "Details",
+        flex: 0.6,
+        editable: false,
+        sortable: false,
+        renderCell: (params) => (
+          <Button
+            size="small"
+            variant="outlined"
+            onClick={() => openDetailsForPair(facility.id, params.row.activity_type_id)}
+          >
+            {params.row._repeatable ? "Manage" : activityRequiresDetails(params.row._activityType) ? "Edit" : "View"}
+          </Button>
+        ),
       },
     ],
-    [],
+    [facility.id, openDetailsForPair],
   );
 
   const processRowUpdate = React.useCallback(
     (newRow) => {
-      const source = routing.find((r) => r.source_id === newRow.source_id);
-      if (!source) return newRow;
-      upsertActivity(
-        facility.id,
-        source,
-        newRow.activity_value === "" || newRow.activity_value == null ? "" : String(newRow.activity_value),
-        newRow.activity_unit,
-        newRow.mpg,
-      );
+      upsertActivity(newRow.facility_id, newRow._activityType, newRow.activity_value, newRow.activity_unit);
       return newRow;
     },
-    [upsertActivity, facility.id, routing],
+    [upsertActivity],
   );
 
-  const gridRowsRef = React.useRef(gridRows);
-  gridRowsRef.current = gridRows;
+  const rowsRef = React.useRef(gridRows);
+  rowsRef.current = gridRows;
 
   const handleCellKeyDown = React.useMemo(
-    () =>
-      makePasteHandler({
-        get gridRows() { return gridRowsRef.current; },
-        columns,
-        onPasteApply: (updatedRows) => {
-          for (const row of updatedRows) {
-            const source = routing.find((r) => r.source_id === row.source_id);
-            if (!source) continue;
-            upsertActivity(
-              facility.id,
-              source,
-              row.activity_value === "" || row.activity_value == null ? "" : String(row.activity_value),
-              row.activity_unit,
-              row.mpg,
-            );
-          }
-        },
-        show,
-      }),
-    [columns, upsertActivity, facility.id, routing, show],
+    () => makePasteAndNavigationHandler({
+      getRows: () => rowsRef.current,
+      editableFields: ["activity_value", "activity_unit"],
+      onPasteApply: (updatedRows) => {
+        updatedRows.forEach((row) => {
+          if (row._repeatable) return;
+          upsertActivity(row.facility_id, row._activityType, row.activity_value, row.activity_unit);
+        });
+      },
+      canEditCell: (row) => !row._repeatable,
+      show,
+    }),
+    [show, upsertActivity],
   );
 
   return (
-    <Accordion defaultExpanded={routing.length <= 10}>
+    <Accordion defaultExpanded={facilityCount <= 8}>
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {facility.facility_name || facility.id}
+            {facility.facility_name}
           </Typography>
-          {facility.state && <Chip label={facility.state} size="small" variant="outlined" />}
-          {facility.egrid_subregion && (
-            <Chip label={facility.egrid_subregion} size="small" variant="outlined" />
-          )}
+          {facility.state ? <Chip label={facility.state} size="small" variant="outlined" /> : null}
+          {facility.egrid_subregion ? <Chip label={facility.egrid_subregion} size="small" variant="outlined" /> : null}
           <Box sx={{ flexGrow: 1 }} />
           <Typography variant="body2" color="text.secondary">
-            {filledCount}/{routing.length} sources
+            {filledCount}/{selectableActivities.length} activities
           </Typography>
         </Stack>
       </AccordionSummary>
@@ -576,11 +672,11 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
             processRowUpdate={processRowUpdate}
             onProcessRowUpdateError={() => {}}
             onCellKeyDown={handleCellKeyDown}
-            isCellEditable={(params) => params.field !== "mpg" || params.row.method_id === "miles_to_fuel"}
+            isCellEditable={(params) => !params.row._repeatable && ["activity_value", "activity_unit"].includes(params.field)}
             disableRowSelectionOnClick
             autoHeight
-            hideFooter
             density="compact"
+            hideFooter
           />
         </Box>
       </AccordionDetails>
@@ -588,18 +684,13 @@ function FacilityAccordion({ facility, activities, routing, upsertActivity, show
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*  Main Panel                                                         */
-/* ------------------------------------------------------------------ */
-
 export default function ActivityInputsPanel({
   activities,
   setActivities,
   facilities,
-  routing,
-  routingById,
+  activityCatalog,
+  activityTypesById,
   facilityOptions,
-  sourceOptions,
   inventoryYear,
   setInventoryYear,
   gwpSet,
@@ -609,64 +700,182 @@ export default function ActivityInputsPanel({
   runCalculation,
   calculating,
   saveCurrentVersion,
-  routingError,
-  show,
+  catalogError,
+  show = () => {},
 }) {
-  const [viewMode, setViewMode] = React.useState("bySource");
+  const [viewMode, setViewMode] = React.useState("byActivity");
+  const [detailDraftId, setDetailDraftId] = React.useState("");
+  const [repeatableDialog, setRepeatableDialog] = React.useState(null);
 
-  const addActivity = () => setActivities((prev) => [...prev, { ...EMPTY_ACTIVITY, id: uid() }]);
-  const removeActivity = (id) => setActivities((prev) => prev.filter((r) => r.id !== id));
+  const selectableActivities = React.useMemo(
+    () => activityCatalog.filter((activityType) => ["implemented", "partial"].includes(activityType.implementation_status)),
+    [activityCatalog],
+  );
+  const visibleFacilityIds = React.useMemo(() => new Set(facilities.map((facility) => facility.id)), [facilities]);
+  const visibleActivities = React.useMemo(
+    () => activities.filter((draft) => !draft.facility_id || visibleFacilityIds.has(draft.facility_id)),
+    [activities, visibleFacilityIds],
+  );
+  const activitiesByPair = React.useMemo(() => {
+    const next = new Map();
+    visibleActivities.forEach((draft) => {
+      if (draft.facility_id && draft.activity_type_id) {
+        const key = pairKey(draft.facility_id, draft.activity_type_id);
+        if (!next.has(key)) next.set(key, []);
+        next.get(key).push(draft);
+      }
+    });
+    return next;
+  }, [visibleActivities]);
+  const activePartialActivities = React.useMemo(() => {
+    const seen = new Set();
+    return visibleActivities
+      .filter((draft) => hasMeaningfulData(draft))
+      .map((draft) => activityTypesById[draft.activity_type_id])
+      .filter((activityType) => activityType?.implementation_status === "partial")
+      .filter((activityType) => {
+        if (!activityType || seen.has(activityType.activity_type_id)) return false;
+        seen.add(activityType.activity_type_id);
+        return true;
+      });
+  }, [activityTypesById, visibleActivities]);
 
-  const hydrateActivityFromSource = (row) => {
-    const src = routingById[row.source_id];
-    if (!src) return row;
-    const units = unitOptionsForSource(src);
-    return {
-      ...row,
-      activity_type_id: src.activity_type_id || row.activity_type_id || "",
-      source_id: src.source_id || row.source_id || "",
-      source_label: src.label || src.source_type,
-      source_type: src.source_type,
-      scope: src.scope,
-      metric_group: src.metric_group,
-      metric_subgroup: src.metric_subgroup || "",
-      method_id: src.method_id || row.method_id || "",
-      activity_unit: units.includes(row.activity_unit) ? row.activity_unit : units[0] || row.activity_unit,
-    };
-  };
+  const activityOptions = React.useMemo(
+    () => selectableActivities.map((activityType) => ({ value: activityType.activity_type_id, label: activityType.label })),
+    [selectableActivities],
+  );
 
-  const maybeCollectEqmParams = (row) => {
-    if (row.method_id !== "miles_to_fuel") return row;
-    const existingMpg = row.params?.mpg;
-    if (existingMpg && Number(existingMpg) > 0) return row;
-    const mpgInput = window.prompt(
-      `Source "${row.source_label}" entered in miles requires mpg. Enter mpg value:`,
-      "25",
-    );
-    const mpg = Number(mpgInput);
-    if (!Number.isFinite(mpg) || mpg <= 0) {
-      throw new Error("Miles-based fuel activity requires positive mpg.");
-    }
-    return { ...row, params: { ...(row.params || {}), mpg, fuel_type: row.source_type } };
-  };
+  const addActivity = () => setActivities((prev) => [...prev, createEmptyDraft()]);
+  const removeActivity = (id) => setActivities((prev) => prev.filter((draft) => draft.id !== id));
 
-  const processActivityUpdate = async (newRow) => {
-    let row = newRow;
-    if (row.source_id) row = hydrateActivityFromSource(row);
-    try {
-      row = maybeCollectEqmParams(row);
-    } catch (err) {
-      show(String(err.message || err), "error");
-      return newRow;
-    }
-    setActivities((prev) => prev.map((r) => (r.id === row.id ? row : r)));
-    return row;
-  };
+  const updateDraft = React.useCallback(
+    (id, patch) => {
+      setActivities((prev) => prev.map((draft) => {
+        if (draft.id !== id) return draft;
+        const nextDraft = {
+          ...draft,
+          ...patch,
+          activity: patch.activity ? patch.activity : draft.activity,
+          params: patch.params ? patch.params : draft.params,
+        };
+        if (patch.activity_type_id) {
+          const activityType = activityTypesById[patch.activity_type_id];
+          return withActivityTypeDefaults(nextDraft, activityType);
+        }
+        return nextDraft;
+      }));
+    },
+    [activityTypesById, setActivities],
+  );
 
-  const updateActivityField = async (id, field, value) => {
-    const row = activities.find((r) => r.id === id);
-    if (!row) return;
-    return processActivityUpdate({ ...row, [field]: value });
+  const upsertActivity = React.useCallback(
+    (facilityId, activityType, value, unit) => {
+      setActivities((prev) => {
+        const existingIndex = prev.findIndex(
+          (draft) => draft.facility_id === facilityId && draft.activity_type_id === activityType.activity_type_id,
+        );
+        const normalizedValue = value === "" || value == null ? "" : String(value);
+        if (normalizedValue === "") {
+          if (existingIndex >= 0) return prev.filter((_, index) => index !== existingIndex);
+          return prev;
+        }
+        const baseDraft = existingIndex >= 0 ? prev[existingIndex] : { ...EMPTY_ACTIVITY, id: uid(), params: {} };
+        const nextDraft = withActivityTypeDefaults(
+          {
+            ...baseDraft,
+            facility_id: facilityId,
+            activity_type_id: activityType.activity_type_id,
+            activity: {
+              value: normalizedValue,
+              unit: unit || getDefaultUnit(activityType),
+            },
+          },
+          activityType,
+        );
+        if (existingIndex >= 0) {
+          return prev.map((draft, index) => (index === existingIndex ? nextDraft : draft));
+        }
+        return [...prev, nextDraft];
+      });
+    },
+    [setActivities],
+  );
+
+  const replaceActivitiesForPair = React.useCallback(
+    (facilityId, activityType, nextDrafts) => {
+      setActivities((prev) => {
+        const filtered = prev.filter(
+          (draft) => !(draft.facility_id === facilityId && draft.activity_type_id === activityType.activity_type_id),
+        );
+        const normalized = nextDrafts
+          .filter((draft) => hasMeaningfulData(draft))
+          .map((draft) => withActivityTypeDefaults(
+            {
+              ...draft,
+              id: draft.id || uid(),
+              facility_id: facilityId,
+              activity_type_id: activityType.activity_type_id,
+            },
+            activityType,
+          ));
+        return [...filtered, ...normalized];
+      });
+    },
+    [setActivities],
+  );
+
+  const openDetails = React.useCallback((draftId) => {
+    setDetailDraftId(draftId);
+  }, []);
+
+  const openDetailsForPair = React.useCallback(
+    (facilityId, activityTypeId) => {
+      const activityType = activityTypesById[activityTypeId];
+      if (isRepeatableActivity(activityType)) {
+        setRepeatableDialog({ facilityId, activityTypeId });
+        return;
+      }
+      setActivities((prev) => {
+        const existing = prev.find(
+          (draft) => draft.facility_id === facilityId && draft.activity_type_id === activityTypeId,
+        );
+        if (existing) {
+          setDetailDraftId(existing.id);
+          return prev;
+        }
+        const draft = withActivityTypeDefaults(
+          {
+            ...EMPTY_ACTIVITY,
+            id: uid(),
+            facility_id: facilityId,
+            activity_type_id: activityTypeId,
+          },
+          activityType,
+        );
+        setDetailDraftId(draft.id);
+        return [...prev, draft];
+      });
+    },
+    [activityTypesById, setActivities],
+  );
+
+  const detailDraft = visibleActivities.find((draft) => draft.id === detailDraftId) || null;
+  const detailActivityType = detailDraft ? activityTypesById[detailDraft.activity_type_id] : null;
+  const repeatableActivityType = repeatableDialog ? activityTypesById[repeatableDialog.activityTypeId] : null;
+  const repeatableFacility = repeatableDialog
+    ? facilities.find((facility) => facility.id === repeatableDialog.facilityId) || null
+    : null;
+  const repeatableDrafts = React.useMemo(
+    () => (repeatableDialog
+      ? activitiesByPair.get(pairKey(repeatableDialog.facilityId, repeatableDialog.activityTypeId)) || []
+      : []),
+    [activitiesByPair, repeatableDialog],
+  );
+
+  const saveDetailParams = (params) => {
+    if (!detailDraftId) return;
+    updateDraft(detailDraftId, { params });
+    setDetailDraftId("");
   };
 
   return (
@@ -676,39 +885,51 @@ export default function ActivityInputsPanel({
           <TextField
             label="Inventory Year"
             value={inventoryYear}
-            onChange={(e) => setInventoryYear(e.target.value)}
+            onChange={(event) => setInventoryYear(event.target.value)}
             sx={{ width: 150 }}
           />
-          <Select value={gwpSet} onChange={(e) => setGwpSet(e.target.value)} sx={{ width: 150 }}>
+          <Select value={gwpSet} onChange={(event) => setGwpSet(event.target.value)} sx={{ width: 150 }}>
             <MenuItem value="AR6">AR6</MenuItem>
             <MenuItem value="AR5">AR5</MenuItem>
           </Select>
           <Select
             value={String(includeTrace)}
-            onChange={(e) => setIncludeTrace(e.target.value === "true")}
+            onChange={(event) => setIncludeTrace(event.target.value === "true")}
             sx={{ width: 170 }}
           >
             <MenuItem value="true">Include Trace</MenuItem>
             <MenuItem value="false">No Trace</MenuItem>
           </Select>
           <Typography variant="body2" color="text.secondary">
-            Source geo context is pulled from each facility row.
+            Facility geo context still drives geography-sensitive factor selection.
           </Typography>
         </Stack>
       </Paper>
+
+      {facilities.length === 0 ? (
+        <Alert severity="info">
+          Add at least one named facility in the Facilities tab before entering activity data.
+        </Alert>
+      ) : null}
+
+      {activePartialActivities.map((activityType) => (
+        <Alert key={activityType.activity_type_id} severity="warning">
+          <strong>{activityType.label}:</strong> {getPartialReason(activityType) || "Catalog metadata marks this activity as partial support."}
+        </Alert>
+      ))}
 
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
           <ToggleButtonGroup
             value={viewMode}
             exclusive
-            onChange={(_, v) => {
-              if (v) setViewMode(v);
+            onChange={(_, nextValue) => {
+              if (nextValue) setViewMode(nextValue);
             }}
             size="small"
           >
             <ToggleButton value="rowByRow">Row-by-Row</ToggleButton>
-            <ToggleButton value="bySource">By Source</ToggleButton>
+            <ToggleButton value="byActivity">By Activity</ToggleButton>
             <ToggleButton value="byFacility">By Facility</ToggleButton>
           </ToggleButtonGroup>
           <Stack direction="row" spacing={1}>
@@ -720,46 +941,73 @@ export default function ActivityInputsPanel({
             </Button>
           </Stack>
         </Stack>
-        {viewMode !== "rowByRow" && (
-          <Typography variant="body2" color="text.secondary">
-            Click a cell then Ctrl+V to paste tabular data from a spreadsheet. Values fill down from the selected cell.
-          </Typography>
-        )}
+        <Typography variant="body2" color="text.secondary">
+          Paste from spreadsheets in the By Activity and By Facility views with `Ctrl+V`, use `Tab` to move across, and use `Enter` to move down the next row in the same column.
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          Only catalog rows marked implemented or partial are available for calculation in this phase.
+        </Typography>
       </Paper>
 
-      {viewMode === "rowByRow" && (
+      {viewMode === "rowByRow" ? (
         <RowByRowView
-          activities={activities}
-          routingById={routingById}
+          activities={visibleActivities}
+          activityTypesById={activityTypesById}
           facilityOptions={facilityOptions}
-          sourceOptions={sourceOptions}
-          updateActivityField={updateActivityField}
+          activityOptions={activityOptions}
+          updateDraft={updateDraft}
           addActivity={addActivity}
           removeActivity={removeActivity}
-          routingError={routingError}
-          routing={routing}
+          openDetails={openDetails}
+          catalogError={catalogError}
         />
-      )}
+      ) : null}
 
-      {viewMode === "bySource" && (
-        <BySourceView
-          activities={activities}
-          setActivities={setActivities}
+      {viewMode === "byActivity" ? (
+        <BulkByActivityView
+          activitiesByPair={activitiesByPair}
           facilities={facilities}
-          routing={routing}
+          selectableActivities={selectableActivities}
+          upsertActivity={upsertActivity}
+          openDetailsForPair={openDetailsForPair}
           show={show}
         />
-      )}
+      ) : null}
 
-      {viewMode === "byFacility" && (
-        <ByFacilityView
-          activities={activities}
-          setActivities={setActivities}
+      {viewMode === "byFacility" ? (
+        <BulkByFacilityView
+          activitiesByPair={activitiesByPair}
           facilities={facilities}
-          routing={routing}
+          selectableActivities={selectableActivities}
+          upsertActivity={upsertActivity}
+          openDetailsForPair={openDetailsForPair}
           show={show}
         />
-      )}
+      ) : null}
+
+      <CatalogCoverageBrowser activityCatalog={activityCatalog} />
+
+      <ActivityDetailDialog
+        open={Boolean(detailDraft && detailActivityType)}
+        draft={detailDraft}
+        activityType={detailActivityType}
+        onClose={() => setDetailDraftId("")}
+        onSave={saveDetailParams}
+      />
+
+      <RepeatableActivityDialog
+        open={Boolean(repeatableDialog && repeatableActivityType)}
+        activityType={repeatableActivityType}
+        facilityId={repeatableDialog?.facilityId || ""}
+        facilityName={repeatableFacility?.facility_name || ""}
+        drafts={repeatableDrafts}
+        onClose={() => setRepeatableDialog(null)}
+        onSave={(nextDrafts) => {
+          if (!repeatableDialog || !repeatableActivityType) return;
+          replaceActivitiesForPair(repeatableDialog.facilityId, repeatableActivityType, nextDrafts);
+          setRepeatableDialog(null);
+        }}
+      />
     </Stack>
   );
 }

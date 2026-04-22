@@ -91,7 +91,7 @@
     "method_id": "scope2_energy",
     "emission_category": "purchased-electricity",
     "factor_description": null,
-    "implementation_status": "planned",
+    "implementation_status": "partial",
     "input_schema": {
       "fields": [
         {
@@ -130,6 +130,15 @@
         "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
         "description": null,
         "life_cycle_stage": "generation",
+        "accounting_method": "location_based",
+        "geography_preference": "subregion_to_national_fallback"
+      },
+      {
+        "domain": "electricity-generation",
+        "type": "electricity",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": null,
+        "life_cycle_stage": "generation",
         "accounting_method": "market_based",
         "geography_preference": "contractual_instrument_to_residual_mix"
       }
@@ -137,7 +146,8 @@
     "accounting_metadata": {
       "standards_basis": ["corporate-standard", "scope2-guidance"],
       "requires_dual_scope2_reporting": true,
-      "requires_contractual_instrument_review": true
+      "requires_contractual_instrument_review": true,
+      "partial_reason": "Market-based reporting currently falls back to proxy factors unless a supplier-specific or residual-mix factor is available."
     },
     "ui_metadata": {
       "group": "Stationary Energy",
@@ -262,7 +272,8 @@
       }
     ],
     "accounting_metadata": {
-      "standards_basis": ["corporate-standard"]
+      "standards_basis": ["corporate-standard"],
+      "partial_reason": "Reported diesel may include renewable or biogenic blend share, but this activity currently treats the entered volume as fully fossil."
     },
     "ui_metadata": {
       "group": "Stationary Energy",
@@ -309,7 +320,7 @@
         }
       ],
       "notes": [
-        "Legacy routing currently shares one diesel source between mobile and stationary use; canonical separation still needs to be implemented."
+        "Reported diesel may include renewable or biogenic blend share; current calculation treats entered volume as fully fossil unless adjusted upstream."
       ]
     },
     "factor_query_templates": [
@@ -324,7 +335,8 @@
       }
     ],
     "accounting_metadata": {
-      "standards_basis": ["corporate-standard"]
+      "standards_basis": ["corporate-standard"],
+      "partial_reason": "Reported diesel may include renewable or biogenic blend share, but this activity currently treats the entered volume as fully fossil."
     },
     "ui_metadata": {
       "group": "Stationary Energy",
@@ -354,7 +366,7 @@
     "method_id": "direct_factor",
     "emission_category": "stationary-energy",
     "factor_description": "liquid-propane",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -431,7 +443,7 @@
         }
       ],
       "notes": [
-        "Legacy implementation supports purchased steam but still needs canonical subgroup and unit treatment aligned to the new catalog."
+        "Current implementation uses delivered steam CO2e factors; gas-level factor detail is not yet available."
       ]
     },
     "factor_query_templates": [
@@ -439,14 +451,15 @@
         "domain": "combustion",
         "type": "district-steam",
         "attributes": ["co2e-ef"],
-        "description": "global-default-co2e",
+        "description": null,
         "life_cycle_stage": "delivered",
         "accounting_method": null,
         "geography_preference": "country_to_global_fallback"
       }
     ],
     "accounting_metadata": {
-      "standards_basis": ["corporate-standard", "scope2-guidance"]
+      "standards_basis": ["corporate-standard", "scope2-guidance"],
+      "partial_reason": "Purchased steam currently uses delivered steam factors and may not preserve full gas-level detail for all providers."
     },
     "ui_metadata": {
       "group": "Stationary Energy",
@@ -609,7 +622,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "us-default-e100",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -634,7 +647,7 @@
         "domain": "combustion",
         "type": "ethanol",
         "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
-        "description": "us-default-e100",
+        "description": "us-default-e100-gal",
         "life_cycle_stage": "direct",
         "accounting_method": null,
         "geography_preference": "country_to_global_fallback"
@@ -689,7 +702,7 @@
         }
       ],
       "notes": [
-        "Legacy routing currently shares one diesel source between mobile and stationary use; canonical separation still needs to be implemented."
+        "Reported diesel may include renewable or biogenic blend share; current calculation treats entered volume as fully fossil unless adjusted upstream."
       ]
     },
     "factor_query_templates": [
@@ -704,7 +717,8 @@
       }
     ],
     "accounting_metadata": {
-      "standards_basis": ["corporate-standard"]
+      "standards_basis": ["corporate-standard"],
+      "partial_reason": "Reported diesel may include renewable or biogenic blend share, but this activity currently treats the entered volume as fully fossil."
     },
     "ui_metadata": {
       "group": "Transportation",
@@ -734,7 +748,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "us-default-b100",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -759,7 +773,7 @@
         "domain": "combustion",
         "type": "biodiesel",
         "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
-        "description": "us-default-b100",
+        "description": "us-default-b100-gal",
         "life_cycle_stage": "direct",
         "accounting_method": null,
         "geography_preference": "country_to_global_fallback"
@@ -797,7 +811,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "us-tallow-r100",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -822,7 +836,7 @@
         "domain": "combustion",
         "type": "renewable-diesel",
         "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
-        "description": "us-tallow-r100",
+        "description": "us-tallow-r100-gal",
         "life_cycle_stage": "direct",
         "accounting_method": null,
         "geography_preference": "country_to_global_fallback"
@@ -860,7 +874,7 @@
     "method_id": "scope2_energy",
     "emission_category": "purchased-electricity",
     "factor_description": null,
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -932,7 +946,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "us-cng-scf",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -992,7 +1006,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "us-lng",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1052,7 +1066,7 @@
     "method_id": "direct_factor",
     "emission_category": "mobile-combustion",
     "factor_description": "liquid-propane",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1112,7 +1126,7 @@
     "method_id": "freight_ton_mile",
     "emission_category": "3.4-upstream-transportation-distribution",
     "factor_description": "upstream-trucking",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1172,7 +1186,7 @@
     "method_id": "freight_ton_mile",
     "emission_category": "3.4-upstream-transportation-distribution",
     "factor_description": "upstream-rail",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1232,7 +1246,7 @@
     "method_id": "freight_ton_mile",
     "emission_category": "3.4-upstream-transportation-distribution",
     "factor_description": "upstream-waterborne-craft",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1292,7 +1306,7 @@
     "method_id": "freight_ton_mile",
     "emission_category": "3.4-upstream-transportation-distribution",
     "factor_description": "upstream-aircraft",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1445,7 +1459,7 @@
         }
       ],
       "notes": [
-        "Current implementation supports the miles-plus-MPG pathway but still relies on legacy row behavior in the UI."
+        "Current implementation supports the distance-plus-efficiency pathway with gasoline and diesel fuel selection."
       ]
     },
     "factor_query_templates": [
@@ -1463,6 +1477,15 @@
         "type": "gasoline",
         "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
         "description": "motor-gasoline-default",
+        "life_cycle_stage": "direct",
+        "accounting_method": null,
+        "geography_preference": "country_to_global_fallback"
+      },
+      {
+        "domain": "combustion",
+        "type": "diesel",
+        "attributes": ["co2-ef", "ch4-ef", "n2o-ef"],
+        "description": "motor-diesel-default",
         "life_cycle_stage": "direct",
         "accounting_method": null,
         "geography_preference": "country_to_global_fallback"
@@ -1499,7 +1522,7 @@
     "method_id": "distance_plus_efficiency",
     "emission_category": "mobile-combustion",
     "factor_description": "motor-gasoline-default",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1518,7 +1541,7 @@
           "field_id": "fuel_efficiency",
           "label": "Fuel Efficiency (MPG)",
           "kind": "number",
-          "required": false,
+          "required": true,
           "is_primary": false,
           "default_unit": null,
           "allowed_units": [],
@@ -1592,7 +1615,7 @@
     "method_id": "passenger_distance",
     "emission_category": "3.6-business-travel",
     "factor_description": "air-travel-average-with-rf",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1652,7 +1675,7 @@
     "method_id": "passenger_distance",
     "emission_category": "3.7-employee-commuting",
     "factor_description": "bus-commute",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1712,7 +1735,7 @@
     "method_id": "passenger_distance",
     "emission_category": "3.6-business-travel",
     "factor_description": "us-average-intercity-rail-travel",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1772,7 +1795,7 @@
     "method_id": "passenger_distance",
     "emission_category": "3.7-employee-commuting",
     "factor_description": "transit-rail-travel",
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {
@@ -1832,7 +1855,7 @@
     "method_id": "refrigerant_mass_to_gwp",
     "emission_category": "fugitive-emission",
     "factor_description": null,
-    "implementation_status": "planned",
+    "implementation_status": "partial",
     "input_schema": {
       "fields": [
         {
@@ -1877,12 +1900,15 @@
     ],
     "accounting_metadata": {
       "standards_basis": ["corporate-standard"],
-      "requires_gwp_set": true
+      "requires_gwp_set": true,
+      "supported_gwp_sets": ["AR6"],
+      "partial_reason": "Refrigerant releases currently support AR6 GWP factors only."
     },
     "ui_metadata": {
       "group": "Fugitive Emissions",
       "detail_mode": "quantity_plus_details",
-      "repeatable": true
+      "repeatable": true,
+      "bulk_entry_mode": "repeatable_summary"
     },
     "audit_metadata": {
       "audit_group": "scope1_fugitive"
@@ -1908,7 +1934,7 @@
     "method_id": "waste_mass",
     "emission_category": "3.5-waste-operations",
     "factor_description": null,
-    "implementation_status": "planned",
+    "implementation_status": "implemented",
     "input_schema": {
       "fields": [
         {

@@ -3,8 +3,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
+from ..activity_catalog import ActivityTypeDefinition
 from ..factors import FactorRepository
-from ..models import ActivityRecord, CalculationContext, ResultRecord, RoutingRow, TraceRecord
+from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from ..units import build_unit_registry
 
 
@@ -17,14 +18,14 @@ class EQMPlugin(ABC):
         pass
 
     @abstractmethod
-    def applicability(self, activity: ActivityRecord, routing: RoutingRow) -> bool:
+    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
         pass
 
     @abstractmethod
     def compute(
         self,
         activity: ActivityRecord,
-        routing: RoutingRow,
+        activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
     ) -> tuple[list[ResultRecord], TraceRecord]:

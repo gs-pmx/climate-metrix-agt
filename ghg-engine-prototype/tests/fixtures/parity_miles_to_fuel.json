@@ -5,11 +5,7 @@
   "activities": [
     {
       "facility_id": "F1",
-      "source_id": "travel_miles_s3",
-      "source_type": "gasoline",
-      "scope": "Scope 3",
-      "metric_group": "travel",
-      "metric_subgroup": "3.6_business_travel",
+      "activity_type_id": "scope3_business_travel_rental_vehicle",
       "activity": {
         "value": 100.0,
         "unit": "mile"
@@ -22,7 +18,7 @@
   "expected": [
     {
       "facility_id": "F1",
-      "source_id": "travel_rental_vehicle_s3",
+      "activity_type_id": "scope3_business_travel_rental_vehicle",
       "scope": "Scope 3",
       "accounting_method": "none",
       "gas": "co2",

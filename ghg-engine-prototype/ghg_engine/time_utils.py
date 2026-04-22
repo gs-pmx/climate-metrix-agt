@@ -39,7 +39,7 @@ def aggregate_results(records: list[ResultRecord], bucket: Bucket = "year") -> l
         bucket_key = rebucket(row.time_bucket or "")
         key = (
             row.facility_id,
-            row.source_id or "",
+            row.activity_type_id,
             row.scope,
             row.accounting_method,
             row.gas,

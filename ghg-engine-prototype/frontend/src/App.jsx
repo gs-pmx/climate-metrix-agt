@@ -24,7 +24,15 @@ import {
 } from "@mui/material";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import { api } from "./api";
-import { EMPTY_ACTIVITY, uid, normalizeActivityForSubmit } from "./constants";
+import {
+  EMPTY_ACTIVITY,
+  buildSnapshot,
+  createEmptyDraft,
+  hydrateDraft,
+  normalizeActivityForSubmit,
+  uid,
+  withActivityTypeDefaults,
+} from "./activityDrafts";
 import ActivityInputsPanel from "./ActivityInputsPanel";
 
 const US_STATE_OPTIONS = [
@@ -329,14 +337,14 @@ function SourceBarChart({ rows }) {
             <g key={row.id}>
               <rect x={x} y={y} width={w} height={h} fill={color} rx="4">
                 <title>
-                  {`${row.source_label}: ${formatNumber(value)} MTCO2e`}
+                  {`${row.activity_label}: ${formatNumber(value)} MTCO2e`}
                 </title>
               </rect>
               <text x={x + w / 2} y={y - 6} textAnchor="middle" fontSize="10" fill="currentColor">
                 {formatNumber(value)}
               </text>
               <text x={x + w / 2} y={height - padding.bottom + 14} textAnchor="middle" fontSize="10" fill="currentColor">
-                {wrapText(row.source_label, 12).split("\n")[0]}
+                {wrapText(row.activity_label, 12).split("\n")[0]}
               </text>
             </g>
           );
@@ -429,7 +437,7 @@ function FacilitySourceTreemap({ rows }) {
   const facilityMap = {};
   for (const row of rows) {
     const facility = row.facility_name || row.facility_id || "Unknown";
-    const source = row.source_label || row.source_id || "Unknown";
+    const source = row.activity_label || row.activity_type_id || "Unknown";
     const value = Number(row.value || 0);
     if (!facilityMap[facility]) facilityMap[facility] = {};
     facilityMap[facility][source] = (facilityMap[facility][source] || 0) + value;
@@ -488,7 +496,7 @@ function FacilitySourceTreemap({ rows }) {
 export default function App({ colorMode = "light", onToggleColorMode = () => {} }) {
   const { snack, show, close } = useSnack();
   const [tab, setTab] = React.useState(0);
-  const [routing, setRouting] = React.useState([]);
+  const [activityCatalog, setActivityCatalog] = React.useState([]);
   const [projects, setProjects] = React.useState([]);
   const [projectVersions, setProjectVersions] = React.useState([]);
   const [activeProjectId, setActiveProjectId] = React.useState("");
@@ -497,7 +505,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [versionNote, setVersionNote] = React.useState("");
   const [projectBusy, setProjectBusy] = React.useState(false);
   const [facilities, setFacilities] = React.useState([{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }]);
-  const [activities, setActivities] = React.useState([{ ...EMPTY_ACTIVITY, id: uid() }]);
+  const [activities, setActivities] = React.useState([createEmptyDraft()]);
   const [inventoryYear, setInventoryYear] = React.useState(String(new Date().getFullYear()));
   const [gwpSet, setGwpSet] = React.useState("AR6");
   const [includeTrace, setIncludeTrace] = React.useState(true);
@@ -506,7 +514,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [summaryRows, setSummaryRows] = React.useState([]);
   const [traceRows, setTraceRows] = React.useState([]);
   const [auditRows, setAuditRows] = React.useState([]);
-  const [routingError, setRoutingError] = React.useState("");
+  const [catalogError, setCatalogError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
 
@@ -530,78 +538,29 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     [projects, activeProjectId],
   );
 
-  const routingById = React.useMemo(() => {
-    const legacyCounts = {};
-    for (const row of routing) {
-      for (const legacySourceId of row.legacy_source_ids || []) {
-        legacyCounts[legacySourceId] = (legacyCounts[legacySourceId] || 0) + 1;
-      }
-    }
-    const pairs = [];
-    for (const row of routing) {
-      pairs.push([row.source_id, row]);
-      for (const legacySourceId of row.legacy_source_ids || []) {
-        if (legacyCounts[legacySourceId] !== 1) continue;
-        pairs.push([legacySourceId, row]);
-      }
-    }
-    return Object.fromEntries(pairs);
-  }, [routing]);
-  const sourceLabelById = React.useMemo(() => {
-    const legacyCounts = {};
-    for (const row of routing) {
-      for (const legacySourceId of row.legacy_source_ids || []) {
-        legacyCounts[legacySourceId] = (legacyCounts[legacySourceId] || 0) + 1;
-      }
-    }
-    const pairs = [];
-    for (const row of routing) {
-      const label = row.label || row.source_type || row.source_id;
-      pairs.push([row.source_id, label]);
-      for (const legacySourceId of row.legacy_source_ids || []) {
-        if (legacyCounts[legacySourceId] !== 1) continue;
-        pairs.push([legacySourceId, label]);
-      }
-    }
-    return Object.fromEntries(pairs);
-  }, [routing]);
+  const activityTypesById = React.useMemo(
+    () => Object.fromEntries(activityCatalog.map((activityType) => [activityType.activity_type_id, activityType])),
+    [activityCatalog],
+  );
+  const activityLabelById = React.useMemo(
+    () => Object.fromEntries(activityCatalog.map((activityType) => [activityType.activity_type_id, activityType.label])),
+    [activityCatalog],
+  );
   const facilityNameById = React.useMemo(
     () => Object.fromEntries(facilities.map((f) => [f.id, f.facility_name || f.id])),
     [facilities],
   );
-  const sourceOptions = React.useMemo(
-    () => routing.map((r) => ({ value: r.source_id, label: r.label || r.source_type })),
-    [routing],
-  );
-  const facilityOptions = React.useMemo(
-    () => facilities.map((f) => ({ value: f.id, label: f.facility_name || f.id })),
+  const dataEntryFacilities = React.useMemo(
+    () => facilities.filter((facility) => String(facility.facility_name || "").trim()),
     [facilities],
   );
-  const normalizeActivityAgainstRouting = React.useCallback(
-    (row) => {
-      if (!row?.source_id) return row;
-      const source = routingById[row.source_id];
-      if (!source) return row;
-      const allowedUnits = Array.isArray(source.allowed_units) && source.allowed_units.length
-        ? source.allowed_units
-        : [source.default_unit].filter(Boolean);
-      const nextUnit = allowedUnits.includes(row.activity_unit)
-        ? row.activity_unit
-        : (row.activity_unit || allowedUnits[0] || source.default_unit || "");
-      return {
-        ...row,
-        activity_type_id: source.activity_type_id || row.activity_type_id || "",
-        source_id: source.source_id || row.source_id,
-        source_label: source.label || row.source_label || source.source_type || row.source_id,
-        source_type: source.source_type || row.source_type,
-        scope: source.scope || row.scope,
-        metric_group: source.metric_group || row.metric_group,
-        metric_subgroup: source.metric_subgroup || row.metric_subgroup || "",
-        method_id: source.method_id || row.method_id || "",
-        activity_unit: nextUnit,
-      };
-    },
-    [routingById],
+  const dataEntryFacilityIds = React.useMemo(
+    () => new Set(dataEntryFacilities.map((facility) => facility.id)),
+    [dataEntryFacilities],
+  );
+  const facilityOptions = React.useMemo(
+    () => dataEntryFacilities.map((f) => ({ value: f.id, label: f.facility_name })),
+    [dataEntryFacilities],
   );
   const co2eRows = React.useMemo(
     () =>
@@ -633,11 +592,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const dashboardBySourceRows = React.useMemo(() => {
     const byKey = {};
     for (const row of co2eRows) {
-      const key = row.source_label || row.source_id || "Unknown";
+      const key = row.activity_label || row.activity_type_id || "Unknown";
       byKey[key] = (byKey[key] || 0) + Number(row.value || 0);
     }
     return Object.entries(byKey)
-      .map(([source_label, value], i) => ({ id: `src_${i}`, source_label, value }))
+      .map(([activity_label, value], i) => ({ id: `src_${i}`, activity_label, value }))
       .sort((a, b) => b.value - a.value);
   }, [co2eRows]);
   const totalCo2e = React.useMemo(
@@ -667,7 +626,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       {
         id: "source",
         label: "Top Source",
-        value: topSource?.source_label || "No data",
+        value: topSource?.activity_label || "No data",
         detail:
           topSource && totalCo2e > 0
             ? `${formatNumber(topSource.value)} MTCO2e (${formatPercent((topSource.value / totalCo2e) * 100)})`
@@ -692,7 +651,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           return {
             id: row.id || `dashboard_${i}`,
             facility_name: row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
-            source_label: row.source_label || sourceLabelById[row.source_id] || row.source_id,
+            activity_label: row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
             scope: row.scope || "Unknown",
             accounting_method: row.accounting_method || "",
             value,
@@ -700,7 +659,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           };
         })
         .sort((a, b) => b.value - a.value),
-    [co2eRows, facilityNameById, sourceLabelById, totalCo2e],
+    [activityLabelById, co2eRows, facilityNameById, totalCo2e],
   );
 
   const refreshProjects = React.useCallback(async () => {
@@ -727,7 +686,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const applySnapshot = React.useCallback((payload) => {
     const snap = payload?.snapshot || {};
     setFacilities(ensureRowsWithIds(snap.facilities, () => ({ ...EMPTY_FACILITY })));
-    setActivities(ensureRowsWithIds(snap.activities, () => ({ ...EMPTY_ACTIVITY })));
+    setActivities(
+      Array.isArray(snap.activities) && snap.activities.length > 0
+        ? snap.activities.map((draft) => hydrateDraft(draft, activityTypesById[draft.activity_type_id]))
+        : [createEmptyDraft()],
+    );
     setResultRows(
       (snap.result_rows || []).map((row, i) => ({
         id: row.id || `${i}`,
@@ -752,10 +715,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     );
     setTraceRows((snap.trace_rows || []).map((row, i) => ({ id: row.id || `${i}`, ...row })));
     setAuditRows((snap.audit_rows || []).map((row, i) => ({ id: row.id || `a_${i}`, ...row })));
-    setInventoryYear(String(payload?.inventory_year || snap.inventory_year || new Date().getFullYear()));
-    setGwpSet(String(payload?.gwp_set || snap.gwp_set || "AR6"));
-    setIncludeTrace(Boolean(payload?.include_trace ?? snap.include_trace ?? true));
-  }, []);
+    setInventoryYear(String(payload?.inventory_year || new Date().getFullYear()));
+    setGwpSet(String(payload?.gwp_set || "AR6"));
+    setIncludeTrace(Boolean(payload?.include_trace ?? true));
+  }, [activityTypesById]);
 
   const loadLatestSnapshot = React.useCallback(
     async (projectId) => {
@@ -785,12 +748,14 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           inventory_year: Number(inventoryYear),
           gwp_set: gwpSet,
           include_trace: includeTrace,
-          facilities,
-          activities,
-          result_rows: resultRows,
-          summary_rows: summaryRows,
-          trace_rows: traceRows,
-          audit_rows: auditRows,
+          snapshot: buildSnapshot({
+            facilities,
+            activities,
+            resultRows,
+            summaryRows,
+            traceRows,
+            auditRows,
+          }),
           note: note || null,
         });
         await refreshVersions(activeProjectId);
@@ -845,27 +810,22 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   );
 
   React.useEffect(() => {
-    const loadRouting = async () => {
+    const loadCatalog = async () => {
       try {
-        const rows = await api.listRouting();
+        const rows = await api.listActivityTypes();
         if (!Array.isArray(rows)) {
-          throw new Error("Routing API returned non-array payload.");
+          throw new Error("Catalog API returned non-array payload.");
         }
-        setRouting(rows);
-        setRoutingError("");
+        setActivityCatalog(rows);
+        setCatalogError("");
       } catch (e) {
-        setRouting([]);
-        setRoutingError(String(e.message || e));
-        show(`Failed to load sources: ${e.message}`, "error");
+        setActivityCatalog([]);
+        setCatalogError(String(e.message || e));
+        show(`Failed to load activity catalog: ${e.message}`, "error");
       }
     };
-    loadRouting();
+    loadCatalog();
   }, [show]);
-
-  React.useEffect(() => {
-    if (!routing.length) return;
-    setActivities((prev) => prev.map((row) => normalizeActivityAgainstRouting(row)));
-  }, [routing.length, normalizeActivityAgainstRouting]);
 
   React.useEffect(() => {
     let mounted = true;
@@ -912,7 +872,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       const project = await api.createProject({ name: cleanName, inventory_year: year });
       setProjectNameDraft("");
       const initialFacilities = [{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }];
-      const initialActivities = [{ ...EMPTY_ACTIVITY, id: uid() }];
+      const initialActivities = [createEmptyDraft()];
       setFacilities(initialFacilities);
       setActivities(initialActivities);
       setResultRows([]);
@@ -925,12 +885,14 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         inventory_year: year,
         gwp_set: gwpSet,
         include_trace: includeTrace,
-        facilities: initialFacilities,
-        activities: initialActivities,
-        result_rows: [],
-        summary_rows: [],
-        trace_rows: [],
-        audit_rows: [],
+        snapshot: buildSnapshot({
+          facilities: initialFacilities,
+          activities: initialActivities,
+          resultRows: [],
+          summaryRows: [],
+          traceRows: [],
+          auditRows: [],
+        }),
         note: "Initial project scaffold.",
       });
       await refreshProjects();
@@ -978,7 +940,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       setProjectRenameDraft("");
       setProjectVersions([]);
       setFacilities([{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }]);
-      setActivities([{ ...EMPTY_ACTIVITY, id: uid() }]);
+      setActivities([createEmptyDraft()]);
       setResultRows([]);
       setSummaryRows([]);
       setTraceRows([]);
@@ -1039,9 +1001,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       setTab(0);
       return;
     }
-    const rows = activities.filter((r) => r.facility_id && r.source_id && r.activity_value !== "");
+    if (!dataEntryFacilities.length) {
+      show("Add at least one named facility before entering activity data.", "warning");
+      setTab(1);
+      return;
+    }
+    const rows = activities.filter(
+      (draft) =>
+        dataEntryFacilityIds.has(draft.facility_id)
+        && draft.activity_type_id
+        && draft.activity?.value !== "",
+    );
     if (!rows.length) {
-      show("Add at least one activity row with facility, source, and value.", "warning");
+      show("Add at least one activity row with facility, activity, and value.", "warning");
       return;
     }
 
@@ -1066,27 +1038,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
               egrid_subregion: fac?.egrid_subregion || undefined,
             },
           },
-          activities: facilityRows.map((r) => {
-            const sourceMeta = routingById[r.source_id] || {};
-            const preparedRow = {
-              ...sourceMeta,
-              ...r,
-              activity_type_id: r.activity_type_id || sourceMeta.activity_type_id || "",
-              method_id: r.method_id || sourceMeta.method_id || "",
-            };
-            const normalized = normalizeActivityForSubmit(preparedRow);
-            return {
-              activity_type_id: preparedRow.activity_type_id || null,
-              activity: normalized.activity,
-              params: normalized.params,
-              facility_id: preparedRow.facility_id,
-              source_id: preparedRow.source_id,
-              source_type: preparedRow.source_type,
-              scope: preparedRow.scope,
-              metric_group: preparedRow.metric_group,
-              metric_subgroup: preparedRow.metric_subgroup || null,
-            };
-          }),
+          activities: facilityRows.map((draft) => normalizeActivityForSubmit(draft, activityTypesById[draft.activity_type_id])),
         };
         const response = await api.calculateAudit(payload);
         for (const rr of response.results || []) mergedResults.push(rr);
@@ -1103,7 +1055,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           value: toMetricTons(r.value, r.unit),
           unit: "metric ton",
           facility_name: facilityNameById[r.facility_id] || r.facility_id,
-          source_label: sourceLabelById[r.source_id] || r.source_id,
+          activity_label: r.activity_label || activityLabelById[r.activity_type_id] || r.activity_type_id,
         })),
       );
       setTraceRows(mergedTrace.map((r, i) => ({ id: `${i}`, ...r })));
@@ -1112,7 +1064,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           id: `a_${i}`,
           ...r,
           facility_name: facilityNameById[r.facility_id] || r.facility_id,
-          source_label: sourceLabelById[r.source_id] || r.source_id,
+          activity_label: r.activity_label || activityLabelById[r.activity_type_id] || r.activity_type_id,
         })),
       );
       const metricTonSummary = {};
@@ -1232,10 +1184,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       valueGetter: (_, row) => row.facility_name || facilityNameById[row.facility_id] || row.facility_id,
     },
     {
-      field: "source_label",
-      headerName: "Source",
+      field: "activity_label",
+      headerName: "Activity",
       flex: 1,
-      valueGetter: (_, row) => row.source_label || sourceLabelById[row.source_id] || row.source_id,
+      valueGetter: (_, row) => row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
     },
     { field: "scope", headerName: "Scope", flex: 0.6 },
     { field: "accounting_method", headerName: "Accounting", flex: 0.8 },
@@ -1263,7 +1215,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const dashboardTableColumns = React.useMemo(
     () => [
       { field: "facility_name", headerName: "Facility", flex: 0.95, minWidth: 160, renderCell: renderWrappedCell },
-      { field: "source_label", headerName: "Source", flex: 1.1, minWidth: 180, renderCell: renderWrappedCell },
+      { field: "activity_label", headerName: "Activity", flex: 1.1, minWidth: 180, renderCell: renderWrappedCell },
       { field: "scope", headerName: "Scope", flex: 0.7, minWidth: 120 },
       { field: "accounting_method", headerName: "Accounting", flex: 0.85, minWidth: 140 },
       {
@@ -1483,11 +1435,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <ActivityInputsPanel
           activities={activities}
           setActivities={setActivities}
-          facilities={facilities}
-          routing={routing}
-          routingById={routingById}
+          facilities={dataEntryFacilities}
+          activityCatalog={activityCatalog}
+          activityTypesById={activityTypesById}
           facilityOptions={facilityOptions}
-          sourceOptions={sourceOptions}
           inventoryYear={inventoryYear}
           setInventoryYear={setInventoryYear}
           gwpSet={gwpSet}
@@ -1497,7 +1448,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           runCalculation={runCalculation}
           calculating={calculating}
           saveCurrentVersion={saveCurrentVersion}
-          routingError={routingError}
+          catalogError={catalogError}
           show={show}
         />
       )}
@@ -1645,10 +1596,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                   renderCell: renderWrappedCell,
                 },
                 {
-                  field: "source_label",
-                  headerName: "Source",
+                  field: "activity_label",
+                  headerName: "Activity",
                   flex: 1.1,
-                  valueGetter: (_, row) => row.source_label || sourceLabelById[row.source_id] || row.source_id,
+                  valueGetter: (_, row) => row.activity_label || activityLabelById[row.activity_type_id] || row.activity_type_id,
                   renderCell: renderWrappedCell,
                 },
                 { field: "scope", headerName: "Scope", flex: 0.55, renderCell: renderWrappedCell },

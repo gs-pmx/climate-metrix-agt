@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from ghg_engine.activity_catalog import ActivityCatalog
+from ghg_engine.models import ActivityDraft, FacilityDraft, ProjectSnapshot, ResultRecord
+
 
 def utc_now_iso() -> str:
     return datetime.now(tz=UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
@@ -48,6 +51,8 @@ class ProjectStore:
                 (1, "initial project storage schema", self._migration_1_initial_schema),
                 (2, "project name index and helper views", self._migration_2_indexes),
                 (3, "emission factor document store", self._migration_3_factors),
+                (4, "canonical activity snapshots and typed fact schema", self._migration_4_canonical_activity_schema),
+                (5, "biogenic-aware measure schema", self._migration_5_biogenic_measure_schema),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -200,8 +205,217 @@ class ProjectStore:
             """
         )
 
+    def _migration_4_canonical_activity_schema(self, conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_fact_actuals_version;
+            DROP INDEX IF EXISTS idx_versions_project_version;
+
+            DROP TABLE IF EXISTS fact_actuals;
+            DROP TABLE IF EXISTS dim_measure;
+            DROP TABLE IF EXISTS dim_entity;
+            DROP TABLE IF EXISTS dim_date;
+            DROP TABLE IF EXISTS project_versions;
+
+            CREATE TABLE project_versions (
+                version_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                inventory_year INTEGER NOT NULL,
+                gwp_set TEXT NOT NULL,
+                include_trace INTEGER NOT NULL,
+                note TEXT,
+                snapshot_json TEXT NOT NULL,
+                UNIQUE(project_id, version_number),
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE dim_date (
+                date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                calendar_date TEXT NOT NULL UNIQUE,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL
+            );
+
+            CREATE TABLE dim_entity (
+                entity_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                facility_id TEXT,
+                facility_name TEXT,
+                activity_type_id TEXT,
+                activity_label TEXT,
+                activity_group TEXT,
+                protocol_category_code TEXT,
+                protocol_category_label TEXT,
+                country TEXT,
+                state TEXT,
+                egrid_subregion TEXT,
+                reporting_group TEXT,
+                owned_leased TEXT,
+                UNIQUE(
+                    project_id,
+                    facility_id,
+                    activity_type_id,
+                    country,
+                    state,
+                    egrid_subregion,
+                    reporting_group,
+                    owned_leased
+                ),
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE dim_measure (
+                measure_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                measure_type TEXT NOT NULL,
+                unit TEXT,
+                scope TEXT,
+                activity_group TEXT,
+                source_type TEXT,
+                gas TEXT,
+                accounting_method TEXT,
+                is_biogenic INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(
+                    measure_type,
+                    unit,
+                    scope,
+                    activity_group,
+                    source_type,
+                    gas,
+                    accounting_method,
+                    is_biogenic
+                )
+            );
+
+            CREATE TABLE fact_actuals (
+                fact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version_id INTEGER NOT NULL,
+                date_id INTEGER NOT NULL,
+                entity_id INTEGER NOT NULL,
+                measure_id INTEGER NOT NULL,
+                value REAL NOT NULL,
+                is_emission INTEGER NOT NULL,
+                row_json TEXT NOT NULL,
+                FOREIGN KEY(version_id) REFERENCES project_versions(version_id) ON DELETE CASCADE,
+                FOREIGN KEY(date_id) REFERENCES dim_date(date_id),
+                FOREIGN KEY(entity_id) REFERENCES dim_entity(entity_id),
+                FOREIGN KEY(measure_id) REFERENCES dim_measure(measure_id)
+            );
+
+            CREATE INDEX idx_versions_project_version
+                ON project_versions(project_id, version_number DESC);
+            CREATE INDEX idx_fact_actuals_version ON fact_actuals(version_id);
+            """
+        )
+
+    def _migration_5_biogenic_measure_schema(self, conn: sqlite3.Connection) -> None:
+        conn.executescript(
+            """
+            DROP INDEX IF EXISTS idx_fact_actuals_version;
+            DROP INDEX IF EXISTS idx_versions_project_version;
+
+            DROP TABLE IF EXISTS fact_actuals;
+            DROP TABLE IF EXISTS dim_measure;
+            DROP TABLE IF EXISTS dim_entity;
+            DROP TABLE IF EXISTS dim_date;
+            DROP TABLE IF EXISTS project_versions;
+
+            CREATE TABLE project_versions (
+                version_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                version_number INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                inventory_year INTEGER NOT NULL,
+                gwp_set TEXT NOT NULL,
+                include_trace INTEGER NOT NULL,
+                note TEXT,
+                snapshot_json TEXT NOT NULL,
+                UNIQUE(project_id, version_number),
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE dim_date (
+                date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                calendar_date TEXT NOT NULL UNIQUE,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL
+            );
+
+            CREATE TABLE dim_entity (
+                entity_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                facility_id TEXT,
+                facility_name TEXT,
+                activity_type_id TEXT,
+                activity_label TEXT,
+                activity_group TEXT,
+                protocol_category_code TEXT,
+                protocol_category_label TEXT,
+                country TEXT,
+                state TEXT,
+                egrid_subregion TEXT,
+                reporting_group TEXT,
+                owned_leased TEXT,
+                UNIQUE(
+                    project_id,
+                    facility_id,
+                    activity_type_id,
+                    country,
+                    state,
+                    egrid_subregion,
+                    reporting_group,
+                    owned_leased
+                ),
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE dim_measure (
+                measure_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                measure_type TEXT NOT NULL,
+                unit TEXT,
+                scope TEXT,
+                activity_group TEXT,
+                source_type TEXT,
+                gas TEXT,
+                accounting_method TEXT,
+                is_biogenic INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(
+                    measure_type,
+                    unit,
+                    scope,
+                    activity_group,
+                    source_type,
+                    gas,
+                    accounting_method,
+                    is_biogenic
+                )
+            );
+
+            CREATE TABLE fact_actuals (
+                fact_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                version_id INTEGER NOT NULL,
+                date_id INTEGER NOT NULL,
+                entity_id INTEGER NOT NULL,
+                measure_id INTEGER NOT NULL,
+                value REAL NOT NULL,
+                is_emission INTEGER NOT NULL,
+                row_json TEXT NOT NULL,
+                FOREIGN KEY(version_id) REFERENCES project_versions(version_id) ON DELETE CASCADE,
+                FOREIGN KEY(date_id) REFERENCES dim_date(date_id),
+                FOREIGN KEY(entity_id) REFERENCES dim_entity(entity_id),
+                FOREIGN KEY(measure_id) REFERENCES dim_measure(measure_id)
+            );
+
+            CREATE INDEX idx_versions_project_version
+                ON project_versions(project_id, version_number DESC);
+            CREATE INDEX idx_fact_actuals_version ON fact_actuals(version_id);
+            """
+        )
+
     def seed_factors(self, json_path: Path) -> int:
-        """Load emission_factors.json into the factors table if empty. Returns count inserted."""
         with self._connect() as conn:
             count = conn.execute("SELECT COUNT(*) FROM factors").fetchone()[0]
             if count > 0:
@@ -236,7 +450,6 @@ class ProjectStore:
             return len(rows)
 
     def factors_connection(self) -> sqlite3.Connection:
-        """Return a connection for the DocumentFactorRepository to read from."""
         return self._connect()
 
     def schema_info(self) -> dict[str, Any]:
@@ -250,7 +463,7 @@ class ProjectStore:
             ).fetchall()
             return {
                 "current_version": self._current_schema_version(conn),
-                "migrations": [dict(r) for r in rows],
+                "migrations": [dict(row) for row in rows],
             }
 
     def list_projects(self) -> list[dict[str, Any]]:
@@ -265,7 +478,7 @@ class ProjectStore:
                 ORDER BY p.updated_at DESC
                 """
             ).fetchall()
-            return [dict(r) for r in rows]
+            return [dict(row) for row in rows]
 
     def create_project(self, *, project_id: str, name: str, inventory_year: int) -> dict[str, Any]:
         now = utc_now_iso()
@@ -332,7 +545,7 @@ class ProjectStore:
                 """,
                 (project_id,),
             ).fetchall()
-            return [dict(r) for r in rows]
+            return [dict(row) for row in rows]
 
     def get_version_snapshot(self, project_id: str, version_number: int | None = None) -> dict[str, Any]:
         with self._connect() as conn:
@@ -378,7 +591,10 @@ class ProjectStore:
             if row is None:
                 raise KeyError("Project version not found.")
             payload = dict(row)
-            payload["snapshot"] = json.loads(payload.pop("snapshot_json"))
+            try:
+                payload["snapshot"] = ProjectSnapshot.model_validate_json(payload.pop("snapshot_json"))
+            except Exception as exc:
+                raise ValueError(f"Unsupported snapshot schema for project '{project_id}': {exc}") from exc
             payload["include_trace"] = bool(payload["include_trace"])
             return payload
 
@@ -389,7 +605,8 @@ class ProjectStore:
         inventory_year: int,
         gwp_set: str,
         include_trace: bool,
-        snapshot: dict[str, Any],
+        snapshot: ProjectSnapshot,
+        activity_catalog: ActivityCatalog,
         note: str | None = None,
     ) -> dict[str, Any]:
         now = utc_now_iso()
@@ -407,7 +624,6 @@ class ProjectStore:
             ).fetchone()
             next_version = int(current["latest_version"]) + 1 if current else 1
 
-            snapshot_json = json.dumps(snapshot, sort_keys=True)
             cur = conn.execute(
                 """
                 INSERT INTO project_versions (
@@ -423,7 +639,7 @@ class ProjectStore:
                     gwp_set,
                     int(include_trace),
                     note,
-                    snapshot_json,
+                    snapshot.model_dump_json(),
                 ),
             )
             version_id = int(cur.lastrowid)
@@ -440,9 +656,10 @@ class ProjectStore:
                 project_id=project_id,
                 version_id=version_id,
                 as_of=now,
-                facilities=snapshot.get("facilities", []),
-                activities=snapshot.get("activities", []),
-                result_rows=snapshot.get("result_rows", []),
+                facilities=snapshot.facilities,
+                activities=snapshot.activities,
+                result_rows=snapshot.result_rows,
+                activity_catalog=activity_catalog,
             )
 
             return {
@@ -459,93 +676,96 @@ class ProjectStore:
         project_id: str,
         version_id: int,
         as_of: str,
-        facilities: list[dict[str, Any]],
-        activities: list[dict[str, Any]],
-        result_rows: list[dict[str, Any]],
+        facilities: list[FacilityDraft],
+        activities: list[ActivityDraft],
+        result_rows: list[ResultRecord],
+        activity_catalog: ActivityCatalog,
     ) -> None:
         date_id = self._upsert_dim_date(conn, as_of)
-        facility_by_id = {str(f.get("id")): f for f in facilities if f.get("id") is not None}
+        facility_by_id = {facility.id: facility for facility in facilities}
 
         for row in activities:
-            raw_value = row.get("activity_value")
-            if raw_value in ("", None):
+            if (
+                not row.facility_id
+                or not row.activity_type_id
+                or row.activity.value is None
+                or not row.activity.unit
+            ):
                 continue
-            try:
-                value = float(raw_value)
-            except (TypeError, ValueError):
-                continue
-            facility = facility_by_id.get(str(row.get("facility_id")), {})
+            facility = facility_by_id.get(row.facility_id, FacilityDraft(id=row.facility_id))
+            activity_def = activity_catalog.get_required(row.activity_type_id)
             entity_id = self._upsert_dim_entity(
                 conn=conn,
                 project_id=project_id,
-                facility_id=row.get("facility_id"),
-                facility_name=facility.get("facility_name"),
-                source_id=row.get("source_id"),
-                source_label=row.get("source_label"),
-                country=facility.get("country"),
-                state=facility.get("state"),
-                egrid_subregion=facility.get("egrid_subregion"),
-                reporting_group=facility.get("reporting_group"),
-                owned_leased=facility.get("owned_leased"),
+                facility=facility,
+                activity_type_id=row.activity_type_id,
+                activity_label=activity_def.label,
+                activity_group=activity_def.ui_metadata.get("group"),
+                protocol_category_code=activity_def.protocol_category_code,
+                protocol_category_label=activity_def.protocol_category_label,
             )
             measure_id = self._upsert_dim_measure(
                 conn=conn,
                 measure_type="activity",
-                unit=row.get("activity_unit"),
-                scope=row.get("scope"),
-                metric_group=row.get("metric_group"),
-                metric_subgroup=row.get("metric_subgroup"),
-                source_type=row.get("source_type"),
+                unit=row.activity.unit,
+                scope=activity_def.scope,
+                activity_group=activity_def.ui_metadata.get("group"),
+                source_type=activity_def.source_type,
                 gas=None,
                 accounting_method=None,
+                is_biogenic=False,
             )
             conn.execute(
                 """
                 INSERT INTO fact_actuals (version_id, date_id, entity_id, measure_id, value, is_emission, row_json)
                 VALUES (?, ?, ?, ?, ?, 0, ?)
                 """,
-                (version_id, date_id, entity_id, measure_id, value, json.dumps(row, sort_keys=True)),
+                (
+                    version_id,
+                    date_id,
+                    entity_id,
+                    measure_id,
+                    row.activity.value,
+                    row.model_dump_json(),
+                ),
             )
 
         for row in result_rows:
-            raw_value = row.get("value")
-            if raw_value in ("", None):
-                continue
-            try:
-                value = float(raw_value)
-            except (TypeError, ValueError):
-                continue
-            facility = facility_by_id.get(str(row.get("facility_id")), {})
+            facility = facility_by_id.get(row.facility_id, FacilityDraft(id=row.facility_id))
             entity_id = self._upsert_dim_entity(
                 conn=conn,
                 project_id=project_id,
-                facility_id=row.get("facility_id"),
-                facility_name=facility.get("facility_name"),
-                source_id=row.get("source_id"),
-                source_label=None,
-                country=facility.get("country"),
-                state=facility.get("state"),
-                egrid_subregion=facility.get("egrid_subregion"),
-                reporting_group=facility.get("reporting_group"),
-                owned_leased=facility.get("owned_leased"),
+                facility=facility,
+                activity_type_id=row.activity_type_id,
+                activity_label=row.activity_label,
+                activity_group=row.activity_group,
+                protocol_category_code=row.protocol_category_code,
+                protocol_category_label=row.protocol_category_label,
             )
             measure_id = self._upsert_dim_measure(
                 conn=conn,
                 measure_type="emission",
-                unit=row.get("unit"),
-                scope=row.get("scope"),
-                metric_group=None,
-                metric_subgroup=None,
-                source_type=None,
-                gas=row.get("gas"),
-                accounting_method=row.get("accounting_method"),
+                unit=row.unit,
+                scope=row.scope,
+                activity_group=row.activity_group,
+                source_type=row.source_type,
+                gas=row.gas,
+                accounting_method=row.accounting_method,
+                is_biogenic=row.is_biogenic,
             )
             conn.execute(
                 """
                 INSERT INTO fact_actuals (version_id, date_id, entity_id, measure_id, value, is_emission, row_json)
                 VALUES (?, ?, ?, ?, ?, 1, ?)
                 """,
-                (version_id, date_id, entity_id, measure_id, value, json.dumps(row, sort_keys=True)),
+                (
+                    version_id,
+                    date_id,
+                    entity_id,
+                    measure_id,
+                    row.value,
+                    row.model_dump_json(),
+                ),
             )
 
     def _upsert_dim_date(self, conn: sqlite3.Connection, as_of: str) -> int:
@@ -571,15 +791,12 @@ class ProjectStore:
         *,
         conn: sqlite3.Connection,
         project_id: str,
-        facility_id: Any,
-        facility_name: Any,
-        source_id: Any,
-        source_label: Any,
-        country: Any,
-        state: Any,
-        egrid_subregion: Any,
-        reporting_group: Any,
-        owned_leased: Any,
+        facility: FacilityDraft,
+        activity_type_id: str,
+        activity_label: str | None,
+        activity_group: str | None,
+        protocol_category_code: str | None,
+        protocol_category_label: str | None,
     ) -> int:
         row = conn.execute(
             """
@@ -587,7 +804,7 @@ class ProjectStore:
             FROM dim_entity
             WHERE project_id = ?
               AND facility_id IS ?
-              AND source_id IS ?
+              AND activity_type_id IS ?
               AND country IS ?
               AND state IS ?
               AND egrid_subregion IS ?
@@ -596,13 +813,13 @@ class ProjectStore:
             """,
             (
                 project_id,
-                facility_id,
-                source_id,
-                country,
-                state,
-                egrid_subregion,
-                reporting_group,
-                owned_leased,
+                facility.id,
+                activity_type_id,
+                facility.country,
+                facility.state,
+                facility.egrid_subregion,
+                facility.reporting_group,
+                facility.owned_leased,
             ),
         ).fetchone()
         if row is not None:
@@ -610,22 +827,36 @@ class ProjectStore:
         cur = conn.execute(
             """
             INSERT INTO dim_entity (
-                project_id, facility_id, facility_name, source_id, source_label, country,
-                state, egrid_subregion, reporting_group, owned_leased
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
                 project_id,
                 facility_id,
                 facility_name,
-                source_id,
-                source_label,
+                activity_type_id,
+                activity_label,
+                activity_group,
+                protocol_category_code,
+                protocol_category_label,
                 country,
                 state,
                 egrid_subregion,
                 reporting_group,
-                owned_leased,
+                owned_leased
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                facility.id,
+                facility.facility_name,
+                activity_type_id,
+                activity_label,
+                activity_group,
+                protocol_category_code,
+                protocol_category_label,
+                facility.country,
+                facility.state,
+                facility.egrid_subregion,
+                facility.reporting_group,
+                facility.owned_leased,
             ),
         )
         return int(cur.lastrowid)
@@ -637,11 +868,11 @@ class ProjectStore:
         measure_type: str,
         unit: Any,
         scope: Any,
-        metric_group: Any,
-        metric_subgroup: Any,
+        activity_group: Any,
         source_type: Any,
         gas: Any,
         accounting_method: Any,
+        is_biogenic: bool,
     ) -> int:
         row = conn.execute(
             """
@@ -650,21 +881,21 @@ class ProjectStore:
             WHERE measure_type = ?
               AND unit IS ?
               AND scope IS ?
-              AND metric_group IS ?
-              AND metric_subgroup IS ?
+              AND activity_group IS ?
               AND source_type IS ?
               AND gas IS ?
               AND accounting_method IS ?
+              AND is_biogenic = ?
             """,
             (
                 measure_type,
                 unit,
                 scope,
-                metric_group,
-                metric_subgroup,
+                activity_group,
                 source_type,
                 gas,
                 accounting_method,
+                1 if is_biogenic else 0,
             ),
         ).fetchone()
         if row is not None:
@@ -672,10 +903,10 @@ class ProjectStore:
         cur = conn.execute(
             """
             INSERT INTO dim_measure (
-                measure_type, unit, scope, metric_group, metric_subgroup, source_type, gas, accounting_method
+                measure_type, unit, scope, activity_group, source_type, gas, accounting_method, is_biogenic
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (measure_type, unit, scope, metric_group, metric_subgroup, source_type, gas, accounting_method),
+            (measure_type, unit, scope, activity_group, source_type, gas, accounting_method, 1 if is_biogenic else 0),
         )
         return int(cur.lastrowid)

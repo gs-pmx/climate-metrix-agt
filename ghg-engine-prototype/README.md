@@ -34,7 +34,8 @@ If the UI loads but calculations fail, confirm the FastAPI server is running; th
 ## API Endpoints
 
 - `POST /calculate`
-- `GET /catalog/routing`
+- `POST /calculate/audit`
+- `GET /catalog/activity-types`
 - `GET /catalog/factors/preview?query=...`
 - `GET /schema/method/{method_id}`
 
@@ -52,11 +53,7 @@ curl -X POST http://127.0.0.1:8000/calculate \
     },
     "activities": [{
       "facility_id": "F1",
-      "source_id": "electricity_s2",
-      "source_type": "electricity",
-      "scope": "Scope 2",
-      "metric_group": "grid_energy",
-      "metric_subgroup": "electricity_mix",
+      "activity_type_id": "scope2_purchased_electricity_grid_mix",
       "activity": {"value": 1000, "unit": "kwh"}
     }]
   }'
