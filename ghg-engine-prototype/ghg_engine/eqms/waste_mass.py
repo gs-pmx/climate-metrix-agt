@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..activity_catalog import ActivityTypeDefinition, FactorQueryTemplate
+from ..domain import ResolvedActivity
 from ..factors import FactorRepository
 from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from .base import EQMPlugin
@@ -67,6 +68,8 @@ class WasteMassMethod(EQMPlugin):
         activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
+        *,
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         disposal_method = str(activity.params.get("disposal_method") or "")
         template = DISPOSAL_TEMPLATE_MAP.get(disposal_method)
@@ -83,4 +86,5 @@ class WasteMassMethod(EQMPlugin):
             template_groups={"none": [template]},
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )

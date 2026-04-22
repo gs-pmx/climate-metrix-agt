@@ -4,12 +4,13 @@ from .activity_catalog import ActivityCatalog
 from .application import CalculateInventoryUseCase
 from .eqms.registry import default_plugin_registry
 from .factors import FactorRepository
-from .services import CalculationOrchestrator
 from .models import ActivityRecord, CalculationContext, MethodSchema, ResultRecord, TraceRecord
+from .ports import FactorQueryRepository
+from .services import CalculationOrchestrator
 
 
 class GHGEngine:
-    def __init__(self, activity_catalog: ActivityCatalog, factors: FactorRepository):
+    def __init__(self, activity_catalog: ActivityCatalog, factors: FactorRepository | FactorQueryRepository):
         self.activity_catalog = activity_catalog
         self.factors = factors
         self.plugins = default_plugin_registry()

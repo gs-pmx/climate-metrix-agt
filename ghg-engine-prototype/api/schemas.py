@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from ghg_engine.activity_catalog import ActivityTypeDefinition, ImplementationStatus
+from ghg_engine.activity_catalog import ActivityTypeDefinition
 from ghg_engine.models import (
     ActivityRecord,
     AuditRecord,

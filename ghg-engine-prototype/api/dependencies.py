@@ -5,9 +5,9 @@ from functools import lru_cache
 
 from config import Settings, get_settings
 from ghg_engine.activity_catalog import ActivityCatalog
-from ghg_engine.document_factors import DocumentFactorRepository
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
+from ghg_engine.infrastructure.sqlite_factors import SQLiteFactorRepository
 from project_store import ProjectStore
 
 log = logging.getLogger(__name__)
@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 @lru_cache(maxsize=1)
 def _build(
     settings: Settings | None = None,
-) -> tuple[ActivityCatalog, FactorRepository | DocumentFactorRepository, GHGEngine, ProjectStore]:
+) -> tuple[ActivityCatalog, FactorRepository | SQLiteFactorRepository, GHGEngine, ProjectStore]:
     if settings is None:
         settings = get_settings()
     activity_catalog = ActivityCatalog.from_json(settings.data_dir / "activity_types.json")
@@ -26,11 +26,14 @@ def _build(
         ef_json = settings.data_dir / "emission_factors.json"
         seeded = store.seed_factors(ef_json)
         if seeded:
-            log.info("Seeded %d emission factor documents into SQLite.", seeded)
-        conn = store.factors_connection()
-        factors = DocumentFactorRepository.from_sqlite(conn)
-        conn.close()
-        log.info("Using document-based factor repository (%d factors).", len(factors._docs))
+            log.info("Seeded %d canonical emission factor rows into SQLite.", seeded)
+        factors = store.factor_repository()
+        dataset = store.current_factor_dataset()
+        log.info(
+            "Using canonical SQLite factor repository (%d factors, dataset=%s).",
+            factors.count(),
+            dataset["dataset_key"] if dataset else "none",
+        )
     else:
         factors = FactorRepository.from_csv(str(settings.data_dir / "factors.csv"))
         log.info("Using CSV-based factor repository.")
@@ -43,7 +46,7 @@ def get_activity_catalog() -> ActivityCatalog:
     return _build()[0]
 
 
-def get_factors() -> FactorRepository | DocumentFactorRepository:
+def get_factors() -> FactorRepository | SQLiteFactorRepository:
     return _build()[1]
 
 

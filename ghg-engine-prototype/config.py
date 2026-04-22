@@ -16,7 +16,8 @@ class Settings(BaseSettings):
     )
 
     data_dir: Path = Field(default=_BASE_DIR / "data")
-    db_path: Path = Field(default=_BASE_DIR / "data" / "ghg_projects.sqlite")
+    db_path: Path = Field(default=_BASE_DIR / "state" / "ghg_projects.sqlite")
+    frontend_dist_dir: Path = Field(default=_BASE_DIR / "frontend" / "dist")
     cors_origins: list[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..activity_catalog import ActivityTypeDefinition
+from ..domain import ResolvedActivity
 from ..factors import FactorRepository
 from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from .base import EQMPlugin
@@ -27,6 +28,8 @@ class FreightTonMileMethod(EQMPlugin):
         activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
+        *,
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         return self._direct.compute_from_template_groups(
             activity=activity,
@@ -36,4 +39,5 @@ class FreightTonMileMethod(EQMPlugin):
             template_groups=self._direct._group_templates(activity_def),
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )

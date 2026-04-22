@@ -10,7 +10,6 @@ from ghg_engine.document_factors import DocumentFactorRepository
 from ghg_engine.engine import GHGEngine
 from ghg_engine.models import ActivityRecord, CalculationContext
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -201,3 +200,47 @@ def test_scope2_market_based_proxy_is_traced_when_residual_mix_is_unavailable():
 
     assert {row.accounting_method for row in rows} == {"location_based", "market_based"}
     assert any("location-based proxy" in note for note in trace.defaults_applied)
+
+
+def test_direct_factor_manual_emission_factor_override_replaces_default_factor_path():
+    eng = _engine()
+    rows, trace = eng.calculate_one(
+        ActivityRecord(
+            facility_id="F1",
+            activity_type_id="scope1_stationary_natural_gas",
+            activity={"value": 1000.0, "unit": "scf"},
+            params={"emission_factor_override": {"value": 5.0, "unit": "kg/mmbtu"}},
+        ),
+        CalculationContext(inventory_year=2026),
+    )
+
+    assert len(rows) == 1
+    assert rows[0].gas == "co2e"
+    assert rows[0].accounting_method == "none"
+    assert rows[0].value == pytest.approx(5.13, rel=1e-3)
+    assert any("params.emission_factor_override" in note for note in trace.defaults_applied)
+    assert any("heat-content factor" in note for note in trace.conversions)
+
+
+def test_scope2_market_based_manual_factor_override_preserves_dual_reporting():
+    eng = _engine()
+    rows, trace = eng.calculate_one(
+        ActivityRecord(
+            facility_id="F1",
+            activity_type_id="scope2_purchased_electricity_grid_mix",
+            activity={"value": 1000.0, "unit": "kwh"},
+            params={"market_based_emission_factor": {"value": 0.25, "unit": "kg/kwh"}},
+        ),
+        CalculationContext(
+            inventory_year=2026,
+            source_attributes={"country": "USA", "egrid_subregion": "NWPP"},
+        ),
+    )
+
+    market_rows = [row for row in rows if row.accounting_method == "market_based"]
+
+    assert {row.accounting_method for row in rows} == {"location_based", "market_based"}
+    assert len(market_rows) == 1
+    assert market_rows[0].gas == "co2e"
+    assert market_rows[0].value == pytest.approx(250.0)
+    assert any("params.market_based_emission_factor" in note for note in trace.defaults_applied)

@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from .models import ActivityRecord, AccountingMethod, Scope
+from .models import AccountingMethod, ActivityRecord, Scope
 
 ImplementationStatus = Literal["implemented", "partial", "planned", "deferred"]
 InputKind = Literal["quantity", "number", "enum", "string", "boolean"]

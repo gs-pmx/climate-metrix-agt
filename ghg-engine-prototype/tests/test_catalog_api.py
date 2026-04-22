@@ -27,6 +27,15 @@ def test_catalog_activity_types_endpoint_returns_protocol_catalog(client: TestCl
     assert any(row["activity_type_id"] == "scope2_purchased_electricity_grid_mix" for row in payload)
 
 
+def test_catalog_activity_types_endpoint_is_available_under_api_prefix(client: TestClient):
+    response = client.get("/api/catalog/activity-types")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) >= 30
+    assert any(row["activity_type_id"] == "scope2_purchased_electricity_grid_mix" for row in payload)
+
+
 def test_catalog_activity_types_endpoint_filters_by_status(client: TestClient):
     response = client.get("/catalog/activity-types", params={"status": "implemented"})
 
@@ -67,8 +76,38 @@ def test_catalog_activity_types_endpoint_exposes_partial_reason_and_bulk_entry_m
     assert renewable_electricity["accounting_metadata"]["partial_reason"]
 
 
+def test_catalog_activity_types_endpoint_exposes_manual_factor_override_fields(client: TestClient):
+    response = client.get("/catalog/activity-types")
+
+    assert response.status_code == 200
+    by_id = {row["activity_type_id"]: row for row in response.json()}
+    grid_mix = by_id["scope2_purchased_electricity_grid_mix"]
+    natural_gas = by_id["scope1_stationary_natural_gas"]
+
+    grid_fields = {field["field_id"]: field for field in grid_mix["input_schema"]["fields"]}
+    gas_fields = {field["field_id"]: field for field in natural_gas["input_schema"]["fields"]}
+
+    assert grid_fields["market_based_emission_factor"]["kind"] == "quantity"
+    assert grid_fields["market_based_emission_factor"]["allowed_units"] == [
+        "kg/kwh",
+        "kg/mwh",
+        "lb/kwh",
+        "lb/mwh",
+    ]
+    assert gas_fields["emission_factor_override"]["kind"] == "quantity"
+    assert gas_fields["emission_factor_override_source"]["kind"] == "string"
+
+
 def test_schema_method_exposes_registered_scope2_plugin(client: TestClient):
     response = client.get("/schema/method/scope2_energy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["method_id"] == "scope2_energy"
+
+
+def test_schema_method_is_available_under_api_prefix(client: TestClient):
+    response = client.get("/api/schema/method/scope2_energy")
 
     assert response.status_code == 200
     payload = response.json()

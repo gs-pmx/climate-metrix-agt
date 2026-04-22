@@ -28,7 +28,7 @@ export default function CatalogCoverageBrowser({ activityCatalog }) {
         Catalog Coverage
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Planned and deferred activities are visible here for coverage review but are not available for calculation yet.
+        Planned non-deferred activities now stay visible in the entry views with unsupported status. Deferred activities remain coverage-only until their factor basis is ready.
       </Typography>
       <Stack spacing={1}>
         {grouped.map(([group, rows]) => (
@@ -56,7 +56,9 @@ export default function CatalogCoverageBrowser({ activityCatalog }) {
                           ? "success"
                           : activityType.implementation_status === "partial"
                             ? "warning"
-                            : "default"
+                            : activityType.implementation_status === "planned"
+                              ? "info"
+                              : "default"
                       } />
                       <Chip label={activityType.method_id} size="small" variant="outlined" />
                     </Stack>

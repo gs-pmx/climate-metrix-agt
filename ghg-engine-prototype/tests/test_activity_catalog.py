@@ -55,6 +55,24 @@ def test_renewable_electricity_claim_keeps_dual_scope2_templates():
     assert methods == {"location_based", "market_based"}
 
 
+def test_catalog_exposes_manual_factor_override_fields_for_supported_activities():
+    grid_mix = _catalog().get_required("scope2_purchased_electricity_grid_mix")
+    natural_gas = _catalog().get_required("scope1_stationary_natural_gas")
+
+    grid_fields = {field.field_id: field for field in grid_mix.input_schema.fields}
+    gas_fields = {field.field_id: field for field in natural_gas.input_schema.fields}
+
+    assert grid_fields["market_based_emission_factor"].kind == "quantity"
+    assert grid_fields["market_based_emission_factor"].allowed_units == [
+        "kg/kwh",
+        "kg/mwh",
+        "lb/kwh",
+        "lb/mwh",
+    ]
+    assert gas_fields["emission_factor_override"].kind == "quantity"
+    assert gas_fields["emission_factor_override"].default_unit == "kg/mmbtu"
+
+
 def test_refrigerant_activity_is_repeatable_and_protocol_driven():
     activity = _catalog().get_required("scope1_fugitive_refrigerant_release")
 
@@ -120,4 +138,18 @@ def test_catalog_validates_required_secondary_fields():
     )
 
     with pytest.raises(ValueError, match="requires params.mpg"):
+        catalog.validate_activity(activity_def, activity)
+
+
+def test_catalog_validates_quantity_secondary_field_units():
+    catalog = _catalog()
+    activity_def = catalog.get_required("scope2_purchased_electricity_grid_mix")
+    activity = ActivityRecord(
+        facility_id="F1",
+        activity_type_id=activity_def.activity_type_id,
+        activity={"value": 100.0, "unit": "kwh"},
+        params={"market_based_emission_factor": {"value": 0.2, "unit": "kg/short-ton"}},
+    )
+
+    with pytest.raises(ValueError, match="must be one of"):
         catalog.validate_activity(activity_def, activity)

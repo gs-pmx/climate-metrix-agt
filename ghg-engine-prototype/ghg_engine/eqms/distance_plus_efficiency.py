@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ..activity_catalog import ActivityTypeDefinition
+from ..domain import ResolvedActivity
 from ..factors import FactorRepository
 from ..models import ActivityRecord, CalculationContext, Quantity, ResultRecord, TraceRecord
 from ..units import parse_qty, to_unit
@@ -40,6 +41,8 @@ class DistancePlusEfficiencyEQM(EQMPlugin):
         activity_def: ActivityTypeDefinition,
         ctx: CalculationContext,
         factors: FactorRepository,
+        *,
+        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         mpg = float(activity.params.get("mpg") or 0)
         if mpg <= 0:
@@ -67,6 +70,7 @@ class DistancePlusEfficiencyEQM(EQMPlugin):
             template_groups=self._direct._group_templates(transformed_activity_def),
             selected_method=self.id,
             result_method_id=self.id,
+            resolved=resolved,
         )
         trace.conversions.append(f"{miles.magnitude} miles / {mpg} mpg -> {gallons} gallons")
         trace.intermediate_quantities["distance_miles"] = float(miles.magnitude)

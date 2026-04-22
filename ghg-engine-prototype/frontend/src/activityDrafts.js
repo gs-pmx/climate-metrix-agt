@@ -19,6 +19,28 @@ export function getPrimaryField(activityType) {
   return activityType?.input_schema?.fields?.find((field) => field.is_primary) || null;
 }
 
+function isBlankValue(value) {
+  return value === "" || value == null;
+}
+
+export function hasMeaningfulParamValue(value) {
+  if (isBlankValue(value)) return false;
+  if (Array.isArray(value)) return value.some((item) => hasMeaningfulParamValue(item));
+  if (typeof value === "object") {
+    if ("value" in value && "unit" in value) {
+      return !isBlankValue(value.value);
+    }
+    return Object.values(value).some((item) => hasMeaningfulParamValue(item));
+  }
+  return true;
+}
+
+export function sanitizeParams(params = {}) {
+  return Object.fromEntries(
+    Object.entries(params || {}).filter(([, value]) => hasMeaningfulParamValue(value)),
+  );
+}
+
 export function getAllowedUnits(activityType) {
   const primaryField = getPrimaryField(activityType);
   if (Array.isArray(activityType?.allowed_units) && activityType.allowed_units.length) {
@@ -34,6 +56,13 @@ export function getDefaultUnit(activityType) {
   return getAllowedUnits(activityType)[0] || activityType?.default_unit || "";
 }
 
+export function getFieldUnits(field) {
+  if (Array.isArray(field?.allowed_units) && field.allowed_units.length) {
+    return field.allowed_units;
+  }
+  return [field?.default_unit].filter(Boolean);
+}
+
 export function withActivityTypeDefaults(draft, activityType) {
   if (!activityType) return draft;
   const allowedUnits = getAllowedUnits(activityType);
@@ -47,7 +76,7 @@ export function withActivityTypeDefaults(draft, activityType) {
       value: draft?.activity?.value ?? "",
       unit: nextUnit,
     },
-    params: draft?.params || {},
+    params: sanitizeParams(draft?.params || {}),
   };
 }
 
@@ -66,7 +95,7 @@ export function hydrateDraft(rawDraft, activityType = null) {
       value: rawDraft?.activity?.value == null ? "" : String(rawDraft.activity.value),
       unit: rawDraft?.activity?.unit || "",
     },
-    params: rawDraft?.params || {},
+    params: sanitizeParams(rawDraft?.params || {}),
   };
   return withActivityTypeDefaults(draft, activityType);
 }
@@ -83,7 +112,7 @@ export function serializeDraft(draft) {
       value: numericValue,
       unit: draft?.activity?.unit || "",
     },
-    params: draft?.params || {},
+    params: sanitizeParams(draft?.params || {}),
   };
 }
 
@@ -99,11 +128,43 @@ export function getPartialReason(activityType) {
   return activityType?.accounting_metadata?.partial_reason || "";
 }
 
+export function isEntryVisibleActivity(activityType) {
+  return Boolean(activityType) && activityType.implementation_status !== "deferred";
+}
+
+export function isCalculableActivity(activityType) {
+  return ["implemented", "partial"].includes(activityType?.implementation_status);
+}
+
 export function isRepeatableActivity(activityType) {
   return Boolean(
     activityType?.ui_metadata?.repeatable
       || activityType?.ui_metadata?.bulk_entry_mode === "repeatable_summary",
   );
+}
+
+export function getActivitySupportNotice(activityType) {
+  if (!activityType) return null;
+  if (activityType.implementation_status === "partial") {
+    return {
+      severity: "warning",
+      message: getPartialReason(activityType)
+        || "This activity is usable, but catalog metadata marks it as partial support. Review the notes below before finalizing.",
+    };
+  }
+  if (activityType.implementation_status === "planned") {
+    return {
+      severity: "info",
+      message: "This activity is visible for draft entry and snapshotting, but calculation is not supported yet.",
+    };
+  }
+  if (activityType.implementation_status === "deferred") {
+    return {
+      severity: "warning",
+      message: "This activity is deferred and not available for calculation yet.",
+    };
+  }
+  return null;
 }
 
 export function getFieldValue(draft, field) {
@@ -115,9 +176,9 @@ export function validateDraft(draft, activityType) {
   const errors = [];
   if (!draft?.facility_id) errors.push("facility");
   if (!draft?.activity_type_id) errors.push("activity");
-  if (draft?.activity?.value === "" || draft?.activity?.value == null) errors.push("activity value");
+  if (isBlankValue(draft?.activity?.value)) errors.push("activity value");
   const numericValue = Number(draft?.activity?.value);
-  if (draft?.activity?.value !== "" && !Number.isFinite(numericValue)) {
+  if (!isBlankValue(draft?.activity?.value) && !Number.isFinite(numericValue)) {
     errors.push("activity value must be numeric");
   }
   const allowedUnits = getAllowedUnits(activityType);
@@ -127,11 +188,37 @@ export function validateDraft(draft, activityType) {
   for (const field of getDetailFields(activityType)) {
     const key = field.param_key || field.field_id;
     const value = draft?.params?.[key];
-    if (field.required && (value === "" || value == null)) {
+    if (field.kind === "quantity") {
+      const quantityValue = value && typeof value === "object" ? value : null;
+      const rawQuantityValue = quantityValue?.value;
+      const quantityUnit = quantityValue?.unit || "";
+      const hasQuantityValue = !isBlankValue(rawQuantityValue);
+      const hasQuantityUnit = !isBlankValue(quantityUnit);
+      if (field.required && !hasQuantityValue) {
+        errors.push(field.label);
+        continue;
+      }
+      if (!hasQuantityValue && !hasQuantityUnit) continue;
+      if (!hasQuantityValue) {
+        errors.push(`${field.label} must be numeric`);
+        continue;
+      }
+      if (!Number.isFinite(Number(rawQuantityValue))) {
+        errors.push(`${field.label} must be numeric`);
+      }
+      const quantityUnits = getFieldUnits(field);
+      if (!hasQuantityUnit) {
+        errors.push(`${field.label} unit`);
+      } else if (quantityUnits.length && !quantityUnits.includes(String(quantityUnit))) {
+        errors.push(`${field.label} unit`);
+      }
+      continue;
+    }
+    if (field.required && isBlankValue(value)) {
       errors.push(field.label);
       continue;
     }
-    if (value === "" || value == null) continue;
+    if (isBlankValue(value)) continue;
     if (field.kind === "number" && !Number.isFinite(Number(value))) {
       errors.push(`${field.label} must be numeric`);
     }
@@ -149,11 +236,18 @@ export function getCompletionState(draft, activityType) {
   if (!activityType) {
     return { state: "unconfigured", label: "Select activity", color: "default" };
   }
-  if (activityType.implementation_status === "planned" || activityType.implementation_status === "deferred") {
+  if (activityType.implementation_status === "planned") {
     return {
-      state: activityType.implementation_status,
-      label: activityType.implementation_status,
-      color: activityType.implementation_status === "planned" ? "warning" : "default",
+      state: "unsupported",
+      label: "Unsupported",
+      color: "info",
+    };
+  }
+  if (activityType.implementation_status === "deferred") {
+    return {
+      state: "deferred",
+      label: "Deferred",
+      color: "default",
     };
   }
   const validation = validateDraft(draft, activityType);
@@ -174,6 +268,11 @@ export function getCompletionState(draft, activityType) {
 }
 
 export function normalizeActivityForSubmit(draft, activityType) {
+  if (!isCalculableActivity(activityType)) {
+    throw new Error(
+      `${activityType?.label || draft?.activity_type_id || "Selected activity"} is not available for calculation yet`,
+    );
+  }
   const validation = validateDraft(draft, activityType);
   if (!validation.valid) {
     throw new Error(validation.errors.join(", "));
@@ -185,7 +284,7 @@ export function normalizeActivityForSubmit(draft, activityType) {
       value: Number(draft.activity.value),
       unit: draft.activity.unit,
     },
-    params: draft.params || {},
+    params: sanitizeParams(draft.params || {}),
   };
 }
 

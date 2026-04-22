@@ -2,16 +2,16 @@
 
 Pure Python GHG engine + FastAPI wrapper with modular EQM plugins.
 
-## Setup
+## Backend Setup
 
 ```bash
-pip install -e .
+uv sync --dev
 ```
 
-## Run API
+## Run API Locally
 
 ```bash
-uvicorn api_main:app --reload
+uv run uvicorn api_main:app --reload
 ```
 
 ## Run Frontend
@@ -31,18 +31,36 @@ In development, Vite now proxies `"/api/*"` requests from `:5173` to the FastAPI
 
 If the UI loads but calculations fail, confirm the FastAPI server is running; the frontend port does not replace the backend port.
 
+## Run With Docker
+
+```bash
+docker compose up --build
+```
+
+The single app is served from `http://127.0.0.1:8000`.
+
+Docker uses:
+
+- bundled read-only seed/reference data at `/app/data`
+- writable runtime SQLite state at `/app/state/ghg_projects.sqlite`
+
+The compose volume preserves runtime project and inventory state across restarts.
+
 ## API Endpoints
 
-- `POST /calculate`
-- `POST /calculate/audit`
-- `GET /catalog/activity-types`
-- `GET /catalog/factors/preview?query=...`
-- `GET /schema/method/{method_id}`
+- `POST /api/calculate`
+- `POST /api/calculate/audit`
+- `GET /api/catalog/activity-types`
+- `GET /api/catalog/factors/preview?query=...`
+- `GET /api/schema/method/{method_id}`
+- `GET /healthz`
+
+The legacy root routes remain available temporarily for compatibility, but `/api/...` is the canonical browser-facing interface.
 
 ## Example Request
 
 ```bash
-curl -X POST http://127.0.0.1:8000/calculate \
+curl -X POST http://127.0.0.1:8000/api/calculate \
   -H "content-type: application/json" \
   -d '{
     "context": {
@@ -62,7 +80,7 @@ curl -X POST http://127.0.0.1:8000/calculate \
 ## Quality Checks
 
 ```bash
-ruff check .
-mypy ghg_engine api_main.py
-pytest
+uv run ruff check .
+uv run mypy ghg_engine api_main.py
+uv run pytest -q
 ```
