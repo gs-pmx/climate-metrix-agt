@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from collections import defaultdict
-
 from .activity_catalog import ActivityCatalog
+from .application import CalculateInventoryUseCase
 from .eqms.registry import default_plugin_registry
 from .factors import FactorRepository
+from .services import CalculationOrchestrator
 from .models import ActivityRecord, CalculationContext, MethodSchema, ResultRecord, TraceRecord
 
 
@@ -13,6 +13,12 @@ class GHGEngine:
         self.activity_catalog = activity_catalog
         self.factors = factors
         self.plugins = default_plugin_registry()
+        self._orchestrator = CalculationOrchestrator(
+            activity_catalog=self.activity_catalog,
+            factors=self.factors,
+            plugins=self.plugins,
+        )
+        self._calculate_inventory = CalculateInventoryUseCase(self._orchestrator)
 
     def method_schema(self, method_id: str) -> MethodSchema:
         plugin = self.plugins.get(method_id)
@@ -29,31 +35,11 @@ class GHGEngine:
         activity: ActivityRecord,
         ctx: CalculationContext,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        activity_def = self.activity_catalog.get_required(activity.activity_type_id)
-        self.activity_catalog.validate_activity(activity_def, activity)
-        plugin = self.plugins.get(activity_def.method_id)
-        if plugin is None:
-            raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
-        if not plugin.applicability(activity, activity_def):
-            raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
-        return plugin.compute(activity, activity_def, ctx, self.factors)
+        return self._calculate_inventory.calculate_one(activity, ctx)
 
     def calculate(
         self,
         activities: list[ActivityRecord],
         ctx: CalculationContext,
     ) -> tuple[list[ResultRecord], dict[str, float], list[TraceRecord]]:
-        all_rows: list[ResultRecord] = []
-        traces: list[TraceRecord] = []
-        for activity in activities:
-            rows, trace = self.calculate_one(activity, ctx)
-            all_rows.extend(rows)
-            traces.append(trace)
-        summary = defaultdict(float)
-        for row in all_rows:
-            key = (
-                f"{row.facility_id}|{row.scope}|{row.accounting_method}|{row.gas}|"
-                f"{row.unit}|{'biogenic' if row.is_biogenic else 'non_biogenic'}"
-            )
-            summary[key] += row.value
-        return all_rows, dict(summary), traces
+        return self._calculate_inventory.calculate(activities, ctx)
