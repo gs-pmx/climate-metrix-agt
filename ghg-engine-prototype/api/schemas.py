@@ -1,11 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
-
 from pydantic import BaseModel
 
-from ghg_engine.activity_catalog import ActivityInputSchema, ActivityTypeDefinition, ImplementationStatus
-from ghg_engine.models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
+from ghg_engine.activity_catalog import ActivityTypeDefinition, ImplementationStatus
+from ghg_engine.models import (
+    ActivityRecord,
+    AuditRecord,
+    CalculationContext,
+    ProjectSnapshot,
+    ResultRecord,
+    TraceRecord,
+)
 
 
 class CalculationRequest(BaseModel):
@@ -19,45 +24,8 @@ class CalculationResponse(BaseModel):
     trace: list[TraceRecord] | None = None
 
 
-class CalculationAuditRow(BaseModel):
-    facility_id: str
-    source_id: str | None = None
-    source_type: str
-    scope: str
-    accounting_method: str
-    metric_group: str
-    metric_subgroup: str | None = None
-    input_activity_value: float
-    input_activity_unit: str
-    eqm_method: str
-    eqm_description: str
-    eqm_steps: list[str]
-    factor_selection_notes: list[str]
-    activity_conversion_notes: list[str]
-    factor_conversion_notes: list[str]
-    factor_ids: list[str]
-    factor_co2_id: str | None = None
-    factor_co2_value: float | None = None
-    factor_co2_unit: str | None = None
-    factor_co2_source: str | None = None
-    factor_co2_valid_from: str | None = None
-    factor_co2_valid_to: str | None = None
-    factor_ch4_id: str | None = None
-    factor_ch4_value: float | None = None
-    factor_ch4_unit: str | None = None
-    factor_ch4_source: str | None = None
-    factor_ch4_valid_from: str | None = None
-    factor_ch4_valid_to: str | None = None
-    factor_n2o_id: str | None = None
-    factor_n2o_value: float | None = None
-    factor_n2o_unit: str | None = None
-    factor_n2o_source: str | None = None
-    factor_n2o_valid_from: str | None = None
-    factor_n2o_valid_to: str | None = None
-    co2_result_kg: float | None = None
-    ch4_result_kg: float | None = None
-    n2o_result_kg: float | None = None
-    co2e_result_kg: float | None = None
+class CalculationAuditRow(AuditRecord):
+    pass
 
 
 class CalculationAuditResponse(CalculationResponse):
@@ -66,20 +34,6 @@ class CalculationAuditResponse(CalculationResponse):
 
 class ActivityTypeResponse(ActivityTypeDefinition):
     pass
-
-
-class ActivitySchemaResponse(BaseModel):
-    activity_type_id: str
-    source_id: str
-    label: str
-    scope: str
-    protocol_category_code: str | None = None
-    protocol_category_label: str | None = None
-    implementation_status: ImplementationStatus
-    method_id: str
-    input_schema: ActivityInputSchema
-    accounting_metadata: dict[str, Any]
-    ui_metadata: dict[str, Any]
 
 
 class ProjectCreateRequest(BaseModel):
@@ -115,12 +69,7 @@ class ProjectSnapshotSaveRequest(BaseModel):
     inventory_year: int
     gwp_set: str
     include_trace: bool
-    facilities: list[dict[str, Any]]
-    activities: list[dict[str, Any]]
-    result_rows: list[dict[str, Any]]
-    summary_rows: list[dict[str, Any]]
-    trace_rows: list[dict[str, Any]]
-    audit_rows: list[dict[str, Any]] = []
+    snapshot: ProjectSnapshot
     note: str | None = None
 
 
@@ -140,7 +89,7 @@ class ProjectSnapshotResponse(BaseModel):
     gwp_set: str
     include_trace: bool
     note: str | None = None
-    snapshot: dict[str, Any]
+    snapshot: ProjectSnapshot
 
 
 class SchemaMigrationItem(BaseModel):

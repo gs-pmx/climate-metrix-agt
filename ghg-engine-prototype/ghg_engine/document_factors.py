@@ -17,6 +17,11 @@ _CATEGORY_TO_DOMAIN: dict[str, str] = {
     "stationary-energy": "combustion",
     "purchased-electricity": "electricity-generation",
     "purchased-steam": "combustion",
+    "3.4-upstream-transportation-distribution": "freight-transport",
+    "3.5-waste-operations": "waste-decomposition",
+    "3.6-business-travel": "passenger-transport",
+    "3.7-employee-commuting": "passenger-transport",
+    "fugitive-emission": "refrigerant-release",
 }
 
 # Current system uses underscores (co2_ef), documents use hyphens (co2-ef).

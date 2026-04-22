@@ -10,11 +10,7 @@
   "activities": [
     {
       "facility_id": "F1",
-      "source_id": "electricity_s2",
-      "source_type": "electricity",
-      "scope": "Scope 2",
-      "metric_group": "grid_energy",
-      "metric_subgroup": "electricity_mix",
+      "activity_type_id": "scope2_purchased_electricity_grid_mix",
       "activity": {
         "value": 1000.0,
         "unit": "kwh"
@@ -24,7 +20,7 @@
   "expected": [
     {
       "facility_id": "F1",
-      "source_id": "electricity_grid_mix_s2",
+      "activity_type_id": "scope2_purchased_electricity_grid_mix",
       "scope": "Scope 2",
       "accounting_method": "location_based",
       "gas": "co2",
@@ -33,7 +29,7 @@
     },
     {
       "facility_id": "F1",
-      "source_id": "electricity_grid_mix_s2",
+      "activity_type_id": "scope2_purchased_electricity_grid_mix",
       "scope": "Scope 2",
       "accounting_method": "market_based",
       "gas": "co2",

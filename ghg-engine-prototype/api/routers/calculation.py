@@ -51,10 +51,15 @@ def calculate_with_audit(
             all_rows.extend(rows)
             traces.append(trace)
             for row in rows:
-                key = f"{row.facility_id}|{row.scope}|{row.accounting_method}|{row.gas}|{row.unit}"
+                key = (
+                    f"{row.facility_id}|{row.scope}|{row.accounting_method}|{row.gas}|"
+                    f"{row.unit}|{'biogenic' if row.is_biogenic else 'non_biogenic'}"
+                )
                 summary[key] = float(summary.get(key, 0.0) + row.value)
+            activity_def = engine.activity_catalog.get_required(activity.activity_type_id)
             audit_rows.extend(
-                CalculationAuditRow(**r) for r in build_audit_rows(activity, rows, trace, factors)
+                CalculationAuditRow(**r)
+                for r in build_audit_rows(activity, activity_def, rows, trace, factors)
             )
         return CalculationAuditResponse(
             results=all_rows,

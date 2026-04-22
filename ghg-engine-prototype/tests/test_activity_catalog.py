@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from ghg_engine.activity_catalog import ActivityCatalog
 from ghg_engine.models import ActivityRecord
-from ghg_engine.routing import RoutingCatalog
 
 
 def _catalog() -> ActivityCatalog:
@@ -35,12 +36,32 @@ def test_rental_vehicle_schema_captures_multi_input_requirements():
     assert by_field_id["fuel_type"].options == ["gasoline", "diesel"]
 
 
+def test_employee_owned_vehicle_is_now_runtime_ready():
+    activity = _catalog().get_required("scope3_business_travel_employee_owned_vehicle")
+
+    assert activity.method_id == "distance_plus_efficiency"
+    assert activity.implementation_status == "implemented"
+
+    by_field_id = {field.field_id: field for field in activity.input_schema.fields}
+    assert by_field_id["fuel_efficiency"].required is True
+    assert by_field_id["fuel_efficiency"].param_key == "mpg"
+
+
+def test_renewable_electricity_claim_keeps_dual_scope2_templates():
+    activity = _catalog().get_required("scope2_purchased_electricity_renewable_purchase")
+
+    assert activity.implementation_status == "partial"
+    methods = {template.accounting_method for template in activity.factor_query_templates}
+    assert methods == {"location_based", "market_based"}
+
+
 def test_refrigerant_activity_is_repeatable_and_protocol_driven():
     activity = _catalog().get_required("scope1_fugitive_refrigerant_release")
 
     by_field_id = {field.field_id: field for field in activity.input_schema.fields}
     assert by_field_id["refrigerant_type"].param_key == "refrigerant_type"
     assert activity.ui_metadata["repeatable"] is True
+    assert activity.ui_metadata["bulk_entry_mode"] == "repeatable_summary"
     assert activity.accounting_metadata["requires_gwp_set"] is True
 
 
@@ -53,26 +74,50 @@ def test_status_filter_returns_only_requested_rows():
     assert all(row.implementation_status == "implemented" for row in implemented)
 
 
-def test_routing_catalog_bridges_canonical_and_legacy_source_ids():
+def test_runtime_catalog_rows_have_required_metadata():
     catalog = _catalog()
-    legacy = RoutingCatalog.from_csv(Path(__file__).resolve().parents[1] / "data" / "routing.csv")
 
-    routing = RoutingCatalog.from_activity_catalog(catalog, legacy_catalog=legacy)
+    active = [
+        row
+        for row in catalog.rows
+        if row.implementation_status in {"implemented", "partial"}
+    ]
 
-    bridged = routing.resolve(
-        ActivityRecord(
-            facility_id="F1",
-            activity_type_id="scope3_business_travel_rental_vehicle",
-            source_id="travel_miles_s3",
-            source_type="gasoline",
-            scope="Scope 3",
-            metric_group="travel",
-            metric_subgroup="3.6_business_travel",
-            activity={"value": 100.0, "unit": "mile"},
-            params={"mpg": 25, "fuel_type": "gasoline"},
-        )
+    assert active
+    assert all(row.source_type for row in active)
+    assert all(row.default_unit for row in active)
+    assert all(row.method_id for row in active)
+
+
+def test_partial_rows_require_partial_reason():
+    catalog = _catalog()
+
+    partial_rows = catalog.list(status="partial")
+    assert partial_rows
+    assert all(row.accounting_metadata.get("partial_reason") for row in partial_rows)
+
+
+def test_only_explicitly_blocked_rows_remain_non_runtime():
+    catalog = _catalog()
+
+    assert {row.activity_type_id for row in catalog.list(status="planned")} == {
+        "scope1_onsite_generation_electricity",
+        "scope2_purchased_district_steam_renewable",
+    }
+    assert {row.activity_type_id for row in catalog.list(status="deferred")} == {
+        "scope3_upstream_transport_other_freight_fuel",
+    }
+
+
+def test_catalog_validates_required_secondary_fields():
+    catalog = _catalog()
+    activity_def = catalog.get_required("scope3_business_travel_rental_vehicle")
+    activity = ActivityRecord(
+        facility_id="F1",
+        activity_type_id=activity_def.activity_type_id,
+        activity={"value": 100.0, "unit": "mile"},
+        params={},
     )
 
-    assert bridged.source_id == "travel_rental_vehicle_s3"
-    assert bridged.legacy_source_ids == ["travel_miles_s3"]
-    assert bridged.method_id == "miles_to_fuel"
+    with pytest.raises(ValueError, match="requires params.mpg"):
+        catalog.validate_activity(activity_def, activity)

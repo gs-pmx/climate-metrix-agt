@@ -3,14 +3,20 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from .activity_catalog import ActivityTypeDefinition
 from .factors import FactorRepository
-from .models import ActivityRecord, ResultRecord, TraceRecord
+from .models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
 
 
 def _eqm_description(method_id: str) -> str:
     descriptions = {
-        "direct_factor": "Applies gas-specific emission factors to activity, normalizes to kg, and computes CO2e.",
-        "miles_to_fuel": "Converts miles to gallons with MPG, then applies direct gas-specific emission factors.",
+        "direct_factor": "Applies factor templates from the activity catalog to the reported quantity and computes gas rows and CO2e.",
+        "scope2_energy": "Runs the Scope 2 factor templates and preserves location-based and market-based reporting where required.",
+        "distance_plus_efficiency": "Converts reported distance and fuel efficiency into an intermediate fuel quantity, then applies combustion factors.",
+        "freight_ton_mile": "Applies freight transport factors to reported ton-mile activity.",
+        "passenger_distance": "Applies passenger travel factors to reported passenger-mile activity.",
+        "refrigerant_mass_to_gwp": "Converts released refrigerant mass to CO2e using refrigerant-specific AR6 GWP values.",
+        "waste_mass": "Applies disposal-path-specific waste factors to reported waste mass.",
     }
     return descriptions.get(method_id, "No method description available.")
 
@@ -46,15 +52,11 @@ def _conversion_notes(activity_unit: str, factor_unit: str | None) -> tuple[str 
 
 def build_audit_rows(
     activity: ActivityRecord,
+    activity_def: ActivityTypeDefinition,
     rows: list[ResultRecord],
     trace: TraceRecord,
     factors: FactorRepository,
 ) -> list[dict[str, Any]]:
-    """Build audit-row dicts for a single activity's results.
-
-    Returns plain dicts so callers can construct whatever schema they need.
-    """
-
     def _factor_for_gas(gas_name: str) -> dict[str, Any] | None:
         row = gas_rows.get(gas_name)
         if row is None or not row.factor_ids:
@@ -67,12 +69,12 @@ def build_audit_rows(
 
     out: list[dict[str, Any]] = []
     for accounting_method, method_rows in by_method.items():
-        gas_rows = {r.gas: r for r in method_rows}
+        gas_rows = {row.gas: row for row in method_rows}
         factor_ids: list[str] = []
-        for r in method_rows:
-            for fid in r.factor_ids:
-                if fid not in factor_ids:
-                    factor_ids.append(fid)
+        for row in method_rows:
+            for factor_id in row.factor_ids:
+                if factor_id not in factor_ids:
+                    factor_ids.append(factor_id)
 
         f_co2 = _factor_for_gas("co2")
         f_ch4 = _factor_for_gas("ch4")
@@ -92,47 +94,58 @@ def build_audit_rows(
         for step in trace.conversions:
             if step not in activity_notes:
                 activity_notes.append(step)
+        factor_selection_notes = list(trace.defaults_applied)
+        partial_reason = activity_def.accounting_metadata.get("partial_reason")
+        if partial_reason:
+            factor_selection_notes.append(f"partial support: {partial_reason}")
+        if any(row.gas == "co2" and row.is_biogenic for row in method_rows):
+            factor_selection_notes.append("biogenic CO2 is reported separately from scope totals")
 
         out.append(
-            {
-                "facility_id": activity.facility_id,
-                "source_id": activity.source_id,
-                "source_type": activity.source_type,
-                "scope": activity.scope,
-                "accounting_method": accounting_method,
-                "metric_group": activity.metric_group,
-                "metric_subgroup": activity.metric_subgroup,
-                "input_activity_value": float(activity.activity.value),
-                "input_activity_unit": activity.activity.unit,
-                "eqm_method": trace.selected_method,
-                "eqm_description": _eqm_description(trace.selected_method),
-                "eqm_steps": trace.conversions,
-                "factor_selection_notes": trace.defaults_applied,
-                "activity_conversion_notes": activity_notes,
-                "factor_conversion_notes": factor_notes,
-                "factor_ids": factor_ids,
-                "factor_co2_id": f_co2["factor_id"] if f_co2 else None,
-                "factor_co2_value": f_co2["value"] if f_co2 else None,
-                "factor_co2_unit": f_co2["unit"] if f_co2 else None,
-                "factor_co2_source": f_co2["source"] if f_co2 else None,
-                "factor_co2_valid_from": f_co2["valid_from"] if f_co2 else None,
-                "factor_co2_valid_to": f_co2["valid_to"] if f_co2 else None,
-                "factor_ch4_id": f_ch4["factor_id"] if f_ch4 else None,
-                "factor_ch4_value": f_ch4["value"] if f_ch4 else None,
-                "factor_ch4_unit": f_ch4["unit"] if f_ch4 else None,
-                "factor_ch4_source": f_ch4["source"] if f_ch4 else None,
-                "factor_ch4_valid_from": f_ch4["valid_from"] if f_ch4 else None,
-                "factor_ch4_valid_to": f_ch4["valid_to"] if f_ch4 else None,
-                "factor_n2o_id": f_n2o["factor_id"] if f_n2o else None,
-                "factor_n2o_value": f_n2o["value"] if f_n2o else None,
-                "factor_n2o_unit": f_n2o["unit"] if f_n2o else None,
-                "factor_n2o_source": f_n2o["source"] if f_n2o else None,
-                "factor_n2o_valid_from": f_n2o["valid_from"] if f_n2o else None,
-                "factor_n2o_valid_to": f_n2o["valid_to"] if f_n2o else None,
-                "co2_result_kg": gas_rows["co2"].value if gas_rows.get("co2") else None,
-                "ch4_result_kg": gas_rows["ch4"].value if gas_rows.get("ch4") else None,
-                "n2o_result_kg": gas_rows["n2o"].value if gas_rows.get("n2o") else None,
-                "co2e_result_kg": gas_rows["co2e"].value if gas_rows.get("co2e") else None,
-            }
+            AuditRecord(
+                facility_id=activity.facility_id,
+                activity_type_id=activity.activity_type_id,
+                activity_label=activity_def.label,
+                source_type=activity_def.source_type,
+                scope=activity_def.scope,
+                protocol_category_code=activity_def.protocol_category_code,
+                protocol_category_label=activity_def.protocol_category_label,
+                activity_group=activity_def.ui_metadata.get("group"),
+                metric_group=activity_def.metric_group,
+                metric_subgroup=activity_def.metric_subgroup,
+                accounting_method=accounting_method,
+                input_activity_value=float(activity.activity.value),
+                input_activity_unit=activity.activity.unit,
+                input_params=activity.params,
+                eqm_method=trace.selected_method,
+                eqm_description=_eqm_description(trace.selected_method),
+                eqm_steps=trace.conversions,
+                factor_selection_notes=factor_selection_notes,
+                activity_conversion_notes=activity_notes,
+                factor_conversion_notes=factor_notes,
+                factor_ids=factor_ids,
+                factor_co2_id=f_co2["factor_id"] if f_co2 else None,
+                factor_co2_value=f_co2["value"] if f_co2 else None,
+                factor_co2_unit=f_co2["unit"] if f_co2 else None,
+                factor_co2_source=f_co2["source"] if f_co2 else None,
+                factor_co2_valid_from=f_co2["valid_from"] if f_co2 else None,
+                factor_co2_valid_to=f_co2["valid_to"] if f_co2 else None,
+                factor_ch4_id=f_ch4["factor_id"] if f_ch4 else None,
+                factor_ch4_value=f_ch4["value"] if f_ch4 else None,
+                factor_ch4_unit=f_ch4["unit"] if f_ch4 else None,
+                factor_ch4_source=f_ch4["source"] if f_ch4 else None,
+                factor_ch4_valid_from=f_ch4["valid_from"] if f_ch4 else None,
+                factor_ch4_valid_to=f_ch4["valid_to"] if f_ch4 else None,
+                factor_n2o_id=f_n2o["factor_id"] if f_n2o else None,
+                factor_n2o_value=f_n2o["value"] if f_n2o else None,
+                factor_n2o_unit=f_n2o["unit"] if f_n2o else None,
+                factor_n2o_source=f_n2o["source"] if f_n2o else None,
+                factor_n2o_valid_from=f_n2o["valid_from"] if f_n2o else None,
+                factor_n2o_valid_to=f_n2o["valid_to"] if f_n2o else None,
+                co2_result_kg=gas_rows["co2"].value if gas_rows.get("co2") else None,
+                ch4_result_kg=gas_rows["ch4"].value if gas_rows.get("ch4") else None,
+                n2o_result_kg=gas_rows["n2o"].value if gas_rows.get("n2o") else None,
+                co2e_result_kg=gas_rows["co2e"].value if gas_rows.get("co2e") else None,
+            ).model_dump()
         )
     return out

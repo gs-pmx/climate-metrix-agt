@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 
+from .activity_catalog import ActivityCatalog
 from .eqms.registry import default_plugin_registry
 from .factors import FactorRepository
 from .models import ActivityRecord, CalculationContext, MethodSchema, ResultRecord, TraceRecord
-from .routing import RoutingCatalog
 
 
 class GHGEngine:
-    def __init__(self, routing: RoutingCatalog, factors: FactorRepository):
-        self.routing = routing
+    def __init__(self, activity_catalog: ActivityCatalog, factors: FactorRepository):
+        self.activity_catalog = activity_catalog
         self.factors = factors
         self.plugins = default_plugin_registry()
 
@@ -29,13 +29,14 @@ class GHGEngine:
         activity: ActivityRecord,
         ctx: CalculationContext,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        routing = self.routing.resolve(activity)
-        plugin = self.plugins.get(routing.method_id)
+        activity_def = self.activity_catalog.get_required(activity.activity_type_id)
+        self.activity_catalog.validate_activity(activity_def, activity)
+        plugin = self.plugins.get(activity_def.method_id)
         if plugin is None:
-            raise KeyError(f"No plugin registered for method_id={routing.method_id}")
-        if not plugin.applicability(activity, routing):
-            raise ValueError(f"method {routing.method_id} is not applicable to provided activity")
-        return plugin.compute(activity, routing, ctx, self.factors)
+            raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
+        if not plugin.applicability(activity, activity_def):
+            raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
+        return plugin.compute(activity, activity_def, ctx, self.factors)
 
     def calculate(
         self,
@@ -50,6 +51,9 @@ class GHGEngine:
             traces.append(trace)
         summary = defaultdict(float)
         for row in all_rows:
-            k = f"{row.facility_id}|{row.scope}|{row.accounting_method}|{row.gas}|{row.unit}"
-            summary[k] += row.value
+            key = (
+                f"{row.facility_id}|{row.scope}|{row.accounting_method}|{row.gas}|"
+                f"{row.unit}|{'biogenic' if row.is_biogenic else 'non_biogenic'}"
+            )
+            summary[key] += row.value
         return all_rows, dict(summary), traces

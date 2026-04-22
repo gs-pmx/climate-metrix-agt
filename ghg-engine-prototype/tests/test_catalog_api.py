@@ -36,22 +36,40 @@ def test_catalog_activity_types_endpoint_filters_by_status(client: TestClient):
     assert all(row["implementation_status"] == "implemented" for row in payload)
 
 
-def test_activity_schema_endpoint_exposes_multi_input_form_contract(client: TestClient):
-    response = client.get("/schema/activity/scope3_business_travel_rental_vehicle")
+def test_catalog_activity_types_endpoint_exposes_full_ui_contract(client: TestClient):
+    response = client.get("/catalog/activity-types", params={"status": "implemented"})
 
     assert response.status_code == 200
-    payload = response.json()
-    assert payload["method_id"] == "distance_plus_efficiency"
-    assert payload["protocol_category_code"] == "6"
-    assert [field["field_id"] for field in payload["input_schema"]["fields"]] == [
+    activity = next(
+        row for row in response.json()
+        if row["activity_type_id"] == "scope3_business_travel_rental_vehicle"
+    )
+    assert "source_id" not in activity
+    assert activity["default_unit"] == "mile"
+    assert activity["allowed_units"] == ["mile"]
+    assert activity["ui_metadata"]["group"] == "Transportation"
+    assert [field["field_id"] for field in activity["input_schema"]["fields"]] == [
         "distance",
         "fuel_efficiency",
         "fuel_type",
     ]
 
 
-def test_activity_schema_endpoint_returns_404_for_unknown_activity(client: TestClient):
-    response = client.get("/schema/activity/not-a-real-activity")
+def test_catalog_activity_types_endpoint_exposes_partial_reason_and_bulk_entry_mode(client: TestClient):
+    response = client.get("/catalog/activity-types")
 
-    assert response.status_code == 404
-    assert "unknown activity_type_id" in response.json()["detail"]
+    assert response.status_code == 200
+    by_id = {row["activity_type_id"]: row for row in response.json()}
+    refrigerant = by_id["scope1_fugitive_refrigerant_release"]
+    renewable_electricity = by_id["scope2_purchased_electricity_renewable_purchase"]
+
+    assert refrigerant["ui_metadata"]["bulk_entry_mode"] == "repeatable_summary"
+    assert renewable_electricity["accounting_metadata"]["partial_reason"]
+
+
+def test_schema_method_exposes_registered_scope2_plugin(client: TestClient):
+    response = client.get("/schema/method/scope2_energy")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["method_id"] == "scope2_energy"
