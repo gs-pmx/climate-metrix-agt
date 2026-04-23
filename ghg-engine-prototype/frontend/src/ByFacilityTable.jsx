@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
-import { RepeatableStatusChip, StatusChip } from "./StatusChip";
+import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
   activityRequiresDetails,
@@ -38,6 +38,7 @@ function FacilityAccordion({
   facilityCount,
   upsertActivity,
   openDetailsForPair,
+  calcErrors,
   show,
 }) {
   const gridRows = React.useMemo(
@@ -45,6 +46,7 @@ function FacilityAccordion({
       const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
       const draft = drafts[0]
         || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
+      const rowErrors = filterErrorsForRow(calcErrors, facility.id, activityType.activity_type_id);
       return {
         id: `${facility.id}__${activityType.activity_type_id}`,
         facility_id: facility.id,
@@ -59,9 +61,10 @@ function FacilityAccordion({
         _repeatable: isRepeatableActivity(activityType),
         _unitOptions: getAllowedUnits(activityType),
         _activityType: activityType,
+        _rowErrors: rowErrors,
       };
     }),
-    [activitiesByPair, facility.id, selectableActivities],
+    [activitiesByPair, calcErrors, facility.id, selectableActivities],
   );
 
   const filledCount = gridRows.filter((row) => (row._repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
@@ -113,8 +116,8 @@ function FacilityAccordion({
         sortable: false,
         renderCell: (params) => (
           params.row._repeatable
-            ? <RepeatableStatusChip drafts={params.row.drafts} activityType={params.row._activityType} />
-            : <StatusChip draft={params.row.draft} activityType={params.row._activityType} />
+            ? <RepeatableStatusChip drafts={params.row.drafts} activityType={params.row._activityType} rowErrors={params.row._rowErrors} />
+            : <StatusChip draft={params.row.draft} activityType={params.row._activityType} rowErrors={params.row._rowErrors} />
         ),
       },
       {
@@ -217,6 +220,7 @@ export default function ByFacilityTable({
   selectableActivities,
   upsertActivity,
   openDetailsForPair,
+  calcErrors = [],
   show,
 }) {
   return (
@@ -230,6 +234,7 @@ export default function ByFacilityTable({
           facilityCount={facilities.length}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
+          calcErrors={calcErrors}
           show={show}
         />
       ))}

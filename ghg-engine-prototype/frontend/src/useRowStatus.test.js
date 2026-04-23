@@ -5,6 +5,7 @@ import {
   ROW_STATUS,
   classifyRepeatableRow,
   classifyRow,
+  filterErrorsForRow,
 } from "./rowStatus.js";
 
 const ACTIVITY_TYPE = {
@@ -208,4 +209,118 @@ test("classifyRepeatableRow unsupported for planned/deferred regardless of entri
   const drafts = [draftWith({ activity: { value: "100", unit: "scf" } })];
   assert.equal(classifyRepeatableRow(drafts, PLANNED_TYPE).status, ROW_STATUS.UNSUPPORTED);
   assert.equal(classifyRepeatableRow(drafts, DEFERRED_TYPE).status, ROW_STATUS.UNSUPPORTED);
+});
+
+// ---------------------------------------------------------------------------
+// Backend-error overlay — Phase C1 row-level error attribution.
+//
+// classifyRow accepts an optional `errors` array of ActivityCalculationError
+// envelopes (already filtered by the caller to the row's facility/activity
+// pair). When non-empty, the row is reported as backend-error regardless
+// of client-side classification.
+// ---------------------------------------------------------------------------
+
+const SAMPLE_ERROR = {
+  activity_index: 0,
+  activity_type_id: ACTIVITY_TYPE.activity_type_id,
+  facility_id: "F1",
+  error_code: "factor_not_found",
+  message: "No emission factor for scope1_stationary_natural_gas",
+  details: { exception_type: "ValueError" },
+};
+
+test("blank draft with a backend error is backend-error (overrides not-started)", () => {
+  const result = classifyRow(draftWith(), ACTIVITY_TYPE, [SAMPLE_ERROR]);
+  assert.equal(result.status, ROW_STATUS.BACKEND_ERROR);
+  assert.equal(result.error, SAMPLE_ERROR);
+});
+
+test("complete draft with a backend error is backend-error (overrides complete)", () => {
+  const result = classifyRow(
+    draftWith({ activity: { value: "1000", unit: "scf" } }),
+    ACTIVITY_TYPE,
+    [SAMPLE_ERROR],
+  );
+  assert.equal(result.status, ROW_STATUS.BACKEND_ERROR);
+  assert.equal(result.error.error_code, "factor_not_found");
+});
+
+test("row with an empty errors list classifies by client rules", () => {
+  // An empty list — i.e. the caller filtered out non-matching errors —
+  // must not flip the row to backend-error. This is the common case for
+  // the majority of rows after a partial_success response.
+  const result = classifyRow(
+    draftWith({ activity: { value: "1000", unit: "scf" } }),
+    ACTIVITY_TYPE,
+    [],
+  );
+  assert.equal(result.status, ROW_STATUS.COMPLETE);
+  assert.equal(result.error, undefined);
+});
+
+test("multiple backend errors on the same row surface the first", () => {
+  const first = { ...SAMPLE_ERROR, error_code: "factor_not_found" };
+  const second = { ...SAMPLE_ERROR, error_code: "calculation_error" };
+  const result = classifyRow(
+    draftWith({ activity: { value: "1000", unit: "scf" } }),
+    ACTIVITY_TYPE,
+    [first, second],
+  );
+  assert.equal(result.status, ROW_STATUS.BACKEND_ERROR);
+  assert.equal(result.error, first);
+});
+
+test("backend error overrides unsupported for planned/deferred activities", () => {
+  // Edge case: if the backend somehow errored on a planned activity (e.g.
+  // a client submitted one despite the guard), the error still takes
+  // precedence so the user gets actionable feedback.
+  const result = classifyRow(draftWith(), PLANNED_TYPE, [SAMPLE_ERROR]);
+  assert.equal(result.status, ROW_STATUS.BACKEND_ERROR);
+});
+
+test("classifyRepeatableRow surfaces backend-error when any error applies", () => {
+  const drafts = [draftWith({ activity: { value: "100", unit: "scf" } })];
+  const result = classifyRepeatableRow(drafts, ACTIVITY_TYPE, [SAMPLE_ERROR]);
+  assert.equal(result.status, ROW_STATUS.BACKEND_ERROR);
+  assert.equal(result.error, SAMPLE_ERROR);
+  assert.equal(result.count, 1);
+});
+
+// ---------------------------------------------------------------------------
+// filterErrorsForRow — the caller-side filter used by the hook and by
+// grid renderers (ByActivityTable/ByFacilityTable) to slice the full
+// response envelope down to the errors that belong to a single row.
+// ---------------------------------------------------------------------------
+
+test("filterErrorsForRow returns only errors matching facility and activity", () => {
+  const errors = [
+    { ...SAMPLE_ERROR, facility_id: "F1", activity_type_id: "scope1_stationary_natural_gas" },
+    { ...SAMPLE_ERROR, facility_id: "F2", activity_type_id: "scope1_stationary_natural_gas" },
+    { ...SAMPLE_ERROR, facility_id: "F1", activity_type_id: "scope2_electricity" },
+  ];
+  const filtered = filterErrorsForRow(errors, "F1", "scope1_stationary_natural_gas");
+  assert.equal(filtered.length, 1);
+  assert.equal(filtered[0].facility_id, "F1");
+  assert.equal(filtered[0].activity_type_id, "scope1_stationary_natural_gas");
+});
+
+test("filterErrorsForRow returns [] when nothing matches — caller then classifies by client rules", () => {
+  const errors = [
+    { ...SAMPLE_ERROR, facility_id: "F2", activity_type_id: "scope2_electricity" },
+  ];
+  const filtered = filterErrorsForRow(errors, "F1", "scope1_stationary_natural_gas");
+  assert.deepEqual(filtered, []);
+  // Confirm the row then classifies normally:
+  const row = classifyRow(
+    draftWith({ activity: { value: "1000", unit: "scf" } }),
+    ACTIVITY_TYPE,
+    filtered,
+  );
+  assert.equal(row.status, ROW_STATUS.COMPLETE);
+});
+
+test("filterErrorsForRow handles empty or missing inputs defensively", () => {
+  assert.deepEqual(filterErrorsForRow(undefined, "F1", "A"), []);
+  assert.deepEqual(filterErrorsForRow([], "F1", "A"), []);
+  assert.deepEqual(filterErrorsForRow([SAMPLE_ERROR], "F1", undefined), []);
 });

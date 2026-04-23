@@ -16,7 +16,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { StatusChip } from "./StatusChip";
+import { StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   activityRequiresDetails,
   getAllowedUnits,
@@ -75,6 +75,7 @@ export default function RowByRowView({
   removeActivity,
   openDetails,
   catalogError,
+  calcErrors = [],
 }) {
   return (
     <Paper sx={{ p: 2 }}>
@@ -109,6 +110,7 @@ export default function RowByRowView({
             {activities.map((draft) => {
               const activityType = activityTypesById[draft.activity_type_id];
               const unitOptions = getAllowedUnits(activityType);
+              const rowErrors = filterErrorsForRow(calcErrors, draft.facility_id, draft.activity_type_id);
               return (
                 <TableRow key={draft.id}>
                   <TableCell sx={{ minWidth: 210 }}>
@@ -162,7 +164,7 @@ export default function RowByRowView({
                     </Select>
                   </TableCell>
                   <TableCell sx={{ minWidth: 160 }}>
-                    <StatusChip draft={draft} activityType={activityType} />
+                    <StatusChip draft={draft} activityType={activityType} rowErrors={rowErrors} />
                   </TableCell>
                   <TableCell sx={{ minWidth: 120 }}>
                     <Button
