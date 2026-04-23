@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import Any
+
+from pydantic import BaseModel, Field
 
 from ghg_engine.activity_catalog import ActivityTypeDefinition
 from ghg_engine.models import (
@@ -18,10 +20,21 @@ class CalculationRequest(BaseModel):
     activities: list[ActivityRecord]
 
 
+class ActivityCalculationError(BaseModel):
+    activity_index: int
+    activity_type_id: str | None = None
+    facility_id: str | None = None
+    error_code: str
+    message: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
 class CalculationResponse(BaseModel):
-    results: list[ResultRecord]
-    summary: dict[str, float]
+    results: list[ResultRecord] = Field(default_factory=list)
+    summary: dict[str, float] = Field(default_factory=dict)
     trace: list[TraceRecord] | None = None
+    errors: list[ActivityCalculationError] = Field(default_factory=list)
+    partial_success: bool = False
 
 
 class CalculationAuditRow(AuditRecord):
@@ -29,7 +42,7 @@ class CalculationAuditRow(AuditRecord):
 
 
 class CalculationAuditResponse(CalculationResponse):
-    audit_rows: list[CalculationAuditRow]
+    audit_rows: list[CalculationAuditRow] = Field(default_factory=list)
 
 
 class ActivityTypeResponse(ActivityTypeDefinition):
