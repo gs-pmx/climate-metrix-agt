@@ -21,7 +21,6 @@ import {
   EMPTY_ACTIVITY,
   getActivitySupportNotice,
   getAllowedUnits,
-  getCompletionState,
   getDetailFields,
   getFieldUnits,
   hasMeaningfulParamValue,
@@ -29,6 +28,48 @@ import {
   uid,
   withActivityTypeDefaults,
 } from "./activityDrafts";
+import { classifyRow, ROW_STATUS, getRowStatusLabel, getRowStatusColor } from "./rowStatus";
+import { formatNumericDisplay, parseNumericInput } from "./numericFormat";
+
+// Numeric text field matching the behavior used elsewhere: accepts
+// thousands-separated input, formats on blur.
+function NumericField({ value, onChange, ...rest }) {
+  const [draft, setDraft] = React.useState(() => {
+    if (value === "" || value == null) return "";
+    const parsed = parseNumericInput(value);
+    return parsed == null ? String(value) : formatNumericDisplay(parsed);
+  });
+
+  React.useEffect(() => {
+    const parsed = parseNumericInput(value);
+    const currentParsed = parseNumericInput(draft);
+    if (parsed !== currentParsed) {
+      setDraft(value === "" || value == null ? "" : (parsed == null ? String(value) : formatNumericDisplay(parsed)));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  return (
+    <TextField
+      {...rest}
+      value={draft}
+      onChange={(event) => {
+        const next = event.target.value;
+        setDraft(next);
+        onChange(next);
+      }}
+      onBlur={() => {
+        const parsed = parseNumericInput(draft);
+        if (parsed != null) {
+          const formatted = formatNumericDisplay(parsed);
+          setDraft(formatted);
+          onChange(formatted);
+        }
+      }}
+      inputProps={{ inputMode: "decimal", autoComplete: "off", spellCheck: false, ...(rest.inputProps || {}) }}
+    />
+  );
+}
 
 function hasMeaningfulData(draft) {
   if (draft?.activity?.value !== "" && draft?.activity?.value != null) return true;
@@ -144,7 +185,9 @@ export default function RepeatableActivityDialog({
             </Alert>
           ))}
           {localDrafts.map((draft, index) => {
-            const completion = getCompletionState(draft, activityType);
+            const classification = classifyRow(draft, activityType);
+            const statusLabel = getRowStatusLabel(classification.status);
+            const statusColor = getRowStatusColor(classification.status);
             return (
               <Box
                 key={draft.id}
@@ -152,7 +195,7 @@ export default function RepeatableActivityDialog({
               >
                 <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems={{ md: "center" }} sx={{ mb: 1.5 }}>
                   <Typography variant="subtitle2">Entry {index + 1}</Typography>
-                  <Chip label={completion.label} color={completion.color} size="small" variant="outlined" />
+                  <Chip label={statusLabel} color={statusColor} size="small" variant="outlined" />
                   <Box sx={{ flexGrow: 1 }} />
                   <Button color="error" size="small" onClick={() => removeEntry(draft.id)}>
                     Remove
@@ -160,13 +203,12 @@ export default function RepeatableActivityDialog({
                 </Stack>
                 <Stack spacing={1.5}>
                   <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                    <TextField
+                    <NumericField
                       label={primaryField?.label || "Activity Value"}
-                      type="number"
                       value={draft.activity.value}
-                      onChange={(event) => updateDraft(draft.id, (current) => ({
+                      onChange={(next) => updateDraft(draft.id, (current) => ({
                         ...current,
-                        activity: { ...current.activity, value: event.target.value },
+                        activity: { ...current.activity, value: next },
                       }))}
                       fullWidth
                     />
@@ -197,16 +239,15 @@ export default function RepeatableActivityDialog({
                             {field.label}
                           </Typography>
                           <Stack direction={{ xs: "column", md: "row" }} spacing={1.5}>
-                            <TextField
-                              type="number"
+                            <NumericField
                               value={quantityValue.value}
-                              onChange={(event) => updateDraft(draft.id, (current) => ({
+                              onChange={(next) => updateDraft(draft.id, (current) => ({
                                 ...current,
                                 params: {
                                   ...current.params,
                                   [key]: normalizeFieldValue(field, {
                                     ...quantityValue,
-                                    value: event.target.value,
+                                    value: next,
                                   }),
                                 },
                               }))}
@@ -287,11 +328,25 @@ export default function RepeatableActivityDialog({
                         />
                       );
                     }
+                    if (field.kind === "number") {
+                      return (
+                        <NumericField
+                          key={key}
+                          label={field.label}
+                          value={value}
+                          onChange={(next) => updateDraft(draft.id, (current) => ({
+                            ...current,
+                            params: { ...current.params, [key]: normalizeFieldValue(field, next) },
+                          }))}
+                          helperText={field.help_text || " "}
+                          fullWidth
+                        />
+                      );
+                    }
                     return (
                       <TextField
                         key={key}
                         label={field.label}
-                        type={field.kind === "number" ? "number" : "text"}
                         value={value}
                         onChange={(event) => updateDraft(draft.id, (current) => ({
                           ...current,
@@ -303,11 +358,19 @@ export default function RepeatableActivityDialog({
                     );
                   })}
                 </Stack>
-                {completion.errors?.length ? (
+                {classification.status === ROW_STATUS.INVALID ? (
+                  <>
+                    <Divider sx={{ my: 1.5 }} />
+                    <Alert severity="error">
+                      {Object.entries(classification.fieldErrors).map(([k, v]) => `${k}: ${v}`).join(" | ")}
+                    </Alert>
+                  </>
+                ) : null}
+                {classification.status === ROW_STATUS.MISSING_DETAILS && classification.missingRequired.length ? (
                   <>
                     <Divider sx={{ my: 1.5 }} />
                     <Alert severity="warning">
-                      {completion.errors.join(", ")}
+                      Missing: {classification.missingRequired.join(", ")}
                     </Alert>
                   </>
                 ) : null}

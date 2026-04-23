@@ -9,6 +9,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
+import { parseTSV } from "./usePasteHandler";
 
 const US_STATE_OPTIONS = [
   "Alabama",
@@ -152,9 +153,77 @@ function GridAutocompleteEditCell(props) {
 }
 
 export default function FacilitiesTab({ facilities, setFacilities, onAddFacility }) {
+  const processFacilityUpdate = React.useCallback(
+    (newRow) => {
+      setFacilities((prev) => prev.map((row) => (row.id === newRow.id ? newRow : row)));
+      return newRow;
+    },
+    [setFacilities],
+  );
+
+  // Paste + Tab navigation. Tab moves left/right, Enter moves down (same
+  // column), ArrowUp/ArrowDown also navigate between rows while in edit mode.
   const handleFacilityCellKeyDown = React.useCallback(
     (params, event) => {
-      if (event.key !== "Tab") return;
+      const key = String(event.key || "");
+
+      // Clipboard paste: accept spreadsheet-style multi-cell data.
+      if ((event.ctrlKey || event.metaKey) && key.toLowerCase() === "v") {
+        event.preventDefault();
+        event.defaultMuiPrevented = true;
+
+        navigator.clipboard.readText().then((text) => {
+          const parsed = parseTSV(text);
+          if (!parsed.length) return;
+
+          const rowIds =
+            typeof params.api.getSortedRowIds === "function"
+              ? params.api.getSortedRowIds()
+              : facilities.map((facility) => facility.id);
+          const startRowIndex = rowIds.indexOf(params.id);
+          if (startRowIndex < 0) return;
+
+          let startColumnIndex = FACILITY_EDITABLE_FIELDS.indexOf(params.field);
+          if (startColumnIndex < 0) startColumnIndex = 0;
+
+          setFacilities((prev) => {
+            const byId = new Map(prev.map((row) => [row.id, row]));
+            let touched = 0;
+            for (let rowOffset = 0; rowOffset < parsed.length; rowOffset += 1) {
+              const rowIndex = startRowIndex + rowOffset;
+              if (rowIndex >= rowIds.length) break;
+              const rowId = rowIds[rowIndex];
+              const current = byId.get(rowId);
+              if (!current) continue;
+              const next = { ...current };
+              let changed = false;
+              for (let columnOffset = 0; columnOffset < parsed[rowOffset].length; columnOffset += 1) {
+                const columnIndex = startColumnIndex + columnOffset;
+                if (columnIndex >= FACILITY_EDITABLE_FIELDS.length) break;
+                const field = FACILITY_EDITABLE_FIELDS[columnIndex];
+                const cellValue = parsed[rowOffset][columnOffset];
+                if (cellValue === "") continue;
+                next[field] = cellValue;
+                changed = true;
+              }
+              if (changed) {
+                byId.set(rowId, next);
+                touched += 1;
+              }
+            }
+            if (touched === 0) return prev;
+            return prev.map((row) => byId.get(row.id) || row);
+          });
+        }).catch(() => { /* clipboard may be denied — silently ignore here */ });
+        return;
+      }
+
+      let direction = null;
+      if (key === "Tab") direction = event.shiftKey ? "left" : "right";
+      else if (key === "Enter") direction = event.shiftKey ? "up" : "down";
+      else if (key === "ArrowUp" && params.cellMode === "edit") direction = "up";
+      else if (key === "ArrowDown" && params.cellMode === "edit") direction = "down";
+      if (!direction) return;
 
       const rowIds =
         typeof params.api.getSortedRowIds === "function"
@@ -164,36 +233,36 @@ export default function FacilitiesTab({ facilities, setFacilities, onAddFacility
       const fieldIndex = FACILITY_EDITABLE_FIELDS.indexOf(params.field);
       if (rowIndex < 0 || fieldIndex < 0) return;
 
-      const isShiftTab = event.shiftKey;
-      const atFirstCell = rowIndex === 0 && fieldIndex === 0;
-      const atLastCell = rowIndex === rowIds.length - 1 && fieldIndex === FACILITY_EDITABLE_FIELDS.length - 1;
-      if ((isShiftTab && atFirstCell) || (!isShiftTab && atLastCell)) {
-        return;
-      }
-
-      event.preventDefault();
-      event.defaultMuiPrevented = true;
-
       let nextRowIndex = rowIndex;
       let nextFieldIndex = fieldIndex;
-
-      if (isShiftTab) {
-        if (fieldIndex === 0) {
-          nextRowIndex -= 1;
-          nextFieldIndex = FACILITY_EDITABLE_FIELDS.length - 1;
-        } else {
-          nextFieldIndex -= 1;
-        }
-      } else if (fieldIndex === FACILITY_EDITABLE_FIELDS.length - 1) {
-        nextRowIndex += 1;
-        nextFieldIndex = 0;
-      } else {
-        nextFieldIndex += 1;
+      switch (direction) {
+        case "up": nextRowIndex -= 1; break;
+        case "down": nextRowIndex += 1; break;
+        case "left":
+          if (fieldIndex === 0) {
+            nextRowIndex -= 1;
+            nextFieldIndex = FACILITY_EDITABLE_FIELDS.length - 1;
+          } else {
+            nextFieldIndex -= 1;
+          }
+          break;
+        case "right":
+          if (fieldIndex === FACILITY_EDITABLE_FIELDS.length - 1) {
+            nextRowIndex += 1;
+            nextFieldIndex = 0;
+          } else {
+            nextFieldIndex += 1;
+          }
+          break;
+        default: break;
       }
 
       const nextRowId = rowIds[nextRowIndex];
       const nextField = FACILITY_EDITABLE_FIELDS[nextFieldIndex];
       if (nextRowId === undefined || !nextField) return;
+
+      event.preventDefault();
+      event.defaultMuiPrevented = true;
 
       if (params.cellMode === "edit") {
         params.api.stopCellEditMode({ id: params.id, field: params.field });
@@ -201,27 +270,20 @@ export default function FacilitiesTab({ facilities, setFacilities, onAddFacility
       params.api.setCellFocus(nextRowId, nextField);
       params.api.startCellEditMode({ id: nextRowId, field: nextField });
     },
-    [facilities],
-  );
-
-  const processFacilityUpdate = React.useCallback(
-    (newRow) => {
-      setFacilities((prev) => prev.map((row) => (row.id === newRow.id ? newRow : row)));
-      return newRow;
-    },
-    [setFacilities],
+    [facilities, setFacilities],
   );
 
   const facilityColumns = React.useMemo(
     () => [
-      { field: "facility_name", headerName: "Facility Name", flex: 1, editable: true },
-      { field: "location", headerName: "Location", flex: 1, editable: true },
-      { field: "region", headerName: "Region", flex: 0.7, editable: true },
-      { field: "country", headerName: "Country", flex: 0.6, editable: true },
+      { field: "facility_name", headerName: "Facility Name", flex: 1, minWidth: 160, editable: true },
+      { field: "location", headerName: "Location", flex: 1, minWidth: 160, editable: true },
+      { field: "region", headerName: "Region", flex: 0.7, minWidth: 120, editable: true },
+      { field: "country", headerName: "Country", flex: 0.6, minWidth: 100, editable: true },
       {
         field: "state",
         headerName: "State",
         flex: 0.6,
+        minWidth: 130,
         editable: true,
         renderEditCell: (params) => <GridAutocompleteEditCell {...params} options={US_STATE_OPTIONS} />,
       },
@@ -229,6 +291,7 @@ export default function FacilitiesTab({ facilities, setFacilities, onAddFacility
         field: "egrid_subregion",
         headerName: "eGRID Subregion",
         flex: 0.8,
+        minWidth: 150,
         editable: true,
         renderEditCell: (params) => (
           <GridAutocompleteEditCell
@@ -238,11 +301,12 @@ export default function FacilitiesTab({ facilities, setFacilities, onAddFacility
           />
         ),
       },
-      { field: "reporting_group", headerName: "Group", flex: 0.6, editable: true },
+      { field: "reporting_group", headerName: "Group", flex: 0.6, minWidth: 120, editable: true },
       {
         field: "owned_leased",
         headerName: "Owned/Leased",
         flex: 0.7,
+        minWidth: 130,
         editable: true,
         type: "singleSelect",
         valueOptions: ["Owned", "Leased"],
@@ -259,15 +323,20 @@ export default function FacilitiesTab({ facilities, setFacilities, onAddFacility
           Add Facility
         </Button>
       </Stack>
-      <Box sx={{ height: 520 }}>
-        <DataGrid
-          rows={facilities}
-          columns={facilityColumns}
-          processRowUpdate={processFacilityUpdate}
-          onProcessRowUpdateError={() => {}}
-          onCellKeyDown={handleFacilityCellKeyDown}
-          disableRowSelectionOnClick
-        />
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+        Paste a block of cells with Ctrl+V from a spreadsheet to fill multiple rows at once.
+      </Typography>
+      <Box sx={{ width: "100%", overflowX: "auto" }}>
+        <Box sx={{ height: 520, minWidth: 1100 }}>
+          <DataGrid
+            rows={facilities}
+            columns={facilityColumns}
+            processRowUpdate={processFacilityUpdate}
+            onProcessRowUpdateError={() => {}}
+            onCellKeyDown={handleFacilityCellKeyDown}
+            disableRowSelectionOnClick
+          />
+        </Box>
       </Box>
     </Paper>
   );
