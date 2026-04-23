@@ -27,29 +27,37 @@ import {
   makeGridKeyHandler,
   pairKey,
 } from "./gridEditingHelpers";
+import { filterApplicableActivities } from "./applicability";
 import { formatNumericDisplay } from "./numericFormat";
 
 const SCROLLABLE_TABLE_SX = { width: "100%", overflowX: "auto" };
 
-function FacilityAccordion({
-  facility,
+function ReportingUnitAccordion({
+  reportingUnit,
   activitiesByPair,
   selectableActivities,
-  facilityCount,
+  reportingUnitCount,
   upsertActivity,
   openDetailsForPair,
   calcErrors,
   show,
 }) {
+  // Phase C2 filter: only show activities in this unit's applicable list.
+  // An empty list keeps legacy permissive behavior (show all).
+  const applicableActivities = React.useMemo(
+    () => filterApplicableActivities(reportingUnit, selectableActivities),
+    [reportingUnit, selectableActivities],
+  );
+
   const gridRows = React.useMemo(
-    () => selectableActivities.map((activityType) => {
-      const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
+    () => applicableActivities.map((activityType) => {
+      const drafts = activitiesByPair.get(pairKey(reportingUnit.id, activityType.activity_type_id)) || [];
       const draft = drafts[0]
-        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
-      const rowErrors = filterErrorsForRow(calcErrors, facility.id, activityType.activity_type_id);
+        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: reportingUnit.id }, activityType);
+      const rowErrors = filterErrorsForRow(calcErrors, reportingUnit.id, activityType.activity_type_id);
       return {
-        id: `${facility.id}__${activityType.activity_type_id}`,
-        facility_id: facility.id,
+        id: `${reportingUnit.id}__${activityType.activity_type_id}`,
+        facility_id: reportingUnit.id,
         activity_type_id: activityType.activity_type_id,
         activity_label: activityType.label,
         scope: activityType.scope,
@@ -64,7 +72,7 @@ function FacilityAccordion({
         _rowErrors: rowErrors,
       };
     }),
-    [activitiesByPair, calcErrors, facility.id, selectableActivities],
+    [activitiesByPair, applicableActivities, calcErrors, reportingUnit.id],
   );
 
   const filledCount = gridRows.filter((row) => (row._repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
@@ -78,8 +86,6 @@ function FacilityAccordion({
         flex: 0.8,
         minWidth: 150,
         editable: true,
-        // NumericEditCell handles parsing; built-in type: "number" would
-        // conflict with thousands-separator input. See ByActivityTable.
         renderEditCell: (params) => <NumericEditCell {...params} />,
         valueFormatter: (value) => formatNumericDisplay(value),
         align: "right",
@@ -131,14 +137,14 @@ function FacilityAccordion({
           <Button
             size="small"
             variant="outlined"
-            onClick={() => openDetailsForPair(facility.id, params.row.activity_type_id)}
+            onClick={() => openDetailsForPair(reportingUnit.id, params.row.activity_type_id)}
           >
             {params.row._repeatable ? "Manage" : activityRequiresDetails(params.row._activityType) ? "Edit" : "View"}
           </Button>
         ),
       },
     ],
-    [facility.id, openDetailsForPair],
+    [openDetailsForPair, reportingUnit.id],
   );
 
   const processRowUpdate = React.useCallback(
@@ -168,9 +174,11 @@ function FacilityAccordion({
     [show, upsertActivity],
   );
 
+  const legacyPermissive = (reportingUnit.applicable_activity_types || []).length === 0;
+
   return (
     <Accordion
-      defaultExpanded={facilityCount <= 8}
+      defaultExpanded={reportingUnitCount <= 8}
       disableGutters
       sx={{
         overflow: "hidden",
@@ -180,13 +188,16 @@ function FacilityAccordion({
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
           <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-            {facility.facility_name}
+            {reportingUnit.facility_name}
           </Typography>
-          {facility.state ? <Chip label={facility.state} size="small" variant="outlined" /> : null}
-          {facility.egrid_subregion ? <Chip label={facility.egrid_subregion} size="small" variant="outlined" /> : null}
+          {reportingUnit.state ? <Chip label={reportingUnit.state} size="small" variant="outlined" /> : null}
+          {reportingUnit.egrid_subregion ? <Chip label={reportingUnit.egrid_subregion} size="small" variant="outlined" /> : null}
+          {legacyPermissive ? (
+            <Chip label="Legacy: all sources" size="small" variant="outlined" color="info" />
+          ) : null}
           <Box sx={{ flexGrow: 1 }} />
           <Typography variant="body2" color="text.secondary">
-            {filledCount}/{selectableActivities.length} activities
+            {filledCount}/{applicableActivities.length} activities
           </Typography>
         </Stack>
       </AccordionSummary>
@@ -214,9 +225,9 @@ function FacilityAccordion({
   );
 }
 
-export default function ByFacilityTable({
+export default function ByReportingUnitTable({
   activitiesByPair,
-  facilities,
+  reportingUnits,
   selectableActivities,
   upsertActivity,
   openDetailsForPair,
@@ -225,13 +236,13 @@ export default function ByFacilityTable({
 }) {
   return (
     <Stack spacing={1}>
-      {facilities.map((facility) => (
-        <FacilityAccordion
-          key={facility.id}
-          facility={facility}
+      {reportingUnits.map((reportingUnit) => (
+        <ReportingUnitAccordion
+          key={reportingUnit.id}
+          reportingUnit={reportingUnit}
           activitiesByPair={activitiesByPair}
           selectableActivities={selectableActivities}
-          facilityCount={facilities.length}
+          reportingUnitCount={reportingUnits.length}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
           calcErrors={calcErrors}
