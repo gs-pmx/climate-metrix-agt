@@ -21,7 +21,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { api } from "./api";
+import { api, ApiError } from "./api";
 import {
   EMPTY_ACTIVITY,
   buildSnapshot,
@@ -137,6 +137,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [summaryRows, setSummaryRows] = React.useState([]);
   const [traceRows, setTraceRows] = React.useState([]);
   const [auditRows, setAuditRows] = React.useState([]);
+  const [calcErrors, setCalcErrors] = React.useState([]);
   const [catalogError, setCatalogError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
@@ -539,8 +540,15 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     const mergedResults = [];
     const mergedTrace = [];
     const mergedAudit = [];
+    const mergedErrors = [];
     const summaryMap = {};
+    // Clear stale per-row error chips from a previous run before dispatching
+    // the new batch; otherwise old errors linger until the new response
+    // arrives and chips across several facilities update piecemeal.
+    setCalcErrors([]);
     setCalculating(true);
+    let totalFailure = false;
+    let totalFailureMessage = "";
     try {
       for (const [facilityId, facilityRows] of Object.entries(grouped)) {
         const fac = facilities.find((f) => f.id === facilityId);
@@ -558,10 +566,26 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           },
           activities: facilityRows.map((draft) => normalizeActivityForSubmit(draft, activityTypesById[draft.activity_type_id])),
         };
-        const response = await api.calculateAudit(payload);
+        let response;
+        try {
+          response = await api.calculateAudit(payload);
+        } catch (err) {
+          // On total failure the backend still returns the structured
+          // envelope (with populated errors[]) alongside HTTP 400. Capture
+          // those errors for row attribution, then keep iterating other
+          // facilities so we can still surface their results/errors.
+          if (err instanceof ApiError && err.body && Array.isArray(err.body.errors)) {
+            for (const ee of err.body.errors) mergedErrors.push(ee);
+            totalFailure = true;
+            totalFailureMessage = err.message || totalFailureMessage;
+            continue;
+          }
+          throw err;
+        }
         for (const rr of response.results || []) mergedResults.push(rr);
         for (const tr of response.trace || []) mergedTrace.push(tr);
         for (const ar of response.audit_rows || []) mergedAudit.push(ar);
+        for (const ee of response.errors || []) mergedErrors.push(ee);
         for (const [k, v] of Object.entries(response.summary || {})) {
           summaryMap[k] = (summaryMap[k] || 0) + Number(v);
         }
@@ -594,14 +618,33 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         metricTonSummary[nextKey] = (metricTonSummary[nextKey] || 0) + toMetricTons(value, unit);
       }
       setSummaryRows(Object.entries(metricTonSummary).map(([key, value], i) => ({ id: `${i}`, key, value })));
-      setTab(3);
-      show(
-        skippedRows.length
-          ? `Calculation complete. Skipped ${skippedRows.length} unsupported activity row${skippedRows.length === 1 ? "" : "s"} that are not calculable yet.`
-          : "Calculation complete",
-        skippedRows.length ? "warning" : "success",
-      );
+      setCalcErrors(mergedErrors);
+      const partialSuccess = mergedErrors.length > 0 && mergedResults.length > 0;
+      const totalFailureNoResults = totalFailure && mergedResults.length === 0;
+      if (totalFailureNoResults) {
+        // All activities failed. Keep the user on the data-entry tab so
+        // they can see the per-row chips flip to "Calc error". Snackbar
+        // surfaces the first error message; tooltips cover the rest.
+        show(`Calculation failed: ${totalFailureMessage || "all activities errored"}`, "error");
+      } else {
+        setTab(3);
+        if (partialSuccess) {
+          show(
+            `Some activities failed to calculate (${mergedErrors.length}) — see row details.`,
+            "info",
+          );
+        } else if (skippedRows.length) {
+          show(
+            `Calculation complete. Skipped ${skippedRows.length} unsupported activity row${skippedRows.length === 1 ? "" : "s"} that are not calculable yet.`,
+            "warning",
+          );
+        } else {
+          show("Calculation complete", "success");
+        }
+      }
     } catch (e) {
+      // Fall-through path for non-ApiError failures (network, 5xx, etc.).
+      // Structured 400s are handled inline above and populate calcErrors.
       show(`Calculation failed: ${e.message}`, "error");
     } finally {
       setCalculating(false);
@@ -831,6 +874,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             calculating={calculating}
             saveCurrentVersion={saveCurrentVersion}
             catalogError={catalogError}
+            calcErrors={calcErrors}
             show={show}
           />
         </React.Suspense>

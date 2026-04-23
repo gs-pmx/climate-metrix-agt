@@ -51,6 +51,7 @@ export default function ActivityInputsPanel({
   calculating,
   saveCurrentVersion,
   catalogError,
+  calcErrors = [],
   show = () => {},
 }) {
   const [viewMode, setViewMode] = React.useState("byActivity");
@@ -348,6 +349,7 @@ export default function ActivityInputsPanel({
           removeActivity={removeActivity}
           openDetails={openDetails}
           catalogError={catalogError}
+          calcErrors={calcErrors}
         />
       ) : null}
 
@@ -358,6 +360,7 @@ export default function ActivityInputsPanel({
           selectableActivities={selectableActivities}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
+          calcErrors={calcErrors}
           show={show}
         />
       ) : null}
@@ -369,6 +372,7 @@ export default function ActivityInputsPanel({
           selectableActivities={selectableActivities}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
+          calcErrors={calcErrors}
           show={show}
         />
       ) : null}

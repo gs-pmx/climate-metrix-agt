@@ -11,7 +11,7 @@ import {
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
-import { RepeatableStatusChip, StatusChip } from "./StatusChip";
+import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
   activityRequiresDetails,
@@ -44,6 +44,7 @@ function ActivityAccordion({
   totalActivities,
   upsertActivity,
   openDetailsForPair,
+  calcErrors,
   show,
 }) {
   const repeatable = isRepeatableActivity(activityType);
@@ -53,6 +54,7 @@ function ActivityAccordion({
       const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
       const draft = drafts[0]
         || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
+      const rowErrors = filterErrorsForRow(calcErrors, facility.id, activityType.activity_type_id);
       return {
         id: `${activityType.activity_type_id}__${facility.id}`,
         facility_id: facility.id,
@@ -64,9 +66,10 @@ function ActivityAccordion({
         draft_count: drafts.filter(hasMeaningfulData).length,
         _repeatable: repeatable,
         _unitOptions: unitOptions,
+        _rowErrors: rowErrors,
       };
     }),
-    [activitiesByPair, activityType, facilities, repeatable, unitOptions],
+    [activitiesByPair, activityType, calcErrors, facilities, repeatable, unitOptions],
   );
 
   const filledCount = gridRows.filter((row) => (repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
@@ -94,7 +97,7 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
-          renderCell: (params) => <RepeatableStatusChip drafts={params.row.drafts} activityType={activityType} />,
+          renderCell: (params) => <RepeatableStatusChip drafts={params.row.drafts} activityType={activityType} rowErrors={params.row._rowErrors} />,
         },
         {
           field: "details",
@@ -148,7 +151,7 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
-          renderCell: (params) => <StatusChip draft={params.row.draft} activityType={activityType} />,
+          renderCell: (params) => <StatusChip draft={params.row.draft} activityType={activityType} rowErrors={params.row._rowErrors} />,
         },
         {
           field: "details",
@@ -289,6 +292,7 @@ export default function ByActivityTable({
   selectableActivities,
   upsertActivity,
   openDetailsForPair,
+  calcErrors = [],
   show,
 }) {
   const groups = React.useMemo(() => groupActivitiesByScope(selectableActivities), [selectableActivities]);
@@ -309,6 +313,7 @@ export default function ByActivityTable({
                 totalActivities={selectableActivities.length}
                 upsertActivity={upsertActivity}
                 openDetailsForPair={openDetailsForPair}
+                calcErrors={calcErrors}
                 show={show}
               />
             ))}
