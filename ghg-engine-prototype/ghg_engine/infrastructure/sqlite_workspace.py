@@ -270,7 +270,7 @@ class SQLiteWorkspaceDraftStore:
                 gwp_set,
                 int(include_trace),
                 note,
-                snapshot.model_dump_json(),
+                snapshot.model_dump_json(by_alias=True),
             ),
         )
         version_id = int(cur.lastrowid)

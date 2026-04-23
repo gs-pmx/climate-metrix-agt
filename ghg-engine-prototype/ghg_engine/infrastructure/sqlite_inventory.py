@@ -172,7 +172,7 @@ class SQLiteInventoryStore:
             ),
         )
         inventory_version_id = int(cur.lastrowid)
-        for facility in snapshot.facilities:
+        for reporting_unit in snapshot.reporting_units:
             conn.execute(
                 """
                 INSERT INTO inventory_loci (
@@ -183,16 +183,16 @@ class SQLiteInventoryStore:
                 """,
                 (
                     inventory_version_id,
-                    facility.id,
-                    facility.facility_name,
-                    facility.location,
-                    facility.region,
-                    facility.country,
-                    facility.state,
-                    facility.egrid_subregion,
-                    facility.reporting_group,
-                    facility.owned_leased,
-                    facility.model_dump_json(),
+                    reporting_unit.id,
+                    reporting_unit.name,
+                    reporting_unit.location,
+                    reporting_unit.region,
+                    reporting_unit.country,
+                    reporting_unit.state,
+                    reporting_unit.egrid_subregion,
+                    reporting_unit.reporting_group,
+                    reporting_unit.owned_leased,
+                    reporting_unit.model_dump_json(by_alias=True),
                 ),
             )
         for index, activity in enumerate(snapshot.activities):

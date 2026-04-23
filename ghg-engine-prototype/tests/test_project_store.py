@@ -4,7 +4,13 @@ import sqlite3
 from pathlib import Path
 
 from ghg_engine.activity_catalog import ActivityCatalog
-from ghg_engine.models import ActivityDraft, ProjectSnapshot, ResultRecord, TraceRecord
+from ghg_engine.models import (
+    ActivityDraft,
+    ProjectSnapshot,
+    ReportingUnitDraft,
+    ResultRecord,
+    TraceRecord,
+)
 from project_store import ProjectStore
 
 
@@ -337,3 +343,98 @@ def test_schema_reset_migration_rebuilds_split_storage_tables(tmp_path: Path):
         "factor_versions",
         "factor_source_docs",
     }.issubset(tables)
+
+
+# ---------------------------------------------------------------------------
+# Reporting-unit rename backward-compat round-trip
+# ---------------------------------------------------------------------------
+
+
+def test_legacy_facilities_json_round_trips_through_sqlite(tmp_path: Path):
+    """A snapshot authored with the legacy ``facilities`` JSON key must load
+    through the new :class:`ReportingUnitDraft` model, persist to SQLite
+    under the same ``facilities`` key, and reload with identical data."""
+
+    legacy_json = {
+        "snapshot_version": 2,
+        "facilities": [
+            {
+                "id": "F1",
+                "facility_name": "Facility 1",
+                "location": "Bend, OR",
+                "region": "",
+                "country": "US",
+                "state": "OR",
+                "egrid_subregion": "WECC",
+                "reporting_group": "",
+                "owned_leased": "Owned",
+            }
+        ],
+        "activities": [],
+        "result_rows": [],
+        "summary_rows": [],
+        "trace_rows": [],
+        "audit_rows": [],
+    }
+    snapshot = ProjectSnapshot.model_validate(legacy_json)
+    assert [unit.id for unit in snapshot.reporting_units] == ["F1"]
+    assert snapshot.reporting_units[0].name == "Facility 1"
+
+    store = ProjectStore(tmp_path / "roundtrip.sqlite")
+    catalog = _catalog()
+    project = store.create_project(project_id="prj_ru", name="Reporting Unit RT", inventory_year=2024)
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=False,
+        snapshot=snapshot,
+        activity_catalog=catalog,
+        note=None,
+    )
+
+    loaded = store.get_version_snapshot(project["project_id"], version_number=saved["version_number"])
+    reloaded = loaded["snapshot"]
+    assert isinstance(reloaded, ProjectSnapshot)
+    assert [unit.id for unit in reloaded.reporting_units] == ["F1"]
+    assert reloaded.reporting_units[0].name == "Facility 1"
+    assert reloaded.reporting_units[0].egrid_subregion == "WECC"
+
+    # The raw JSON stored in SQLite must still use the ``facilities`` key so
+    # the wire format is stable for existing consumers.
+    with store._connect() as conn:  # noqa: SLF001 - verifying on-disk JSON shape
+        row = conn.execute(
+            "SELECT snapshot_json FROM project_versions WHERE version_id = ?",
+            (saved["version_id"],),
+        ).fetchone()
+    import json as _json
+    on_disk = _json.loads(row["snapshot_json"])
+    assert "facilities" in on_disk
+    assert "reporting_units" not in on_disk
+    assert on_disk["facilities"][0]["facility_name"] == "Facility 1"
+
+
+def test_reporting_unit_draft_accepts_both_attribute_names_via_alias():
+    """Constructors using either ``name=`` or ``facility_name=`` must both
+    produce the same ``ReportingUnitDraft`` and dump the legacy key."""
+
+    via_new = ReportingUnitDraft(id="F1", name="Plant")
+    via_legacy = ReportingUnitDraft.model_validate({"id": "F1", "facility_name": "Plant"})
+
+    assert via_new == via_legacy
+    assert via_new.name == "Plant"
+    assert via_new.model_dump(by_alias=True)["facility_name"] == "Plant"
+
+
+def test_project_snapshot_model_dump_json_emits_facilities_key():
+    """`model_dump_json(by_alias=True)` must produce the legacy JSON key
+    that the SQLite storage layer writes; the attribute rename is
+    Python-internal only."""
+
+    snapshot = ProjectSnapshot(
+        reporting_units=[ReportingUnitDraft(id="F1", name="Plant")],
+    )
+    dumped = snapshot.model_dump(by_alias=True)
+    assert "facilities" in dumped
+    assert "reporting_units" not in dumped
+    assert dumped["facilities"][0]["facility_name"] == "Plant"
