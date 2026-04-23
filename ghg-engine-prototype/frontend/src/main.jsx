@@ -21,9 +21,14 @@ function buildTheme(mode) {
     text: { primary: "#deebf4", secondary: "#b7cad7" },
   };
 
+  // Slightly tighter corner radius (10 instead of 14) — the previous
+  // rounding made table corners show background slivers when accordions
+  // expanded, and the new value is visually cleaner at small surfaces
+  // like chips and buttons. Accordion/table seam fixes live inside the
+  // components that render them.
   return createTheme({
     palette: mode === "dark" ? darkPalette : lightPalette,
-    shape: { borderRadius: 14 },
+    shape: { borderRadius: 10 },
     typography: {
       fontFamily: '"Assistant", "Public Sans", "IBM Plex Sans", "Segoe UI", sans-serif',
       h1: { fontFamily: '"Public Sans", "Assistant", sans-serif', fontWeight: 700 },
@@ -44,6 +49,16 @@ function buildTheme(mode) {
                 ? "radial-gradient(1200px 420px at -8% -10%, rgba(78,159,207,0.2), transparent 60%), radial-gradient(800px 320px at 105% -15%, rgba(132,178,109,0.18), transparent 55%), linear-gradient(180deg, #1f2831 0%, #161d24 100%)"
                 : "radial-gradient(1200px 420px at -8% -10%, rgba(179,210,218,0.85), transparent 60%), radial-gradient(900px 320px at 105% -15%, rgba(191,214,158,0.6), transparent 55%), linear-gradient(180deg, #f1f3f4 0%, #ffffff 100%)",
           },
+          // Make horizontal overflow containers respond to Shift+wheel as
+          // horizontal scroll. Native browsers already do this for
+          // overflow:auto elements, but explicitly allow horizontal
+          // overscroll so users don't trigger back-navigation gestures.
+          ".sticky-top-shell": {
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+            backdropFilter: "blur(6px)",
+          },
         },
       },
       MuiPaper: {
@@ -56,6 +71,16 @@ function buildTheme(mode) {
                 : "0 10px 30px rgba(0, 48, 86, 0.08)",
             backdropFilter: "blur(1px)",
           }),
+        },
+      },
+      MuiAccordion: {
+        styleOverrides: {
+          // Clip child content so the expanded table shares the rounded
+          // corner with the accordion shell — fixes the sliver-at-the-seam
+          // issue when tables are flush to the accordion edge.
+          root: {
+            overflow: "hidden",
+          },
         },
       },
     },
