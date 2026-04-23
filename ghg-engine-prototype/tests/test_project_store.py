@@ -578,3 +578,279 @@ def test_save_and_materialize_rolls_back_on_failure(tmp_path: Path):
 
     # The workspace save was inside the same transaction; it must be rolled back.
     assert store.list_versions("prj_rb") == []
+
+
+def test_applicable_activity_types_empty_means_show_all(tmp_path: Path):
+    """Legacy snapshots (empty applicable list) canonicalize every activity."""
+
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    project = store.create_project(
+        project_id="prj_legacy", name="Legacy Defaults", inventory_year=2024
+    )
+    snapshot = ProjectSnapshot(
+        facilities=[
+            # No applicable_activity_types supplied; defaults to [] (show all).
+            ReportingUnitDraft(id="F1", name="Facility 1"),
+        ],
+        activities=[
+            ActivityDraft(
+                id="a1",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+            ),
+            ActivityDraft(
+                id="a2",
+                facility_id="F1",
+                activity_type_id="scope2_purchased_electricity",
+                activity={"value": 500.0, "unit": "kWh"},
+            ),
+        ],
+        result_rows=[
+            ResultRecord(
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity_label="Owned Vehicle Gasoline",
+                scope="Scope 1",
+                activity_group="Mobile Combustion",
+                source_type="gasoline",
+                accounting_method="none",
+                gas="co2e",
+                value=88.0,
+                unit="kg",
+                is_biogenic=False,
+                method_id="direct_factor",
+            ),
+            ResultRecord(
+                facility_id="F1",
+                activity_type_id="scope2_purchased_electricity",
+                activity_label="Purchased Electricity",
+                scope="Scope 2",
+                activity_group="Purchased Energy",
+                source_type="electricity",
+                accounting_method="location_based",
+                gas="co2e",
+                value=200.0,
+                unit="kg",
+                is_biogenic=False,
+                method_id="scope2_energy",
+            ),
+        ],
+    )
+
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+    )
+
+    with store._connect() as conn:  # noqa: SLF001
+        inventory = conn.execute(
+            "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
+            (saved["version_id"],),
+        ).fetchone()
+        activity_types = {
+            row["activity_type_id"]
+            for row in conn.execute(
+                "SELECT activity_type_id FROM inventory_activities WHERE inventory_version_id = ?",
+                (inventory["inventory_version_id"],),
+            ).fetchall()
+        }
+        run = conn.execute(
+            "SELECT run_id FROM calculation_runs WHERE inventory_version_id = ?",
+            (inventory["inventory_version_id"],),
+        ).fetchone()
+        result_types = {
+            row["activity_type_id"]
+            for row in conn.execute(
+                "SELECT activity_type_id FROM calculation_results WHERE run_id = ?",
+                (run["run_id"],),
+            ).fetchall()
+        }
+    assert activity_types == {
+        "scope1_mobile_gasoline",
+        "scope2_purchased_electricity",
+    }
+    assert result_types == {
+        "scope1_mobile_gasoline",
+        "scope2_purchased_electricity",
+    }
+
+
+def test_applicable_activity_types_filters_inventory_canonicalization(tmp_path: Path):
+    """A non-empty list restricts which activities flow into ``inventory_activities``."""
+
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    project = store.create_project(
+        project_id="prj_filter", name="Filtered", inventory_year=2024
+    )
+    snapshot = ProjectSnapshot(
+        facilities=[
+            ReportingUnitDraft(
+                id="F1",
+                name="Facility 1",
+                applicable_activity_types=["scope1_mobile_gasoline"],
+            ),
+        ],
+        activities=[
+            ActivityDraft(
+                id="a_keep",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+            ),
+            ActivityDraft(
+                id="a_skip",
+                facility_id="F1",
+                activity_type_id="scope2_purchased_electricity",
+                activity={"value": 500.0, "unit": "kWh"},
+            ),
+        ],
+    )
+
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+    )
+
+    with store._connect() as conn:  # noqa: SLF001
+        inventory = conn.execute(
+            "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
+            (saved["version_id"],),
+        ).fetchone()
+        activity_types = [
+            row["activity_type_id"]
+            for row in conn.execute(
+                "SELECT activity_type_id FROM inventory_activities WHERE inventory_version_id = ?",
+                (inventory["inventory_version_id"],),
+            ).fetchall()
+        ]
+    assert activity_types == ["scope1_mobile_gasoline"]
+
+
+def test_applicable_activity_types_filters_calculation_results(tmp_path: Path):
+    """A non-empty list restricts which result rows flow into ``calculation_results``."""
+
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    project = store.create_project(
+        project_id="prj_calc_filter", name="Calc Filtered", inventory_year=2024
+    )
+    snapshot = ProjectSnapshot(
+        facilities=[
+            ReportingUnitDraft(
+                id="F1",
+                name="Facility 1",
+                applicable_activity_types=["scope1_mobile_gasoline"],
+            ),
+        ],
+        activities=[
+            ActivityDraft(
+                id="a1",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+            ),
+        ],
+        result_rows=[
+            ResultRecord(
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity_label="Owned Vehicle Gasoline",
+                scope="Scope 1",
+                activity_group="Mobile Combustion",
+                source_type="gasoline",
+                accounting_method="none",
+                gas="co2e",
+                value=88.0,
+                unit="kg",
+                is_biogenic=False,
+                method_id="direct_factor",
+            ),
+            # This result should be filtered out — its activity type is not applicable.
+            ResultRecord(
+                facility_id="F1",
+                activity_type_id="scope2_purchased_electricity",
+                activity_label="Purchased Electricity",
+                scope="Scope 2",
+                activity_group="Purchased Energy",
+                source_type="electricity",
+                accounting_method="location_based",
+                gas="co2e",
+                value=200.0,
+                unit="kg",
+                is_biogenic=False,
+                method_id="scope2_energy",
+            ),
+        ],
+    )
+
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+    )
+
+    with store._connect() as conn:  # noqa: SLF001
+        inventory = conn.execute(
+            "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
+            (saved["version_id"],),
+        ).fetchone()
+        run = conn.execute(
+            "SELECT run_id FROM calculation_runs WHERE inventory_version_id = ?",
+            (inventory["inventory_version_id"],),
+        ).fetchone()
+        result_types = [
+            row["activity_type_id"]
+            for row in conn.execute(
+                "SELECT activity_type_id FROM calculation_results WHERE run_id = ?",
+                (run["run_id"],),
+            ).fetchall()
+        ]
+    assert result_types == ["scope1_mobile_gasoline"]
+
+
+def test_applicable_activity_types_round_trips_through_workspace_snapshot(tmp_path: Path):
+    """Saving and reloading a snapshot preserves ``applicable_activity_types``."""
+
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    project = store.create_project(
+        project_id="prj_roundtrip", name="Roundtrip", inventory_year=2024
+    )
+    snapshot = ProjectSnapshot(
+        facilities=[
+            ReportingUnitDraft(
+                id="F1",
+                name="Facility 1",
+                applicable_activity_types=[
+                    "scope1_mobile_gasoline",
+                    "scope2_purchased_electricity",
+                ],
+            ),
+            ReportingUnitDraft(id="F2", name="Facility 2"),  # empty list preserved
+        ],
+    )
+
+    saved = store.save_project_snapshot(
+        project_id=project["project_id"],
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+    )
+
+    loaded = store.get_version_snapshot(
+        project["project_id"], version_number=saved["version_number"]
+    )
+    units = {u.id: u for u in loaded["snapshot"].reporting_units}
+    assert units["F1"].applicable_activity_types == [
+        "scope1_mobile_gasoline",
+        "scope2_purchased_electricity",
+    ]
+    assert units["F2"].applicable_activity_types == []

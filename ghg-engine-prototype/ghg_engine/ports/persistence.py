@@ -61,5 +61,6 @@ class InventoryRepository(Protocol):
         traces: list[TraceRecord],
         engine_version: str,
         source_kind: str = "workspace_snapshot",
+        applicability: dict[str, frozenset[str] | None] | None = None,
     ) -> dict[str, Any] | None:
         ...

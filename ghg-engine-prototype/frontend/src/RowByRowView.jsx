@@ -86,7 +86,7 @@ export default function RowByRowView({
         </Button>
       </Stack>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-        Use this view for one-off edits. Bulk paste, spreadsheet-style entry, and Enter-to-next-row navigation are available in the By Activity and By Facility views.
+        Use this view for one-off edits. Bulk paste, spreadsheet-style entry, and Enter-to-next-row navigation are available in the By Activity and By Reporting Unit views.
       </Typography>
       {catalogError ? (
         <Alert severity="error" sx={{ mb: 1 }}>
@@ -97,7 +97,7 @@ export default function RowByRowView({
         <Table stickyHeader size="small">
           <TableHead>
             <TableRow>
-              <TableCell>Facility</TableCell>
+              <TableCell>Reporting Unit</TableCell>
               <TableCell>Activity</TableCell>
               <TableCell>Activity Value</TableCell>
               <TableCell>Unit</TableCell>

@@ -15,7 +15,7 @@ import ActivityDetailDialog from "./ActivityDetailDialog";
 import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
-import ByFacilityTable from "./ByFacilityTable";
+import ByReportingUnitTable from "./ByReportingUnitTable";
 import RowByRowView from "./RowByRowView";
 import {
   EMPTY_ACTIVITY,
@@ -30,14 +30,17 @@ import {
   withActivityTypeDefaults,
 } from "./activityDrafts";
 import { hasMeaningfulData, pairKey } from "./gridEditingHelpers";
+import { buildExistingPairsSet } from "./applicability";
+import { makeApplyPerActivityUpdate } from "./configureSources";
 
 // Thin orchestrator: owns shared state, passes it down to the three view
-// components. All heavy rendering lives in ByActivityTable, ByFacilityTable,
-// and RowByRowView.
+// components. All heavy rendering lives in ByActivityTable,
+// ByReportingUnitTable, and RowByRowView.
 export default function ActivityInputsPanel({
   activities,
   setActivities,
-  facilities,
+  reportingUnits,
+  setReportingUnits,
   activityCatalog,
   activityTypesById,
   facilityOptions,
@@ -62,10 +65,13 @@ export default function ActivityInputsPanel({
     () => activityCatalog.filter((activityType) => isEntryVisibleActivity(activityType)),
     [activityCatalog],
   );
-  const visibleFacilityIds = React.useMemo(() => new Set(facilities.map((facility) => facility.id)), [facilities]);
+  const visibleReportingUnitIds = React.useMemo(
+    () => new Set(reportingUnits.map((ru) => ru.id)),
+    [reportingUnits],
+  );
   const visibleActivities = React.useMemo(
-    () => activities.filter((draft) => !draft.facility_id || visibleFacilityIds.has(draft.facility_id)),
-    [activities, visibleFacilityIds],
+    () => activities.filter((draft) => !draft.facility_id || visibleReportingUnitIds.has(draft.facility_id)),
+    [activities, visibleReportingUnitIds],
   );
   const activitiesByPair = React.useMemo(() => {
     const next = new Map();
@@ -78,6 +84,11 @@ export default function ActivityInputsPanel({
     });
     return next;
   }, [visibleActivities]);
+
+  const existingActivitiesByPair = React.useMemo(
+    () => buildExistingPairsSet(visibleActivities),
+    [visibleActivities],
+  );
 
   const activePartialActivities = React.useMemo(() => {
     const seen = new Set();
@@ -235,11 +246,23 @@ export default function ActivityInputsPanel({
     [activityTypesById, setActivities],
   );
 
+  // Per-activity "+ Add Reporting Unit" save handler. Mutates each listed
+  // RU's applicable_activity_types based on the checked map coming back
+  // from the dialog.
+  const applyAddReportingUnit = React.useCallback(
+    (activityTypeId, checkedById) => {
+      if (!setReportingUnits) return;
+      const updater = makeApplyPerActivityUpdate({ activityTypeId, checkedById });
+      setReportingUnits((prev) => updater(prev));
+    },
+    [setReportingUnits],
+  );
+
   const detailDraft = visibleActivities.find((draft) => draft.id === detailDraftId) || null;
   const detailActivityType = detailDraft ? activityTypesById[detailDraft.activity_type_id] : null;
   const repeatableActivityType = repeatableDialog ? activityTypesById[repeatableDialog.activityTypeId] : null;
-  const repeatableFacility = repeatableDialog
-    ? facilities.find((facility) => facility.id === repeatableDialog.facilityId) || null
+  const repeatableReportingUnit = repeatableDialog
+    ? reportingUnits.find((ru) => ru.id === repeatableDialog.facilityId) || null
     : null;
   const repeatableDrafts = React.useMemo(
     () => (repeatableDialog
@@ -250,9 +273,6 @@ export default function ActivityInputsPanel({
 
   const saveDetailParams = React.useCallback(
     (params) => {
-      // Close the dialog first (single-click save), then update the draft.
-      // Sequencing matters: if we update then close, the intermediate render
-      // can leave the dialog in a half-closed state requiring a second click.
       const idToUpdate = detailDraftId;
       setDetailDraftId("");
       if (idToUpdate) {
@@ -285,14 +305,14 @@ export default function ActivityInputsPanel({
             <MenuItem value="false">No Trace</MenuItem>
           </Select>
           <Typography variant="body2" color="text.secondary">
-            Facility geo context still drives geography-sensitive factor selection.
+            Reporting Unit geo context still drives geography-sensitive factor selection.
           </Typography>
         </Stack>
       </Paper>
 
-      {facilities.length === 0 ? (
+      {reportingUnits.length === 0 ? (
         <Alert severity="info">
-          Add at least one named facility in the Facilities tab before entering activity data.
+          Add at least one named Reporting Unit in the Reporting Units tab before entering activity data.
         </Alert>
       ) : null}
 
@@ -319,7 +339,7 @@ export default function ActivityInputsPanel({
           >
             <ToggleButton value="rowByRow">Row-by-Row</ToggleButton>
             <ToggleButton value="byActivity">By Activity</ToggleButton>
-            <ToggleButton value="byFacility">By Facility</ToggleButton>
+            <ToggleButton value="byFacility">By Reporting Unit</ToggleButton>
           </ToggleButtonGroup>
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" onClick={() => saveCurrentVersion("Checkpoint before calculation.")}>
@@ -331,7 +351,7 @@ export default function ActivityInputsPanel({
           </Stack>
         </Stack>
         <Typography variant="body2" color="text.secondary">
-          Paste from spreadsheets in the By Activity and By Facility views with Ctrl+V, use Tab to move across, and use Enter to move down to the next row in the same column. ArrowUp/ArrowDown also move between rows.
+          Paste from spreadsheets in the By Activity and By Reporting Unit views with Ctrl+V, use Tab to move across, and use Enter to move down to the next row in the same column. ArrowUp/ArrowDown also move between rows.
         </Typography>
         <Typography variant="body2" color="text.secondary">
           Implemented and partial rows are calculable in this phase. Planned rows remain visible for draft entry, save/load, and completeness tracking, but are skipped during calculation.
@@ -356,19 +376,21 @@ export default function ActivityInputsPanel({
       {viewMode === "byActivity" ? (
         <ByActivityTable
           activitiesByPair={activitiesByPair}
-          facilities={facilities}
+          reportingUnits={reportingUnits}
           selectableActivities={selectableActivities}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
           calcErrors={calcErrors}
+          onApplyAddReportingUnit={applyAddReportingUnit}
+          existingActivitiesByPair={existingActivitiesByPair}
           show={show}
         />
       ) : null}
 
       {viewMode === "byFacility" ? (
-        <ByFacilityTable
+        <ByReportingUnitTable
           activitiesByPair={activitiesByPair}
-          facilities={facilities}
+          reportingUnits={reportingUnits}
           selectableActivities={selectableActivities}
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
@@ -391,7 +413,7 @@ export default function ActivityInputsPanel({
         open={Boolean(repeatableDialog && repeatableActivityType)}
         activityType={repeatableActivityType}
         facilityId={repeatableDialog?.facilityId || ""}
-        facilityName={repeatableFacility?.facility_name || ""}
+        facilityName={repeatableReportingUnit?.facility_name || ""}
         drafts={repeatableDrafts}
         onClose={() => setRepeatableDialog(null)}
         onSave={(nextDrafts) => {

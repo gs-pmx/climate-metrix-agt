@@ -10,6 +10,43 @@ from ghg_engine.models import ProjectSnapshot, ResultRecord, TraceRecord
 from .sqlite_common import connect_sqlite, utc_now_iso
 
 
+def _applicability_map(snapshot: ProjectSnapshot) -> dict[str, frozenset[str] | None]:
+    """Build ``{facility_id: allowed activity_type_ids | None}`` for the snapshot.
+
+    ``None`` means "show all" — the legacy/empty-list case. A ``frozenset``
+    means "only these ``activity_type_id`` values are applicable". Reporting
+    units that aren't present in the snapshot don't appear in the map and
+    are treated permissively (``None``) for safety.
+    """
+
+    result: dict[str, frozenset[str] | None] = {}
+    for unit in snapshot.reporting_units:
+        allowed = tuple(unit.applicable_activity_types or ())
+        if not allowed:
+            result[unit.id] = None
+        else:
+            result[unit.id] = frozenset(allowed)
+    return result
+
+
+def _is_applicable(
+    applicability: dict[str, frozenset[str] | None],
+    facility_id: str,
+    activity_type_id: str,
+) -> bool:
+    """Return ``True`` if ``(facility_id, activity_type_id)`` is applicable.
+
+    Unknown reporting units and units with an empty ``applicable_activity_types``
+    are treated permissively — this matches the "legacy = show all" rule from
+    the Phase C2 alignment doc.
+    """
+
+    allowed = applicability.get(facility_id)
+    if allowed is None:
+        return True
+    return activity_type_id in allowed
+
+
 class SQLiteInventoryStore:
     def __init__(self, db_path: Path):
         self._db_path = db_path
@@ -195,12 +232,17 @@ class SQLiteInventoryStore:
                     reporting_unit.model_dump_json(by_alias=True),
                 ),
             )
+        applicability = _applicability_map(snapshot)
         for index, activity in enumerate(snapshot.activities):
             if (
                 not activity.facility_id
                 or not activity.activity_type_id
                 or activity.activity.value is None
                 or not activity.activity.unit
+            ):
+                continue
+            if not _is_applicable(
+                applicability, activity.facility_id, activity.activity_type_id
             ):
                 continue
             conn.execute(
@@ -243,6 +285,7 @@ class SQLiteInventoryStore:
         traces: list[TraceRecord],
         engine_version: str,
         source_kind: str = "workspace_snapshot",
+        applicability: dict[str, frozenset[str] | None] | None = None,
         conn: sqlite3.Connection | None = None,
     ) -> dict[str, Any] | None:
         if not results and not traces:
@@ -257,8 +300,18 @@ class SQLiteInventoryStore:
                     traces=traces,
                     engine_version=engine_version,
                     source_kind=source_kind,
+                    applicability=applicability,
                     conn=own_conn,
                 )
+        filtered_results: list[ResultRecord]
+        if applicability is None:
+            filtered_results = list(results)
+        else:
+            filtered_results = [
+                r
+                for r in results
+                if _is_applicable(applicability, r.facility_id, r.activity_type_id)
+            ]
         now = utc_now_iso()
         cur = conn.execute(
             """
@@ -276,11 +329,11 @@ class SQLiteInventoryStore:
                 engine_version,
                 source_kind,
                 json.dumps([trace.model_dump(mode="json") for trace in traces], sort_keys=True),
-                json.dumps({"result_count": len(results)}, sort_keys=True),
+                json.dumps({"result_count": len(filtered_results)}, sort_keys=True),
             ),
         )
         run_id = int(cur.lastrowid)
-        for result in results:
+        for result in filtered_results:
             conn.execute(
                 """
                 INSERT INTO calculation_results (

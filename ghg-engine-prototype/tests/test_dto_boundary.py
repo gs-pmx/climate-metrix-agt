@@ -248,6 +248,24 @@ def test_reporting_unit_draft_parses_legacy_facility_name_alias():
     assert dumped["facility_name"] == "Legacy"
 
 
+def test_reporting_unit_draft_to_dto_passes_through_applicable_activity_types():
+    draft = ReportingUnitDraft(
+        id="F4",
+        name="Checklist",
+        applicable_activity_types=[
+            "scope1_mobile_gasoline",
+            "scope2_purchased_electricity",
+        ],
+    )
+
+    dto = reporting_unit_draft_to_dto(draft)
+
+    assert dto.applicable_activity_types == [
+        "scope1_mobile_gasoline",
+        "scope2_purchased_electricity",
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Calculation response envelope
 # ---------------------------------------------------------------------------

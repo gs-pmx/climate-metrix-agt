@@ -9,8 +9,10 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
+import AddReportingUnitDialog from "./AddReportingUnitDialog";
 import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
@@ -27,38 +29,45 @@ import {
   makeGridKeyHandler,
   pairKey,
 } from "./gridEditingHelpers";
+import { filterApplicableReportingUnits } from "./applicability";
 import { formatNumericDisplay } from "./numericFormat";
 
 const SCROLLABLE_TABLE_SX = {
   width: "100%",
   overflowX: "auto",
-  // Shift+wheel horizontal scroll is handled natively by the browser when
-  // the container overflows; no JS needed for that. We do set min-width on
-  // the inner grid to ensure overflow engages on narrow viewports.
 };
 
 function ActivityAccordion({
   activityType,
   activitiesByPair,
-  facilities,
+  reportingUnits,
   totalActivities,
   upsertActivity,
   openDetailsForPair,
   calcErrors,
+  onOpenAddReportingUnit,
   show,
 }) {
   const repeatable = isRepeatableActivity(activityType);
   const unitOptions = getAllowedUnits(activityType);
+
+  // Phase C2 filter: only show RUs where the activity is applicable.
+  // Legacy permissive units (empty applicable list) keep showing up.
+  const applicableReportingUnits = React.useMemo(
+    () => filterApplicableReportingUnits(reportingUnits, activityType.activity_type_id),
+    [reportingUnits, activityType.activity_type_id],
+  );
+
   const gridRows = React.useMemo(
-    () => facilities.map((facility) => {
-      const drafts = activitiesByPair.get(pairKey(facility.id, activityType.activity_type_id)) || [];
+    () => applicableReportingUnits.map((ru) => {
+      const drafts = activitiesByPair.get(pairKey(ru.id, activityType.activity_type_id)) || [];
       const draft = drafts[0]
-        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: facility.id }, activityType);
-      const rowErrors = filterErrorsForRow(calcErrors, facility.id, activityType.activity_type_id);
+        || withActivityTypeDefaults({ ...EMPTY_ACTIVITY, facility_id: ru.id }, activityType);
+      const rowErrors = filterErrorsForRow(calcErrors, ru.id, activityType.activity_type_id);
       return {
-        id: `${activityType.activity_type_id}__${facility.id}`,
-        facility_id: facility.id,
-        facility_name: facility.facility_name,
+        id: `${activityType.activity_type_id}__${ru.id}`,
+        facility_id: ru.id,
+        facility_name: ru.facility_name,
         activity_value: draft.activity.value,
         activity_unit: draft.activity.unit || getDefaultUnit(activityType),
         draft,
@@ -69,14 +78,14 @@ function ActivityAccordion({
         _rowErrors: rowErrors,
       };
     }),
-    [activitiesByPair, activityType, calcErrors, facilities, repeatable, unitOptions],
+    [activitiesByPair, activityType, applicableReportingUnits, calcErrors, repeatable, unitOptions],
   );
 
   const filledCount = gridRows.filter((row) => (repeatable ? row.draft_count > 0 : row.activity_value !== "")).length;
   const columns = React.useMemo(
     () => repeatable
       ? [
-        { field: "facility_name", headerName: "Facility", flex: 1, editable: false, minWidth: 180 },
+        { field: "facility_name", headerName: "Reporting Unit", flex: 1, editable: false, minWidth: 180 },
         {
           field: "draft_count",
           headerName: "Entries",
@@ -118,17 +127,13 @@ function ActivityAccordion({
         },
       ]
       : [
-        { field: "facility_name", headerName: "Facility", flex: 1, editable: false, minWidth: 180 },
+        { field: "facility_name", headerName: "Reporting Unit", flex: 1, editable: false, minWidth: 180 },
         {
           field: "activity_value",
           headerName: "Activity Value",
           flex: 0.8,
           minWidth: 140,
           editable: true,
-          // Intentionally NOT type: "number" — our NumericEditCell handles
-          // parsing (thousands separators, arrow-key navigation) and the
-          // built-in number type would try to coerce/reformat in ways
-          // that conflict. valueFormatter handles display.
           renderEditCell: (params) => <NumericEditCell {...params} />,
           valueFormatter: (value) => formatNumericDisplay(value),
           align: "right",
@@ -205,8 +210,6 @@ function ActivityAccordion({
       disableGutters
       sx={{
         overflow: "hidden",
-        // Clip child tables so they share the rounded corner with the
-        // accordion shell — fixes the visible sliver at the seam.
         "& .MuiAccordionDetails-root": { overflow: "hidden" },
       }}
     >
@@ -231,8 +234,22 @@ function ActivityAccordion({
             }
           />
           <Box sx={{ flexGrow: 1 }} />
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<AddIcon />}
+            // Stop propagation so clicking the button does not also toggle
+            // the surrounding accordion — MUI forwards clicks to the
+            // AccordionSummary otherwise.
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenAddReportingUnit(activityType);
+            }}
+          >
+            Add Reporting Unit
+          </Button>
           <Typography variant="body2" color="text.secondary">
-            {filledCount}/{facilities.length} facilities
+            {filledCount}/{applicableReportingUnits.length} units
           </Typography>
         </Stack>
       </AccordionSummary>
@@ -246,12 +263,10 @@ function ActivityAccordion({
             onCellKeyDown={handleCellKeyDown || undefined}
             disableRowSelectionOnClick
             autoHeight
-            hideFooter={facilities.length <= 25}
+            hideFooter={applicableReportingUnits.length <= 25}
             sx={{
               minWidth: 720,
               border: "none",
-              // Ensure the editable cell fills the height so our custom
-              // edit cell aligns with the view renderer.
               "& .MuiDataGrid-cell": { alignItems: "center" },
             }}
           />
@@ -262,10 +277,8 @@ function ActivityAccordion({
 }
 
 // Scope 1/2/3 header groups. Purely visual — does not filter.
-// Accepts scope values like "scope_1", "scope 1", "Scope 1", "1".
 function scopeMatches(raw, digit) {
   const s = String(raw || "").toLowerCase();
-  // Look for "1"/"2"/"3" immediately after optional scope prefix and separator.
   const pattern = new RegExp(`(?:^|\\b|scope)[\\s_]*${digit}(?:\\b|$)`);
   return pattern.test(s);
 }
@@ -288,14 +301,25 @@ function groupActivitiesByScope(activities) {
 
 export default function ByActivityTable({
   activitiesByPair,
-  facilities,
+  reportingUnits,
   selectableActivities,
   upsertActivity,
   openDetailsForPair,
   calcErrors = [],
+  onApplyAddReportingUnit,
+  existingActivitiesByPair,
   show,
 }) {
   const groups = React.useMemo(() => groupActivitiesByScope(selectableActivities), [selectableActivities]);
+  const [addDialogActivity, setAddDialogActivity] = React.useState(null);
+
+  const handleSaveAdd = (checkedById) => {
+    if (addDialogActivity && onApplyAddReportingUnit) {
+      onApplyAddReportingUnit(addDialogActivity.activity_type_id, checkedById);
+    }
+    setAddDialogActivity(null);
+  };
+
   return (
     <Stack spacing={2}>
       {groups.map((group) => (
@@ -309,17 +333,27 @@ export default function ByActivityTable({
                 key={activityType.activity_type_id}
                 activityType={activityType}
                 activitiesByPair={activitiesByPair}
-                facilities={facilities}
+                reportingUnits={reportingUnits}
                 totalActivities={selectableActivities.length}
                 upsertActivity={upsertActivity}
                 openDetailsForPair={openDetailsForPair}
                 calcErrors={calcErrors}
+                onOpenAddReportingUnit={(at) => setAddDialogActivity(at)}
                 show={show}
               />
             ))}
           </Stack>
         </Stack>
       ))}
+
+      <AddReportingUnitDialog
+        open={Boolean(addDialogActivity)}
+        activityType={addDialogActivity}
+        reportingUnits={reportingUnits}
+        existingActivitiesByPair={existingActivitiesByPair}
+        onClose={() => setAddDialogActivity(null)}
+        onSave={handleSaveAdd}
+      />
     </Stack>
   );
 }

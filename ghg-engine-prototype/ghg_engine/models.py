@@ -219,6 +219,14 @@ class ReportingUnitDraft(BaseModel):
     The ``name`` attribute still serializes and parses under the legacy
     alias ``facility_name`` so existing SQLite snapshots (stored as JSON
     blobs) load unchanged.
+
+    ``applicable_activity_types`` is the Phase C2 source checklist. When
+    non-empty, only those ``activity_type_id`` values are considered
+    applicable to this Reporting Unit — the backend canonicalization
+    layer filters anything else out of the inventory and calculation
+    tables. An empty list preserves legacy behavior ("show all") so
+    existing snapshots load and canonicalize unchanged without a
+    schema migration.
     """
 
     model_config = ConfigDict(populate_by_name=True)
@@ -236,6 +244,7 @@ class ReportingUnitDraft(BaseModel):
     egrid_subregion: str = ""
     reporting_group: str = ""
     owned_leased: str = "Owned"
+    applicable_activity_types: list[str] = Field(default_factory=list)
 
 
 # Backward-compat alias for callers that have not migrated yet. Retained
