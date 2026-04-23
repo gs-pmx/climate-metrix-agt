@@ -28,20 +28,20 @@ def test_legacy_adapter_projects_context_into_locus_and_policy():
     )
 
     resolved = adapter.resolve(activity, ctx)
-    round_trip_activity, round_trip_ctx = adapter.to_plugin_inputs(resolved)
 
     assert resolved.observation.locus_id == "F1"
+    assert resolved.observation.activity_type_id == "scope1_mobile_gasoline"
+    assert resolved.observation.quantity.value == 10.0
+    assert resolved.observation.quantity.unit == "gallon"
     assert resolved.locus.geography.country == "US"
     assert resolved.locus.geography.state == "OR"
     assert resolved.locus.geography.grid_region == "NWPP"
     assert resolved.locus.reporting_group == "Operations"
     assert resolved.locus.ownership_mode == "Owned"
     assert resolved.locus.attributes["custom_tag"] == "west-coast"
-    assert round_trip_activity.facility_id == activity.facility_id
-    assert round_trip_activity.activity_type_id == activity.activity_type_id
-    assert round_trip_ctx.inventory_year == 2026
-    assert round_trip_ctx.source_attributes["egrid_subregion"] == "NWPP"
-    assert round_trip_ctx.source_attributes["custom_tag"] == "west-coast"
+    assert resolved.policy.inventory_year == 2026
+    assert resolved.policy.gwp_set == "AR6"
+    assert resolved.policy.include_trace is True
 
 
 def test_locus_resolver_rejects_mismatched_locus_ids():

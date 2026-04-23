@@ -6,7 +6,7 @@ from typing import Any
 from ..activity_catalog import ActivityTypeDefinition
 from ..domain import ResolvedActivity
 from ..factors import FactorRepository
-from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
+from ..models import ResultRecord, TraceRecord
 from ..units import build_unit_registry
 
 
@@ -19,18 +19,15 @@ class EQMPlugin(ABC):
         pass
 
     @abstractmethod
-    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
+    def applicability(self, resolved: ResolvedActivity, activity_def: ActivityTypeDefinition) -> bool:
         pass
 
     @abstractmethod
     def compute(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
-        *,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         pass
 

@@ -3,13 +3,21 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Literal
 
-from .models import ActivityRecord, ResultRecord
+from .domain import ActivityObservation
+from .models import ResultRecord
 
 Bucket = Literal["hour", "day", "month", "year"]
 
 
-def activity_bucket(activity: ActivityRecord, default_year: int | None, bucket: Bucket = "year") -> str | None:
-    dt = activity.period_start or activity.timestamp
+def observation_bucket(
+    observation: ActivityObservation,
+    default_year: int | None,
+    bucket: Bucket = "year",
+) -> str | None:
+    if observation.period is not None:
+        dt = observation.period.start
+    else:
+        dt = observation.timestamp
     if dt is None:
         return str(default_year) if default_year is not None else None
     if bucket == "hour":

@@ -6,8 +6,8 @@ from ..activity_catalog import ActivityTypeDefinition, FactorQueryTemplate
 from ..domain import ResolvedActivity
 from ..factors import FactorQuery, FactorRepository
 from ..gwp import get_gwp_set
-from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
-from ..time_utils import activity_bucket
+from ..models import ResultRecord, TraceRecord
+from ..time_utils import observation_bucket
 from ..units import parse_qty, to_unit
 from .base import EQMPlugin, default_ureg
 from .context import geo_context, gwp_set, inventory_period, inventory_year
@@ -47,60 +47,53 @@ class DirectFactorMethod(EQMPlugin):
             "required": [],
         }
 
-    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
-        del activity
+    def applicability(self, resolved: ResolvedActivity, activity_def: ActivityTypeDefinition) -> bool:
+        del resolved
         return activity_def.method_id == self.id
 
     def compute(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
-        *,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         template_groups = self._group_templates(activity_def)
         return self.compute_from_template_groups(
-            activity=activity,
+            resolved=resolved,
             activity_def=activity_def,
-            ctx=ctx,
             factors=factors,
             template_groups=template_groups,
             selected_method=self.id,
-            resolved=resolved,
         )
 
     def compute_from_template_groups(
         self,
         *,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
         template_groups: dict[str, list[FactorQueryTemplate]],
         selected_method: str,
         result_method_id: str | None = None,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        observation = resolved.observation
         traces = TraceRecord(
-            activity_type_id=activity.activity_type_id,
+            activity_type_id=observation.activity_type_id,
             activity_label=activity_def.label,
             selected_method=selected_method,
         )
         results: list[ResultRecord] = []
-        bucket = activity_bucket(activity, inventory_year(ctx, resolved), "month")
-        gwp = get_gwp_set(gwp_set(ctx, resolved))
+        bucket = observation_bucket(observation, inventory_year(resolved), "month")
+        gwp = get_gwp_set(gwp_set(resolved))
         ureg = default_ureg()
 
         for accounting_method, templates in template_groups.items():
-            manual_override = self._get_manual_factor_override(activity, accounting_method)
+            manual_override = self._get_manual_factor_override(resolved, accounting_method)
             if manual_override is not None:
                 results.extend(
                     self._compute_manual_override(
-                        activity=activity,
+                        resolved=resolved,
                         activity_def=activity_def,
-                        ctx=ctx,
                         factors=factors,
                         template=templates[0] if templates else self._fallback_template(activity_def),
                         accounting_method=accounting_method,
@@ -109,7 +102,6 @@ class DirectFactorMethod(EQMPlugin):
                         factor_unit=str(manual_override["unit"]),
                         factor_source=manual_override["source"],
                         trace=traces,
-                        resolved=resolved,
                         time_bucket=bucket,
                         method_id=result_method_id or selected_method,
                     )
@@ -125,32 +117,28 @@ class DirectFactorMethod(EQMPlugin):
                     factor = self._query_factor(
                         factors=factors,
                         activity_def=activity_def,
-                        activity=activity,
-                        ctx=ctx,
+                        resolved=resolved,
                         template=template,
                         attribute=raw_attribute,
                         accounting_method=accounting_method,
                         trace=traces,
-                        resolved=resolved,
                     )
                     if factor is None:
                         continue
                     try:
                         denom_qty, numerator = self._activity_to_factor_denominator(
-                            activity=activity,
+                            resolved=resolved,
                             factor_unit=factor.unit,
                             ureg=ureg,
                             factors=factors,
                             activity_def=activity_def,
-                            ctx=ctx,
                             template=template,
                             trace=traces,
-                            resolved=resolved,
                         )
                     except Exception:
                         traces.defaults_applied.append(
                             f"skipped {gas} factor {factor.factor_id}: "
-                            f"cannot convert activity unit '{activity.activity.unit}' to factor denominator"
+                            f"cannot convert activity unit '{observation.quantity.unit}' to factor denominator"
                         )
                         continue
                     factor_denominator = factor.unit.split("/")[1].strip()
@@ -162,7 +150,7 @@ class DirectFactorMethod(EQMPlugin):
                     mass_kg = (denom_qty * factor_q).to("kilogram").magnitude
                     gas_rows.append(
                         self._build_result_row(
-                            activity=activity,
+                            resolved=resolved,
                             activity_def=activity_def,
                             accounting_method=accounting_method,
                             gas=gas,
@@ -189,7 +177,7 @@ class DirectFactorMethod(EQMPlugin):
                 co2e += row.value * gwp.get(row.gas, 1.0)
             results.append(
                 self._build_result_row(
-                    activity=activity,
+                    resolved=resolved,
                     activity_def=activity_def,
                     accounting_method=accounting_method,
                     gas="co2e",
@@ -214,11 +202,12 @@ class DirectFactorMethod(EQMPlugin):
 
     def _get_manual_factor_override(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         accounting_method: str,
     ) -> dict[str, str | float] | None:
+        params = resolved.observation.params
         for param_key, source_key in self._manual_override_keys(accounting_method):
-            raw = activity.params.get(param_key)
+            raw = params.get(param_key)
             if not isinstance(raw, dict):
                 continue
             value = raw.get("value")
@@ -229,7 +218,7 @@ class DirectFactorMethod(EQMPlugin):
                 "param_key": param_key,
                 "value": float(value),
                 "unit": unit,
-                "source": str(activity.params.get(source_key) or "").strip(),
+                "source": str(params.get(source_key) or "").strip(),
             }
         return None
 
@@ -254,15 +243,14 @@ class DirectFactorMethod(EQMPlugin):
         *,
         factors: FactorRepository,
         activity_def: ActivityTypeDefinition,
-        activity: ActivityRecord,
-        ctx: CalculationContext,
+        resolved: ResolvedActivity,
         template: FactorQueryTemplate,
         attribute: str,
         accounting_method: str,
         trace: TraceRecord,
-        resolved: ResolvedActivity | None,
     ):
-        preferred_denoms = (activity.activity.unit,)
+        observation = resolved.observation
+        preferred_denoms = (observation.quantity.unit,)
         normalized_attribute = attribute.replace("-", "_")
         query_type = template.type or activity_def.source_type
         if query_type is None:
@@ -270,7 +258,7 @@ class DirectFactorMethod(EQMPlugin):
         emission_category = activity_def.emission_category
         if not emission_category:
             raise ValueError(f"{activity_def.activity_type_id} is missing emission_category")
-        period_start, period_end = inventory_period(ctx, resolved)
+        period_start, period_end = inventory_period(resolved)
         query = FactorQuery(
             role="emission_factor",
             emission_category=emission_category,
@@ -279,11 +267,11 @@ class DirectFactorMethod(EQMPlugin):
             attribute=normalized_attribute,
             greenhouse_gas=ATTRIBUTE_TO_GAS.get(attribute),
             life_cycle_stage=template.life_cycle_stage,
-            inventory_year=inventory_year(ctx, resolved),
+            inventory_year=inventory_year(resolved),
             period_start=period_start,
             period_end=period_end,
             accounting_method=accounting_method,
-            geo=geo_context(ctx, resolved),
+            geo=geo_context(resolved),
             preferred_denominator_units=preferred_denoms,
             allow_fallback_geography=self._allow_fallback_geography(template),
         )
@@ -307,9 +295,8 @@ class DirectFactorMethod(EQMPlugin):
     def _compute_manual_override(
         self,
         *,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
         template: FactorQueryTemplate,
         accounting_method: str,
@@ -318,7 +305,6 @@ class DirectFactorMethod(EQMPlugin):
         factor_unit: str,
         factor_source: str,
         trace: TraceRecord,
-        resolved: ResolvedActivity | None,
         time_bucket: str | None,
         method_id: str,
     ) -> list[ResultRecord]:
@@ -326,15 +312,13 @@ class DirectFactorMethod(EQMPlugin):
             raise ValueError(f"{param_key} must include a mass-per-activity unit such as kg/kwh")
         ureg = default_ureg()
         denom_qty, numerator = self._activity_to_factor_denominator(
-            activity=activity,
+            resolved=resolved,
             factor_unit=factor_unit,
             ureg=ureg,
             factors=factors,
             activity_def=activity_def,
-            ctx=ctx,
             template=template,
             trace=trace,
-            resolved=resolved,
         )
         _, denominator = self._split_factor_unit(factor_unit)
         factor_q = parse_qty(ureg, factor_value, numerator) / parse_qty(ureg, 1.0, denominator)
@@ -345,7 +329,7 @@ class DirectFactorMethod(EQMPlugin):
         )
         return [
             self._build_result_row(
-                activity=activity,
+                resolved=resolved,
                 activity_def=activity_def,
                 accounting_method=accounting_method,
                 gas="co2e",
@@ -359,18 +343,17 @@ class DirectFactorMethod(EQMPlugin):
     def _activity_to_factor_denominator(
         self,
         *,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         factor_unit: str,
         ureg,
         factors: FactorRepository,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         template: FactorQueryTemplate,
         trace: TraceRecord,
-        resolved: ResolvedActivity | None,
     ):
+        observation = resolved.observation
         numerator, denominator = self._split_factor_unit(factor_unit)
-        qty = parse_qty(ureg, activity.activity.value, activity.activity.unit)
+        qty = parse_qty(ureg, observation.quantity.value, observation.quantity.unit)
         conversion_error: Exception | None = None
         try:
             denom_qty = to_unit(ureg, qty, denominator)
@@ -383,11 +366,9 @@ class DirectFactorMethod(EQMPlugin):
         heat_factor = self._query_heat_content_factor(
             factors=factors,
             activity_def=activity_def,
-            activity=activity,
-            ctx=ctx,
+            resolved=resolved,
             template=template,
             trace=trace,
-            resolved=resolved,
         )
         if heat_factor is None:
             raise ValueError("no heat-content factor matched")
@@ -398,7 +379,7 @@ class DirectFactorMethod(EQMPlugin):
         denom_qty = to_unit(ureg, energy_qty, denominator)
         trace.conversions.append(
             "converted "
-            f"{activity.activity.value} {activity.activity.unit} to {denominator} "
+            f"{observation.quantity.value} {observation.quantity.unit} to {denominator} "
             f"via heat-content factor {heat_factor.factor_id}"
         )
         return denom_qty, numerator
@@ -408,16 +389,15 @@ class DirectFactorMethod(EQMPlugin):
         *,
         factors: FactorRepository,
         activity_def: ActivityTypeDefinition,
-        activity: ActivityRecord,
-        ctx: CalculationContext,
+        resolved: ResolvedActivity,
         template: FactorQueryTemplate,
         trace: TraceRecord,
-        resolved: ResolvedActivity | None,
     ):
+        observation = resolved.observation
         query_type = template.type or activity_def.source_type
         if query_type is None:
             return None
-        period_start, period_end = inventory_period(ctx, resolved)
+        period_start, period_end = inventory_period(resolved)
         query = FactorQuery(
             role="heat_content",
             emission_category=activity_def.emission_category or "",
@@ -425,11 +405,11 @@ class DirectFactorMethod(EQMPlugin):
             description=template.description or activity_def.factor_description,
             attribute="heat_content",
             greenhouse_gas=None,
-            inventory_year=inventory_year(ctx, resolved),
+            inventory_year=inventory_year(resolved),
             period_start=period_start,
             period_end=period_end,
-            geo=geo_context(ctx, resolved),
-            preferred_denominator_units=(activity.activity.unit,),
+            geo=geo_context(resolved),
+            preferred_denominator_units=(observation.quantity.unit,),
             allow_fallback_geography=self._allow_fallback_geography(template),
         )
         return factors.select_best(query, trace=trace.defaults_applied)
@@ -448,7 +428,7 @@ class DirectFactorMethod(EQMPlugin):
     def _build_result_row(
         self,
         *,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         accounting_method: str,
         gas: str,
@@ -457,9 +437,10 @@ class DirectFactorMethod(EQMPlugin):
         time_bucket: str | None,
         method_id: str,
     ) -> ResultRecord:
+        observation = resolved.observation
         return ResultRecord(
-            facility_id=activity.facility_id,
-            activity_type_id=activity.activity_type_id,
+            facility_id=observation.locus_id,
+            activity_type_id=observation.activity_type_id,
             activity_label=activity_def.label,
             scope=activity_def.scope,
             protocol_category_code=activity_def.protocol_category_code,

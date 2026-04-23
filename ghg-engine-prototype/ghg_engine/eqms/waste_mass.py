@@ -3,7 +3,7 @@ from __future__ import annotations
 from ..activity_catalog import ActivityTypeDefinition, FactorQueryTemplate
 from ..domain import ResolvedActivity
 from ..factors import FactorRepository
-from ..models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
+from ..models import ResultRecord, TraceRecord
 from .base import EQMPlugin
 from .direct_factor import DirectFactorMethod
 
@@ -58,20 +58,17 @@ class WasteMassMethod(EQMPlugin):
             "required": ["disposal_method"],
         }
 
-    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
-        del activity
+    def applicability(self, resolved: ResolvedActivity, activity_def: ActivityTypeDefinition) -> bool:
+        del resolved
         return activity_def.method_id == self.id
 
     def compute(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
-        *,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        disposal_method = str(activity.params.get("disposal_method") or "")
+        disposal_method = str(resolved.observation.params.get("disposal_method") or "")
         template = DISPOSAL_TEMPLATE_MAP.get(disposal_method)
         if template is None:
             raise ValueError(
@@ -79,12 +76,10 @@ class WasteMassMethod(EQMPlugin):
                 f"{sorted(DISPOSAL_TEMPLATE_MAP)}"
             )
         return self._direct.compute_from_template_groups(
-            activity=activity,
+            resolved=resolved,
             activity_def=activity_def,
-            ctx=ctx,
             factors=factors,
             template_groups={"none": [template]},
             selected_method=self.id,
             result_method_id=self.id,
-            resolved=resolved,
         )
