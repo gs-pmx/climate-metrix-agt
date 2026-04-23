@@ -220,7 +220,7 @@ function ScopeDonutChart({ rows }) {
 
 function FacilitySourceTreemap({ rows }) {
   if (!rows.length) {
-    return <Typography color="text.secondary">No CO2e facility/source data available yet.</Typography>;
+    return <Typography color="text.secondary">No CO2e Reporting Unit/source data available yet.</Typography>;
   }
   const width = 900;
   const height = 360;
@@ -242,7 +242,7 @@ function FacilitySourceTreemap({ rows }) {
 
   return (
     <Box sx={{ width: "100%", overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Treemap by facility and source">
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} role="img" aria-label="Treemap by Reporting Unit and source">
         {facilities.map((facility, facilityIndex) => {
           const widthValue = (facility.total / total) * width;
           let yCursor = 0;
@@ -361,12 +361,12 @@ export default function DashboardTab({ resultRows, onSaveResults }) {
       },
       {
         id: "facility",
-        label: "Top Facility",
+        label: "Top Reporting Unit",
         value: topFacility?.facility_name || "No data",
         detail:
           topFacility && totalCo2e > 0
             ? `${formatNumber(topFacility.value)} MTCO2e (${formatPercent((topFacility.value / totalCo2e) * 100)})`
-            : "No facility totals yet",
+            : "No Reporting Unit totals yet",
       },
       {
         id: "source",
@@ -410,7 +410,7 @@ export default function DashboardTab({ resultRows, onSaveResults }) {
 
   const dashboardTableColumns = React.useMemo(
     () => [
-      { field: "facility_name", headerName: "Facility", flex: 0.95, minWidth: 160, renderCell: renderWrappedCell },
+      { field: "facility_name", headerName: "Reporting Unit", flex: 0.95, minWidth: 160, renderCell: renderWrappedCell },
       { field: "activity_label", headerName: "Activity", flex: 1.1, minWidth: 180, renderCell: renderWrappedCell },
       { field: "scope", headerName: "Scope", flex: 0.7, minWidth: 120 },
       { field: "accounting_method", headerName: "Accounting", flex: 0.85, minWidth: 140 },
@@ -490,7 +490,7 @@ export default function DashboardTab({ resultRows, onSaveResults }) {
         </Paper>
         <Paper sx={{ p: 2, minHeight: 420 }}>
           <Typography variant="subtitle1" sx={{ mb: 1 }}>
-            Emissions by Facility and Source (Treemap)
+            Emissions by Reporting Unit and Source (Treemap)
           </Typography>
           <FacilitySourceTreemap rows={co2eRows} />
         </Paper>

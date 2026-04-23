@@ -20,7 +20,7 @@ function formatNumber(value, digits = 2) {
 export default function ResultsTab({ resultRows, summaryRows, traceRows, onSaveResults }) {
   const resultColumns = React.useMemo(
     () => [
-      { field: "facility_name", headerName: "Facility", flex: 1 },
+      { field: "facility_name", headerName: "Reporting Unit", flex: 1 },
       { field: "activity_label", headerName: "Activity", flex: 1 },
       { field: "scope", headerName: "Scope", flex: 0.6 },
       { field: "accounting_method", headerName: "Accounting", flex: 0.8 },

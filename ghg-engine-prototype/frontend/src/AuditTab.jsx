@@ -87,7 +87,7 @@ export default function AuditTab({ auditRows, onExportAuditCsv }) {
 
   const columns = React.useMemo(
     () => [
-      { field: "facility_name", headerName: "Facility", flex: 0.85, renderCell: renderWrappedCell },
+      { field: "facility_name", headerName: "Reporting Unit", flex: 0.85, renderCell: renderWrappedCell },
       { field: "activity_label", headerName: "Activity", flex: 1.1, renderCell: renderWrappedCell },
       { field: "scope", headerName: "Scope", flex: 0.55, renderCell: renderWrappedCell },
       { field: "accounting_method", headerName: "Accounting", flex: 0.7, renderCell: renderWrappedCell },

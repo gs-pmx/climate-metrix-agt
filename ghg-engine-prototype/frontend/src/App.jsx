@@ -34,7 +34,7 @@ import {
 } from "./activityDrafts";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
-const FacilitiesTab = React.lazy(() => import("./FacilitiesTab"));
+const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
 const ResultsTab = React.lazy(() => import("./ResultsTab"));
 const DashboardTab = React.lazy(() => import("./DashboardTab"));
 const AuditTab = React.lazy(() => import("./AuditTab"));
@@ -49,7 +49,12 @@ function LazyTabFallback() {
   );
 }
 
-const EMPTY_FACILITY = {
+// The on-the-wire JSON key for backward compatibility with existing
+// SQLite snapshots remains ``facilities`` (see api/dto.py), but the
+// product concept is a ``Reporting Unit``. ``applicable_activity_types``
+// is the Phase C2 source checklist — empty list keeps legacy permissive
+// behavior; non-empty list gates the per-RU grid.
+const EMPTY_REPORTING_UNIT = {
   id: "",
   facility_name: "",
   location: "",
@@ -59,6 +64,7 @@ const EMPTY_FACILITY = {
   egrid_subregion: "",
   reporting_group: "",
   owned_leased: "Owned",
+  applicable_activity_types: [],
 };
 
 function useSnack() {
@@ -68,7 +74,7 @@ function useSnack() {
   return { snack, show, close };
 }
 
-function groupByFacility(rows) {
+function groupByReportingUnit(rows) {
   const grouped = {};
   for (const row of rows) {
     if (!grouped[row.facility_id]) grouped[row.facility_id] = [];
@@ -82,6 +88,18 @@ function ensureRowsWithIds(rows, makeRow) {
     return [{ ...makeRow(), id: uid() }];
   }
   return rows.map((row) => ({ ...row, id: row.id || uid() }));
+}
+
+// Normalize a Reporting Unit loaded from a snapshot: fill in an empty
+// `applicable_activity_types` when the legacy snapshot predates Phase C2
+// so the rest of the UI can treat "no list" and "show all" identically.
+function normalizeReportingUnit(row) {
+  return {
+    ...row,
+    applicable_activity_types: Array.isArray(row?.applicable_activity_types)
+      ? row.applicable_activity_types
+      : [],
+  };
 }
 
 function formatTimestamp(value) {
@@ -127,7 +145,12 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [projectRenameDraft, setProjectRenameDraft] = React.useState("");
   const [versionNote, setVersionNote] = React.useState("");
   const [projectBusy, setProjectBusy] = React.useState(false);
-  const [facilities, setFacilities] = React.useState([{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }]);
+  const [facilities, setFacilities] = React.useState([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }]);
+  // Session-only Set of Reporting Unit IDs that were created in this
+  // browser session AND have never been configured (applicable list is
+  // still empty). Used by ReportingUnitsTab to highlight the Configure
+  // Sources button with an onboarding accent. Not persisted.
+  const [newlyCreatedReportingUnitIds, setNewlyCreatedReportingUnitIds] = React.useState(() => new Set());
   const [activities, setActivities] = React.useState([createEmptyDraft()]);
   const [inventoryYear, setInventoryYear] = React.useState(String(new Date().getFullYear()));
   const [gwpSet, setGwpSet] = React.useState("AR6");
@@ -196,7 +219,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
   const applySnapshot = React.useCallback((payload) => {
     const snap = payload?.snapshot || {};
-    setFacilities(ensureRowsWithIds(snap.facilities, () => ({ ...EMPTY_FACILITY })));
+    setFacilities(
+      ensureRowsWithIds(snap.facilities, () => ({ ...EMPTY_REPORTING_UNIT }))
+        .map(normalizeReportingUnit),
+    );
     setActivities(
       Array.isArray(snap.activities) && snap.activities.length > 0
         ? snap.activities.map((draft) => hydrateDraft(draft, activityTypesById[draft.activity_type_id]))
@@ -382,7 +408,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     try {
       const project = await api.createProject({ name: cleanName, inventory_year: year });
       setProjectNameDraft("");
-      const initialFacilities = [{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }];
+      const initialFacilities = [{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }];
       const initialActivities = [createEmptyDraft()];
       setFacilities(initialFacilities);
       setActivities(initialActivities);
@@ -450,7 +476,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       setActiveProjectId("");
       setProjectRenameDraft("");
       setProjectVersions([]);
-      setFacilities([{ ...EMPTY_FACILITY, id: uid(), facility_name: "Facility 1" }]);
+      setFacilities([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }]);
       setActivities([createEmptyDraft()]);
       setResultRows([]);
       setSummaryRows([]);
@@ -500,7 +526,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     window.URL.revokeObjectURL(url);
   };
 
-  const addFacility = () => setFacilities((prev) => [...prev, { ...EMPTY_FACILITY, id: uid() }]);
+  const addReportingUnit = React.useCallback(() => {
+    const id = uid();
+    setFacilities((prev) => [...prev, { ...EMPTY_REPORTING_UNIT, id }]);
+    // Mark this one for the onboarding highlight. The badge clears itself
+    // once the user saves a non-empty applicable_activity_types list.
+    setNewlyCreatedReportingUnitIds((prev) => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
 
   const runCalculation = async () => {
     if (!hasActiveProject) {
@@ -509,7 +545,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       return;
     }
     if (!dataEntryFacilities.length) {
-      show("Add at least one named facility before entering activity data.", "warning");
+      show("Add at least one named Reporting Unit before entering activity data.", "warning");
       setTab(1);
       return;
     }
@@ -536,7 +572,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       return;
     }
 
-    const grouped = groupByFacility(calculableRows);
+    const grouped = groupByReportingUnit(calculableRows);
     const mergedResults = [];
     const mergedTrace = [];
     const mergedAudit = [];
@@ -694,7 +730,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <Paper sx={{ px: 1.5, pt: 0.5 }}>
           <Tabs value={tab} onChange={(_, v) => setTab(v)}>
             <Tab label="Projects" />
-            <Tab label="Facilities" disabled={!hasActiveProject} />
+            <Tab label="Reporting Units" disabled={!hasActiveProject} />
             <Tab label="Activity Inputs" disabled={!hasActiveProject} />
             <Tab label="Results" disabled={!hasActiveProject} />
             <Tab label="Dashboard" disabled={!hasActiveProject} />
@@ -847,10 +883,13 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
       {tab === 1 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
-          <FacilitiesTab
-            facilities={facilities}
-            setFacilities={setFacilities}
-            onAddFacility={addFacility}
+          <ReportingUnitsTab
+            reportingUnits={facilities}
+            setReportingUnits={setFacilities}
+            onAddReportingUnit={addReportingUnit}
+            activityCatalog={activityCatalog}
+            activities={activities}
+            newlyCreatedIds={newlyCreatedReportingUnitIds}
           />
         </React.Suspense>
       )}
@@ -860,7 +899,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           <ActivityInputsPanel
             activities={activities}
             setActivities={setActivities}
-            facilities={dataEntryFacilities}
+            reportingUnits={dataEntryFacilities}
+            setReportingUnits={setFacilities}
             activityCatalog={activityCatalog}
             activityTypesById={activityTypesById}
             facilityOptions={facilityOptions}
