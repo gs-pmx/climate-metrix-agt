@@ -610,33 +610,55 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Paper sx={{ mb: 2, p: { xs: 2, md: 2.5 } }}>
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
-          <Box>
-            <Typography variant="h4">GHG Calculation Workspace</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Project-based data entry with immutable version snapshots.
-            </Typography>
-          </Box>
-          <Stack direction="row" spacing={1} alignItems="center">
-            {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
-            <Button variant="outlined" onClick={onToggleColorMode}>
-              {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
-            </Button>
+      <Box
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: (theme) => theme.zIndex.appBar,
+          mb: 2,
+          // Blur the background behind the sticky shell so content scrolling
+          // under it stays legible without adding a hard color.
+          "&::before": {
+            content: '""',
+            position: "absolute",
+            inset: 0,
+            backdropFilter: "blur(8px)",
+            background: (theme) => (theme.palette.mode === "dark"
+              ? "rgba(31, 40, 49, 0.65)"
+              : "rgba(241, 243, 244, 0.65)"),
+            zIndex: -1,
+            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
+          },
+        }}
+      >
+        <Paper sx={{ mb: 1, p: { xs: 2, md: 2.5 } }}>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
+            <Box>
+              <Typography variant="h4">GHG Calculation Workspace</Typography>
+              <Typography variant="body2" color="text.secondary">
+                Project-based data entry with immutable version snapshots.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} alignItems="center">
+              {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
+              <Button variant="outlined" onClick={onToggleColorMode}>
+                {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
+              </Button>
+            </Stack>
           </Stack>
-        </Stack>
-      </Paper>
+        </Paper>
 
-      <Paper sx={{ mb: 2, px: 1.5, pt: 0.5 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="Projects" />
-          <Tab label="Facilities" disabled={!hasActiveProject} />
-          <Tab label="Activity Inputs" disabled={!hasActiveProject} />
-          <Tab label="Results" disabled={!hasActiveProject} />
-          <Tab label="Dashboard" disabled={!hasActiveProject} />
-          <Tab label="Audit" disabled={!hasActiveProject} />
-        </Tabs>
-      </Paper>
+        <Paper sx={{ px: 1.5, pt: 0.5 }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+            <Tab label="Projects" />
+            <Tab label="Facilities" disabled={!hasActiveProject} />
+            <Tab label="Activity Inputs" disabled={!hasActiveProject} />
+            <Tab label="Results" disabled={!hasActiveProject} />
+            <Tab label="Dashboard" disabled={!hasActiveProject} />
+            <Tab label="Audit" disabled={!hasActiveProject} />
+          </Tabs>
+        </Paper>
+      </Box>
 
       {tab === 0 && (
         <Stack spacing={2}>

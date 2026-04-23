@@ -5,7 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, TypeAdapter, model_validator
 
-from .models import AccountingMethod, ActivityRecord, Scope
+from .domain import ActivityObservation
+from .models import AccountingMethod, Scope
 
 ImplementationStatus = Literal["implemented", "partial", "planned", "deferred"]
 InputKind = Literal["quantity", "number", "enum", "string", "boolean"]
@@ -142,18 +143,18 @@ class ActivityCatalog:
             raise KeyError(f"unknown activity_type_id {activity_type_id}")
         return row
 
-    def validate_activity(self, activity_def: ActivityTypeDefinition, activity: ActivityRecord) -> None:
+    def validate_activity(self, activity_def: ActivityTypeDefinition, observation: ActivityObservation) -> None:
         allowed_units = set(activity_def.allowed_primary_units())
-        if allowed_units and activity.activity.unit not in allowed_units:
+        if allowed_units and observation.quantity.unit not in allowed_units:
             raise ValueError(
-                f"{activity_def.activity_type_id} activity unit '{activity.activity.unit}' "
+                f"{activity_def.activity_type_id} activity unit '{observation.quantity.unit}' "
                 f"is not one of {sorted(allowed_units)}"
             )
         for field in activity_def.input_schema.fields:
             if field.is_primary:
                 continue
             key = field.param_key or field.field_id
-            value = activity.params.get(key)
+            value = observation.params.get(key)
             if field.required and value in (None, ""):
                 raise ValueError(f"{activity_def.activity_type_id} requires params.{key}")
             if value in (None, ""):

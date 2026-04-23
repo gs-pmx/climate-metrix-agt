@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from ghg_engine.activity_catalog import ActivityCatalog
-from ghg_engine.models import ActivityRecord
+from ghg_engine.domain import ActivityObservation
 
 
 def _catalog() -> ActivityCatalog:
@@ -130,26 +130,28 @@ def test_only_explicitly_blocked_rows_remain_non_runtime():
 def test_catalog_validates_required_secondary_fields():
     catalog = _catalog()
     activity_def = catalog.get_required("scope3_business_travel_rental_vehicle")
-    activity = ActivityRecord(
-        facility_id="F1",
+    observation = ActivityObservation(
+        activity_id="a1",
+        locus_id="F1",
         activity_type_id=activity_def.activity_type_id,
-        activity={"value": 100.0, "unit": "mile"},
+        quantity={"value": 100.0, "unit": "mile"},
         params={},
     )
 
     with pytest.raises(ValueError, match="requires params.mpg"):
-        catalog.validate_activity(activity_def, activity)
+        catalog.validate_activity(activity_def, observation)
 
 
 def test_catalog_validates_quantity_secondary_field_units():
     catalog = _catalog()
     activity_def = catalog.get_required("scope2_purchased_electricity_grid_mix")
-    activity = ActivityRecord(
-        facility_id="F1",
+    observation = ActivityObservation(
+        activity_id="a1",
+        locus_id="F1",
         activity_type_id=activity_def.activity_type_id,
-        activity={"value": 100.0, "unit": "kwh"},
+        quantity={"value": 100.0, "unit": "kwh"},
         params={"market_based_emission_factor": {"value": 0.2, "unit": "kg/short-ton"}},
     )
 
     with pytest.raises(ValueError, match="must be one of"):
-        catalog.validate_activity(activity_def, activity)
+        catalog.validate_activity(activity_def, observation)

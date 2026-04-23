@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from ..activity_catalog import ActivityTypeDefinition
-from ..domain import ResolvedActivity
+from ..domain import Quantity, ResolvedActivity
 from ..factors import FactorRepository
-from ..models import ActivityRecord, CalculationContext, Quantity, ResultRecord, TraceRecord
+from ..models import ResultRecord, TraceRecord
 from ..units import parse_qty, to_unit
 from .base import EQMPlugin, default_ureg
 from .direct_factor import DirectFactorMethod
@@ -31,46 +31,43 @@ class DistancePlusEfficiencyEQM(EQMPlugin):
             "required": ["mpg"],
         }
 
-    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
-        del activity
+    def applicability(self, resolved: ResolvedActivity, activity_def: ActivityTypeDefinition) -> bool:
+        del resolved
         return activity_def.method_id == self.id
 
     def compute(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
-        *,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        mpg = float(activity.params.get("mpg") or 0)
+        observation = resolved.observation
+        mpg = float(observation.params.get("mpg") or 0)
         if mpg <= 0:
             raise ValueError("distance_plus_efficiency requires positive params.mpg")
-        fuel_type = str(activity.params.get("fuel_type") or "gasoline")
+        fuel_type = str(observation.params.get("fuel_type") or "gasoline")
         if fuel_type not in FUEL_FACTOR_DEFAULTS:
             raise ValueError("distance_plus_efficiency only supports gasoline or diesel")
         ureg = default_ureg()
-        miles = to_unit(ureg, parse_qty(ureg, activity.activity.value, activity.activity.unit), "mile")
+        miles = to_unit(ureg, parse_qty(ureg, observation.quantity.value, observation.quantity.unit), "mile")
         gallons = miles.magnitude / mpg
 
         # Keep the transformed quantity explicit so future electric/CNG/propane
         # paths can swap the intermediate carrier without another interface break.
-        transformed_activity = activity.model_copy(
+        transformed_observation = observation.model_copy(
             update={
-                "activity": Quantity(value=float(gallons), unit="gallon"),
+                "quantity": Quantity(value=float(gallons), unit="gallon"),
             }
         )
+        transformed_resolved = resolved.model_copy(update={"observation": transformed_observation})
         transformed_activity_def = self._transform_activity_def(activity_def, fuel_type)
         out, trace = self._direct.compute_from_template_groups(
-            activity=transformed_activity,
+            resolved=transformed_resolved,
             activity_def=transformed_activity_def,
-            ctx=ctx,
             factors=factors,
             template_groups=self._direct._group_templates(transformed_activity_def),
             selected_method=self.id,
             result_method_id=self.id,
-            resolved=resolved,
         )
         trace.conversions.append(f"{miles.magnitude} miles / {mpg} mpg -> {gallons} gallons")
         trace.intermediate_quantities["distance_miles"] = float(miles.magnitude)

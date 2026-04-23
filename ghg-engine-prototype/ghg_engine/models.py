@@ -1,14 +1,39 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
-Scope = Literal["Scope 1", "Scope 2", "Scope 3"]
-AccountingMethod = Literal["location_based", "market_based", "none"]
-FactorRole = Literal["emission_factor", "heat_content", "other"]
-GwpSetName = Literal["AR6", "AR5"]
+from ghg_engine.domain.common import (
+    AccountingMethod,
+    FactorRole,
+    GwpSetName,
+    Scope,
+)
+
+__all__ = [
+    "AccountingMethod",
+    "FactorRole",
+    "GwpSetName",
+    "Scope",
+    "ActivityDraft",
+    "ActivityRecord",
+    "AuditRecord",
+    "CalculationContext",
+    "DraftQuantity",
+    "EmissionFactorRow",
+    "FacilityDraft",
+    "GeoContext",
+    "InventoryPeriod",
+    "MethodSchema",
+    "ProjectSnapshot",
+    "Quantity",
+    "ResultRecord",
+    "SNAPSHOT_VERSION",
+    "SummaryRow",
+    "TraceRecord",
+]
 
 SNAPSHOT_VERSION = 2
 
@@ -187,9 +212,23 @@ class AuditRecord(BaseModel):
     co2e_result_kg: float | None = None
 
 
-class FacilityDraft(BaseModel):
+class ReportingUnitDraft(BaseModel):
+    """The aggregation entity that owns emission sources.
+
+    Internal terminology matches the product concept of "Reporting Unit".
+    The ``name`` attribute still serializes and parses under the legacy
+    alias ``facility_name`` so existing SQLite snapshots (stored as JSON
+    blobs) load unchanged.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
-    facility_name: str = ""
+    name: str = Field(
+        default="",
+        validation_alias=AliasChoices("name", "facility_name"),
+        serialization_alias="facility_name",
+    )
     location: str = ""
     region: str = ""
     country: str = "US"
@@ -197,6 +236,12 @@ class FacilityDraft(BaseModel):
     egrid_subregion: str = ""
     reporting_group: str = ""
     owned_leased: str = "Owned"
+
+
+# Backward-compat alias for callers that have not migrated yet. Retained
+# so external imports of ``FacilityDraft`` keep working; new code should
+# use ``ReportingUnitDraft`` directly.
+FacilityDraft = ReportingUnitDraft
 
 
 class ActivityDraft(BaseModel):
@@ -217,13 +262,36 @@ class SummaryRow(BaseModel):
 
 
 class ProjectSnapshot(BaseModel):
+    """Typed envelope for a saved project version.
+
+    The ``reporting_units`` attribute uses the current product
+    terminology, but serializes and parses as the legacy ``facilities``
+    key so existing SQLite snapshots and request bodies continue to load
+    without migration. The on-the-wire JSON shape is unchanged.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
     snapshot_version: int = SNAPSHOT_VERSION
-    facilities: list[FacilityDraft] = Field(default_factory=list)
+    reporting_units: list[ReportingUnitDraft] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("reporting_units", "facilities"),
+        serialization_alias="facilities",
+    )
     activities: list[ActivityDraft] = Field(default_factory=list)
     result_rows: list[ResultRecord] = Field(default_factory=list)
     summary_rows: list[SummaryRow] = Field(default_factory=list)
     trace_rows: list[TraceRecord] = Field(default_factory=list)
     audit_rows: list[AuditRecord] = Field(default_factory=list)
+
+    @property
+    def facilities(self) -> list[ReportingUnitDraft]:
+        """Deprecated attribute name retained for backward compatibility.
+
+        New code should read ``self.reporting_units`` directly.
+        """
+
+        return self.reporting_units
 
     @model_validator(mode="after")
     def validate_snapshot_version(self) -> ProjectSnapshot:

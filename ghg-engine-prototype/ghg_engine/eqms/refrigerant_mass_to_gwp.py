@@ -5,8 +5,8 @@ import re
 from ..activity_catalog import ActivityTypeDefinition
 from ..domain import ResolvedActivity
 from ..factors import FactorQuery, FactorRepository
-from ..models import ActivityRecord, CalculationContext, GeoContext, ResultRecord, TraceRecord
-from ..time_utils import activity_bucket
+from ..models import GeoContext, ResultRecord, TraceRecord
+from ..time_utils import observation_bucket
 from ..units import parse_qty, to_unit
 from .base import EQMPlugin, default_ureg
 from .context import gwp_set, inventory_year
@@ -37,27 +37,25 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
             "required": ["refrigerant_type"],
         }
 
-    def applicability(self, activity: ActivityRecord, activity_def: ActivityTypeDefinition) -> bool:
-        del activity
+    def applicability(self, resolved: ResolvedActivity, activity_def: ActivityTypeDefinition) -> bool:
+        del resolved
         return activity_def.method_id == self.id
 
     def compute(
         self,
-        activity: ActivityRecord,
+        resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
-        ctx: CalculationContext,
         factors: FactorRepository,
-        *,
-        resolved: ResolvedActivity | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        if gwp_set(ctx, resolved) != "AR6":
+        if gwp_set(resolved) != "AR6":
             raise ValueError("refrigerant_mass_to_gwp currently supports AR6 only")
-        refrigerant_type = str(activity.params.get("refrigerant_type") or "").strip()
+        observation = resolved.observation
+        refrigerant_type = str(observation.params.get("refrigerant_type") or "").strip()
         if not refrigerant_type:
             raise ValueError("refrigerant_mass_to_gwp requires params.refrigerant_type")
 
         trace = TraceRecord(
-            activity_type_id=activity.activity_type_id,
+            activity_type_id=observation.activity_type_id,
             activity_label=activity_def.label,
             selected_method=self.id,
         )
@@ -65,26 +63,29 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
             factors=factors,
             activity_def=activity_def,
             refrigerant_type=refrigerant_type,
-            ctx=ctx,
-            trace=trace,
             resolved=resolved,
+            trace=trace,
         )
         if factor is None:
             raise ValueError(f"no AR6 GWP factor matched refrigerant_type '{refrigerant_type}'")
 
         ureg = default_ureg()
-        released_mass = to_unit(ureg, parse_qty(ureg, activity.activity.value, activity.activity.unit), "kilogram")
-        if activity.activity.unit.lower() not in {"kg", "kilogram"}:
+        released_mass = to_unit(
+            ureg,
+            parse_qty(ureg, observation.quantity.value, observation.quantity.unit),
+            "kilogram",
+        )
+        if observation.quantity.unit.lower() not in {"kg", "kilogram"}:
             trace.conversions.append(
-                f"converted {activity.activity.value} {activity.activity.unit} to kilograms"
+                f"converted {observation.quantity.value} {observation.quantity.unit} to kilograms"
             )
         co2e_kg = float(released_mass.magnitude * factor.value)
         trace.factor_matches.append(factor.factor_id)
         trace.defaults_applied.append(f"used AR6 refrigerant GWP factor for {refrigerant_type}")
 
         result = ResultRecord(
-            facility_id=activity.facility_id,
-            activity_type_id=activity.activity_type_id,
+            facility_id=observation.locus_id,
+            activity_type_id=observation.activity_type_id,
             activity_label=activity_def.label,
             scope=activity_def.scope,
             protocol_category_code=activity_def.protocol_category_code,
@@ -98,7 +99,7 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
             is_biogenic=False,
             method_id=self.id,
             factor_ids=[factor.factor_id] if factor.factor_id else [],
-            time_bucket=activity_bucket(activity, inventory_year(ctx, resolved), "month"),
+            time_bucket=observation_bucket(observation, inventory_year(resolved), "month"),
         )
         return [result], trace
 
@@ -108,9 +109,8 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
         factors: FactorRepository,
         activity_def: ActivityTypeDefinition,
         refrigerant_type: str,
-        ctx: CalculationContext,
+        resolved: ResolvedActivity,
         trace: TraceRecord,
-        resolved: ResolvedActivity | None,
     ):
         normalized_type = refrigerant_type.strip()
         candidates = []
@@ -130,7 +130,7 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
                         description=description,
                         attribute="gwp_100_ar6",
                         greenhouse_gas=None,
-                        inventory_year=inventory_year(ctx, resolved),
+                        inventory_year=inventory_year(resolved),
                         geo=GeoContext(),
                     ),
                     trace=trace.defaults_applied,

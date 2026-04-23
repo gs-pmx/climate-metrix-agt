@@ -38,19 +38,11 @@ class CalculationOrchestrator:
         observation = resolved.observation
         activity_def = self.activity_catalog.get_required(observation.activity_type_id)
         resolved_locus = self.locus_resolver.resolve(observation, resolved.locus)
-        plugin_activity, plugin_ctx = self.legacy_adapter.to_plugin_inputs(
-            resolved.model_copy(update={"locus": resolved_locus})
-        )
-        self.activity_catalog.validate_activity(activity_def, plugin_activity)
+        resolved = resolved.model_copy(update={"locus": resolved_locus})
+        self.activity_catalog.validate_activity(activity_def, resolved.observation)
         plugin = self.plugins.get(activity_def.method_id)
         if plugin is None:
             raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
-        if not plugin.applicability(plugin_activity, activity_def):
+        if not plugin.applicability(resolved, activity_def):
             raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
-        return plugin.compute(
-            plugin_activity,
-            activity_def,
-            plugin_ctx,
-            self.factors,
-            resolved=resolved.model_copy(update={"locus": resolved_locus}),
-        )
+        return plugin.compute(resolved, activity_def, self.factors)
