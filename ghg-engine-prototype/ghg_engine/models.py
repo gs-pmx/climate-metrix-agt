@@ -1,14 +1,39 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta
-from typing import Any, Literal
+from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-Scope = Literal["Scope 1", "Scope 2", "Scope 3"]
-AccountingMethod = Literal["location_based", "market_based", "none"]
-FactorRole = Literal["emission_factor", "heat_content", "other"]
-GwpSetName = Literal["AR6", "AR5"]
+from ghg_engine.domain.common import (
+    AccountingMethod,
+    FactorRole,
+    GwpSetName,
+    Scope,
+)
+
+__all__ = [
+    "AccountingMethod",
+    "FactorRole",
+    "GwpSetName",
+    "Scope",
+    "ActivityDraft",
+    "ActivityRecord",
+    "AuditRecord",
+    "CalculationContext",
+    "DraftQuantity",
+    "EmissionFactorRow",
+    "FacilityDraft",
+    "GeoContext",
+    "InventoryPeriod",
+    "MethodSchema",
+    "ProjectSnapshot",
+    "Quantity",
+    "ResultRecord",
+    "SNAPSHOT_VERSION",
+    "SummaryRow",
+    "TraceRecord",
+]
 
 SNAPSHOT_VERSION = 2
 

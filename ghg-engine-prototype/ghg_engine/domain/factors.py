@@ -4,7 +4,7 @@ from datetime import date
 
 from pydantic import BaseModel
 
-from ghg_engine.models import AccountingMethod, FactorRole
+from ghg_engine.domain.common import AccountingMethod, FactorRole
 
 
 class CanonicalFactorRecord(BaseModel):
