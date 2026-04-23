@@ -3,7 +3,9 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from ghg_engine.activity_catalog import ActivityCatalog
+from ghg_engine.infrastructure.sqlite_factors import SQLiteFactorStore
+from ghg_engine.infrastructure.sqlite_inventory import SQLiteInventoryStore
+from ghg_engine.infrastructure.sqlite_workspace import SQLiteWorkspaceDraftStore
 from ghg_engine.models import (
     ActivityDraft,
     ProjectSnapshot,
@@ -11,16 +13,11 @@ from ghg_engine.models import (
     ResultRecord,
     TraceRecord,
 )
-from project_store import ProjectStore
-
-
-def _catalog() -> ActivityCatalog:
-    return ActivityCatalog.from_json(Path(__file__).resolve().parents[1] / "data" / "activity_types.json")
+from project_store import ProjectService, ProjectStore
 
 
 def test_project_store_saves_and_loads_workspace_snapshot_and_inventory_version(tmp_path: Path):
     store = ProjectStore(tmp_path / "projects.sqlite")
-    catalog = _catalog()
     project = store.create_project(project_id="prj_test", name="Test Project", inventory_year=2024)
 
     snapshot = ProjectSnapshot(
@@ -41,7 +38,6 @@ def test_project_store_saves_and_loads_workspace_snapshot_and_inventory_version(
         gwp_set="AR6",
         include_trace=True,
         snapshot=snapshot,
-        activity_catalog=catalog,
         note="typed snapshot",
     )
 
@@ -94,7 +90,6 @@ def test_project_store_saves_and_loads_workspace_snapshot_and_inventory_version(
 
 def test_project_store_preserves_incomplete_drafts_without_materializing_inventory_activities(tmp_path: Path):
     store = ProjectStore(tmp_path / "projects.sqlite")
-    catalog = _catalog()
     project = store.create_project(project_id="prj_incomplete", name="Incomplete Drafts", inventory_year=2024)
 
     snapshot = ProjectSnapshot(
@@ -116,7 +111,6 @@ def test_project_store_preserves_incomplete_drafts_without_materializing_invento
         gwp_set="AR6",
         include_trace=True,
         snapshot=snapshot,
-        activity_catalog=catalog,
         note="incomplete typed snapshot",
     )
 
@@ -141,7 +135,6 @@ def test_project_store_preserves_incomplete_drafts_without_materializing_invento
 
 def test_project_store_persists_calculation_runs_separately_from_workspace_snapshot(tmp_path: Path):
     store = ProjectStore(tmp_path / "projects.sqlite")
-    catalog = _catalog()
     project = store.create_project(project_id="prj_calc", name="Calculated", inventory_year=2024)
     snapshot = ProjectSnapshot(
         facilities=[{"id": "F1", "facility_name": "Facility 1"}],
@@ -189,7 +182,6 @@ def test_project_store_persists_calculation_runs_separately_from_workspace_snaps
         gwp_set="AR6",
         include_trace=True,
         snapshot=snapshot,
-        activity_catalog=catalog,
         note="calculated snapshot",
     )
 
@@ -381,7 +373,6 @@ def test_legacy_facilities_json_round_trips_through_sqlite(tmp_path: Path):
     assert snapshot.reporting_units[0].name == "Facility 1"
 
     store = ProjectStore(tmp_path / "roundtrip.sqlite")
-    catalog = _catalog()
     project = store.create_project(project_id="prj_ru", name="Reporting Unit RT", inventory_year=2024)
     saved = store.save_project_snapshot(
         project_id=project["project_id"],
@@ -389,7 +380,6 @@ def test_legacy_facilities_json_round_trips_through_sqlite(tmp_path: Path):
         gwp_set="AR6",
         include_trace=False,
         snapshot=snapshot,
-        activity_catalog=catalog,
         note=None,
     )
 
@@ -438,3 +428,153 @@ def test_project_snapshot_model_dump_json_emits_facilities_key():
     assert "facilities" in dumped
     assert "reporting_units" not in dumped
     assert dumped["facilities"][0]["facility_name"] == "Plant"
+
+
+def test_project_store_exposes_sub_components(tmp_path: Path):
+    store = ProjectStore(tmp_path / "projects.sqlite")
+
+    assert isinstance(store.workspace, SQLiteWorkspaceDraftStore)
+    assert isinstance(store.inventory, SQLiteInventoryStore)
+    assert isinstance(store.factors, SQLiteFactorStore)
+    assert isinstance(store.service, ProjectService)
+
+    # Duck-type: the accessors expose the methods callers would reach for.
+    assert callable(getattr(store.workspace, "list_projects", None))
+    assert callable(getattr(store.workspace, "save_workspace_snapshot", None))
+    assert callable(getattr(store.inventory, "save_inventory_version", None))
+    assert callable(getattr(store.inventory, "save_calculation_run", None))
+    assert callable(getattr(store.factors, "current_factor_dataset", None))
+    assert callable(getattr(store.service, "save_and_materialize", None))
+
+    # Sub-components returned should be the same instances the service uses
+    # (no duplicate wiring) and direct workspace CRUD must work through them.
+    created = store.workspace.create_project(
+        project_id="prj_sub", name="Sub Components", inventory_year=2024
+    )
+    assert created["project_id"] == "prj_sub"
+    assert store.list_projects()[0]["project_id"] == "prj_sub"
+
+
+def test_save_project_snapshot_delegates_to_service(tmp_path: Path):
+    snapshot = ProjectSnapshot(
+        facilities=[{"id": "F1", "facility_name": "Facility 1"}],
+        activities=[
+            ActivityDraft(
+                id="a1",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+                params={},
+            )
+        ],
+    )
+
+    # Path A: use the ProjectStore facade (existing public surface).
+    store_a = ProjectStore(tmp_path / "via_facade.sqlite")
+    store_a.create_project(project_id="prj_ab", name="Via Facade", inventory_year=2024)
+    saved_a = store_a.save_project_snapshot(
+        project_id="prj_ab",
+        inventory_year=2024,
+        gwp_set="AR6",
+        include_trace=True,
+        snapshot=snapshot,
+        note="via facade",
+    )
+
+    # Path B: use ProjectService directly, owning the connection.
+    store_b = ProjectStore(tmp_path / "via_service.sqlite")
+    store_b.create_project(project_id="prj_ab", name="Via Service", inventory_year=2024)
+    with store_b._connect() as conn:  # noqa: SLF001 - legitimate service test
+        saved_b = store_b.service.save_and_materialize(
+            conn=conn,
+            project_id="prj_ab",
+            inventory_year=2024,
+            gwp_set="AR6",
+            include_trace=True,
+            snapshot=snapshot,
+            note="via service",
+        )
+
+    # The two paths should produce equivalent outputs for the same input.
+    # Each DB starts at version 1, so IDs and version numbers must match.
+    assert saved_a["project_id"] == saved_b["project_id"]
+    assert saved_a["version_id"] == saved_b["version_id"]
+    assert saved_a["version_number"] == saved_b["version_number"]
+    assert saved_a.keys() == saved_b.keys()
+
+    # The downstream materialization should also match: same facility count,
+    # same activity count, same calculation run count.
+    def _counts(store: ProjectStore, workspace_version_id: int) -> tuple[int, int, int]:
+        with store._connect() as conn:  # noqa: SLF001 - verifying equivalence of materialization
+            inv = conn.execute(
+                "SELECT inventory_version_id FROM inventory_versions WHERE workspace_version_id = ?",
+                (workspace_version_id,),
+            ).fetchone()
+            inv_id = inv["inventory_version_id"]
+            loci = conn.execute(
+                "SELECT COUNT(*) AS c FROM inventory_loci WHERE inventory_version_id = ?", (inv_id,)
+            ).fetchone()["c"]
+            acts = conn.execute(
+                "SELECT COUNT(*) AS c FROM inventory_activities WHERE inventory_version_id = ?",
+                (inv_id,),
+            ).fetchone()["c"]
+            runs = conn.execute(
+                "SELECT COUNT(*) AS c FROM calculation_runs WHERE inventory_version_id = ?",
+                (inv_id,),
+            ).fetchone()["c"]
+            return int(loci), int(acts), int(runs)
+
+    assert _counts(store_a, saved_a["version_id"]) == _counts(store_b, saved_b["version_id"])
+
+
+def test_save_and_materialize_rolls_back_on_failure(tmp_path: Path):
+    """Failure mid-orchestration must not leave a partial workspace version behind.
+
+    We inject the failure at ``save_calculation_run`` (the last step). If the
+    transaction boundary is correct, the workspace save that happened earlier
+    in the same connection must be rolled back too.
+    """
+    store = ProjectStore(tmp_path / "rollback.sqlite")
+    store.create_project(project_id="prj_rb", name="Rollback", inventory_year=2024)
+
+    snapshot = ProjectSnapshot(
+        facilities=[{"id": "F1", "facility_name": "Facility 1"}],
+        activities=[
+            ActivityDraft(
+                id="a1",
+                facility_id="F1",
+                activity_type_id="scope1_mobile_gasoline",
+                activity={"value": 10.0, "unit": "gallon"},
+                params={},
+            )
+        ],
+    )
+
+    # Sanity: no workspace versions exist yet.
+    assert store.list_versions("prj_rb") == []
+
+    original = store.inventory.save_calculation_run
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("injected failure after workspace save")
+
+    store.inventory.save_calculation_run = _boom  # type: ignore[method-assign]
+    try:
+        try:
+            store.save_project_snapshot(
+                project_id="prj_rb",
+                inventory_year=2024,
+                gwp_set="AR6",
+                include_trace=True,
+                snapshot=snapshot,
+                note="rollback probe",
+            )
+        except RuntimeError:
+            pass
+        else:
+            raise AssertionError("expected injected RuntimeError to propagate")
+    finally:
+        store.inventory.save_calculation_run = original  # type: ignore[method-assign]
+
+    # The workspace save was inside the same transaction; it must be rolled back.
+    assert store.list_versions("prj_rb") == []

@@ -4,23 +4,123 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 
-from ghg_engine.activity_catalog import ActivityCatalog
 from ghg_engine.infrastructure.sqlite_common import connect_sqlite, utc_now_iso
 from ghg_engine.infrastructure.sqlite_factors import SQLiteFactorStore
 from ghg_engine.infrastructure.sqlite_inventory import SQLiteInventoryStore
 from ghg_engine.infrastructure.sqlite_workspace import SQLiteWorkspaceDraftStore
 from ghg_engine.models import ProjectSnapshot
+from ghg_engine.ports.persistence import InventoryRepository, WorkspaceDraftRepository
+
+
+class ProjectService:
+    """Orchestrates workspace + inventory + factor operations for a project lifecycle.
+
+    ``save_and_materialize`` atomically persists a workspace snapshot, materializes
+    the inventory version, and records a calculation run, all within a single
+    connection so failure at any step rolls back cleanly.
+    """
+
+    def __init__(
+        self,
+        workspace: WorkspaceDraftRepository,
+        inventory: InventoryRepository,
+        factors: SQLiteFactorStore,
+    ) -> None:
+        self._workspace = workspace
+        self._inventory = inventory
+        self._factors = factors
+
+    def save_and_materialize(
+        self,
+        *,
+        conn: sqlite3.Connection,
+        project_id: str,
+        inventory_year: int,
+        gwp_set: str,
+        include_trace: bool,
+        snapshot: ProjectSnapshot,
+        note: str | None = None,
+    ) -> dict[str, Any]:
+        """Atomically save workspace version, materialize inventory, and record a calc run.
+
+        The caller owns ``conn``; this method does not open or close it. All three
+        sub-operations share the connection so they participate in one transaction.
+        """
+        saved = self._workspace.save_workspace_snapshot(
+            project_id=project_id,
+            inventory_year=inventory_year,
+            gwp_set=gwp_set,
+            include_trace=include_trace,
+            snapshot=snapshot,
+            note=note,
+            conn=conn,
+        )
+        inventory = self._inventory.save_inventory_version(
+            project_id=project_id,
+            workspace_version_id=saved["version_id"],
+            inventory_year=inventory_year,
+            gwp_set=gwp_set,
+            include_trace=include_trace,
+            snapshot=snapshot,
+            note=note,
+            conn=conn,
+        )
+        current_dataset = self._factors.current_factor_dataset(conn=conn)
+        self._inventory.save_calculation_run(
+            inventory_version_id=int(inventory["inventory_version_id"]),
+            workspace_version_id=saved["version_id"],
+            factor_dataset_id=(current_dataset or {}).get("dataset_id"),
+            results=snapshot.result_rows,
+            traces=snapshot.trace_rows,
+            engine_version="workspace_snapshot",
+            conn=conn,
+        )
+        return saved
 
 
 class ProjectStore:
+    """Convenience facade over workspace, inventory, factors, and service.
+
+    Prefer accessing the sub-components directly (``store.workspace``,
+    ``store.inventory``, ``store.factors``, ``store.service``) in new code.
+    The top-level methods on this class are retained as thin delegates so
+    existing callers continue to work.
+
+    Schema and migration methods remain on the facade because they are
+    cross-cutting DB-lifecycle concerns rather than per-entity repository ops.
+    """
+
     def __init__(self, db_path: Path):
         self._db_path = db_path
         self._db_path.parent.mkdir(parents=True, exist_ok=True)
         self._workspace = SQLiteWorkspaceDraftStore(db_path)
         self._inventory = SQLiteInventoryStore(db_path)
         self._factors = SQLiteFactorStore(db_path)
+        self._service = ProjectService(self._workspace, self._inventory, self._factors)
         self._init_db()
 
+    # ------------------------------------------------------------------
+    # Direct accessors (new preferred surface).
+    # ------------------------------------------------------------------
+    @property
+    def workspace(self) -> SQLiteWorkspaceDraftStore:
+        return self._workspace
+
+    @property
+    def inventory(self) -> SQLiteInventoryStore:
+        return self._inventory
+
+    @property
+    def factors(self) -> SQLiteFactorStore:
+        return self._factors
+
+    @property
+    def service(self) -> ProjectService:
+        return self._service
+
+    # ------------------------------------------------------------------
+    # Connection + migrations (DB-lifecycle concerns live on the facade).
+    # ------------------------------------------------------------------
     def _connect(self) -> sqlite3.Connection:
         return connect_sqlite(self._db_path)
 
@@ -432,6 +532,9 @@ class ProjectStore:
         self._inventory.ensure_schema(conn)
         self._factors.ensure_schema(conn)
 
+    # ------------------------------------------------------------------
+    # Factor-store delegates (public API surface on the facade).
+    # ------------------------------------------------------------------
     def seed_factors(self, json_path: Path) -> int:
         dataset_key = json_path.stem
         with self._connect() as conn:
@@ -491,6 +594,9 @@ class ProjectStore:
                 "migrations": [dict(row) for row in rows],
             }
 
+    # ------------------------------------------------------------------
+    # Workspace-repository delegates (backward-compat thin wrappers).
+    # ------------------------------------------------------------------
     def list_projects(self) -> list[dict[str, Any]]:
         return self._workspace.list_projects()
 
@@ -513,6 +619,9 @@ class ProjectStore:
     def get_version_snapshot(self, project_id: str, version_number: int | None = None) -> dict[str, Any]:
         return self._workspace.get_version_snapshot(project_id, version_number=version_number)
 
+    # ------------------------------------------------------------------
+    # Service delegate (orchestration entry point).
+    # ------------------------------------------------------------------
     def save_project_snapshot(
         self,
         *,
@@ -521,38 +630,15 @@ class ProjectStore:
         gwp_set: str,
         include_trace: bool,
         snapshot: ProjectSnapshot,
-        activity_catalog: ActivityCatalog,
         note: str | None = None,
     ) -> dict[str, Any]:
         with self._connect() as conn:
-            saved = self._workspace.save_workspace_snapshot(
+            return self._service.save_and_materialize(
+                conn=conn,
                 project_id=project_id,
                 inventory_year=inventory_year,
                 gwp_set=gwp_set,
                 include_trace=include_trace,
                 snapshot=snapshot,
                 note=note,
-                conn=conn,
             )
-            inventory = self._inventory.save_inventory_version(
-                project_id=project_id,
-                workspace_version_id=saved["version_id"],
-                inventory_year=inventory_year,
-                gwp_set=gwp_set,
-                include_trace=include_trace,
-                snapshot=snapshot,
-                note=note,
-                conn=conn,
-            )
-            current_dataset = self._factors.current_factor_dataset(conn=conn)
-            self._inventory.save_calculation_run(
-                inventory_version_id=int(inventory["inventory_version_id"]),
-                workspace_version_id=saved["version_id"],
-                factor_dataset_id=(current_dataset or {}).get("dataset_id"),
-                results=snapshot.result_rows,
-                traces=snapshot.trace_rows,
-                engine_version="workspace_snapshot",
-                conn=conn,
-            )
-        del activity_catalog
-        return saved

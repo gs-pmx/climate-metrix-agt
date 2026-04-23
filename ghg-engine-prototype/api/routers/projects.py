@@ -4,7 +4,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import get_activity_catalog, get_project_store
+from api.dependencies import get_project_store
 from api.dto import (
     ProjectResponseDTO,
     ProjectSnapshotResponseDTO,
@@ -19,7 +19,6 @@ from api.schemas import (
     SchemaInfoResponse,
     SchemaMigrationItem,
 )
-from ghg_engine.activity_catalog import ActivityCatalog
 from project_store import ProjectStore
 
 router = APIRouter()
@@ -115,7 +114,6 @@ def save_project_version(
     project_id: str,
     payload: ProjectSnapshotSaveRequest,
     store: ProjectStore = Depends(get_project_store),
-    activity_catalog: ActivityCatalog = Depends(get_activity_catalog),
 ):
     if payload.inventory_year < 1900 or payload.inventory_year > 3000:
         raise HTTPException(status_code=400, detail="Inventory year must be between 1900 and 3000.")
@@ -126,7 +124,6 @@ def save_project_version(
             gwp_set=payload.gwp_set,
             include_trace=payload.include_trace,
             snapshot=payload.snapshot,
-            activity_catalog=activity_catalog,
             note=payload.note.strip() if payload.note else None,
         )
         return ProjectSnapshotSaveResponseDTO(**saved)
