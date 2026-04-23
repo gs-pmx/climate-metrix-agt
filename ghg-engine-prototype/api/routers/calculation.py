@@ -6,17 +6,18 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from api.dependencies import get_engine, get_factors
-from api.schemas import (
-    ActivityCalculationError,
-    CalculationAuditResponse,
-    CalculationAuditRow,
-    CalculationRequest,
-    CalculationResponse,
+from api.dto import (
+    ActivityCalculationErrorDTO,
+    CalculationAuditResponseDTO,
+    CalculationResponseDTO,
+    calculation_audit_response_to_dto,
+    calculation_response_to_dto,
 )
+from api.schemas import CalculationRequest
 from ghg_engine.audit import build_audit_rows
 from ghg_engine.engine import GHGEngine
 from ghg_engine.factors import FactorRepository
-from ghg_engine.models import ActivityRecord, ResultRecord, TraceRecord
+from ghg_engine.models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
 
 router = APIRouter()
 
@@ -37,7 +38,6 @@ def _classify_exception(exc: Exception, activity: ActivityRecord) -> tuple[str, 
         return "validation_error", details
 
     if isinstance(exc, ValueError):
-        # Unit validation messages from ActivityCatalog.validate_activity
         if "activity unit" in message and "is not one of" in message:
             return "invalid_unit", details
         if "requires params." in message:
@@ -65,7 +65,7 @@ def _build_activity_error(
     activity: ActivityRecord | None,
     raw_payload: dict | None,
     exc: Exception,
-) -> ActivityCalculationError:
+) -> ActivityCalculationErrorDTO:
     if activity is not None:
         activity_type_id = activity.activity_type_id
         facility_id = activity.facility_id
@@ -84,7 +84,7 @@ def _build_activity_error(
         error_code = "validation_error"
         details = {"exception_type": type(exc).__name__}
 
-    return ActivityCalculationError(
+    return ActivityCalculationErrorDTO(
         activity_index=index,
         activity_type_id=activity_type_id,
         facility_id=facility_id,
@@ -113,14 +113,14 @@ def _total_failure_response(
     return JSONResponse(status_code=status_code, content=body)
 
 
-@router.post("/calculate", response_model=CalculationResponse)
+@router.post("/calculate", response_model=CalculationResponseDTO)
 def calculate(
     payload: CalculationRequest,
     engine: GHGEngine = Depends(get_engine),
 ):
     results: list[ResultRecord] = []
     traces: list[TraceRecord] = []
-    errors: list[ActivityCalculationError] = []
+    errors: list[ActivityCalculationErrorDTO] = []
 
     for index, activity in enumerate(payload.activities):
         try:
@@ -136,7 +136,7 @@ def calculate(
         summary[_summary_key(row)] = float(summary.get(_summary_key(row), 0.0) + row.value)
 
     partial_success = bool(errors) and bool(results)
-    response = CalculationResponse(
+    response = calculation_response_to_dto(
         results=results,
         summary=dict(summary),
         trace=traces if payload.context.include_trace else None,
@@ -149,7 +149,7 @@ def calculate(
     return response
 
 
-@router.post("/calculate/audit", response_model=CalculationAuditResponse)
+@router.post("/calculate/audit", response_model=CalculationAuditResponseDTO)
 def calculate_with_audit(
     payload: CalculationRequest,
     engine: GHGEngine = Depends(get_engine),
@@ -157,8 +157,8 @@ def calculate_with_audit(
 ):
     all_rows: list[ResultRecord] = []
     traces: list[TraceRecord] = []
-    audit_rows: list[CalculationAuditRow] = []
-    errors: list[ActivityCalculationError] = []
+    audit_rows: list[AuditRecord] = []
+    errors: list[ActivityCalculationErrorDTO] = []
     summary: dict[str, float] = defaultdict(float)
 
     for index, activity in enumerate(payload.activities):
@@ -166,7 +166,7 @@ def calculate_with_audit(
             rows, trace = engine.calculate_one(activity, payload.context)
             activity_def = engine.activity_catalog.get_required(activity.activity_type_id)
             activity_audit_rows = [
-                CalculationAuditRow(**r)
+                AuditRecord(**r)
                 for r in build_audit_rows(activity, activity_def, rows, trace, factors)
             ]
         except Exception as exc:  # noqa: BLE001
@@ -182,13 +182,13 @@ def calculate_with_audit(
             )
 
     partial_success = bool(errors) and bool(all_rows)
-    response = CalculationAuditResponse(
+    response = calculation_audit_response_to_dto(
         results=all_rows,
         summary=dict(summary),
         trace=traces if payload.context.include_trace else None,
+        audit_rows=audit_rows,
         errors=errors,
         partial_success=partial_success,
-        audit_rows=audit_rows,
     )
 
     if errors and not all_rows:
