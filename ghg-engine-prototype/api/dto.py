@@ -213,11 +213,14 @@ class DraftQuantityDTO(BaseModel):
 
 
 class ReportingUnitDraftDTO(BaseModel):
-    """Public wire shape of what is internally called ``FacilityDraft``.
+    """Public wire shape of what is internally called ``ReportingUnitDraft``.
 
-    The ``applicable_activity_types`` field is reserved for Phase C2 — it
-    is not populated by the current backend. Declaring it here now means
-    the frontend contract already has a place for it when C2 wires the UI.
+    ``applicable_activity_types`` is the Phase C2 source checklist. When
+    non-empty, only those ``activity_type_id`` values are treated as
+    applicable to this Reporting Unit; the canonical inventory and
+    calculation tables are filtered accordingly. An empty list preserves
+    legacy "show all" behavior so snapshots saved before the feature
+    shipped continue to canonicalize unchanged.
     """
 
     id: str
@@ -457,6 +460,7 @@ def reporting_unit_draft_to_dto(draft: ReportingUnitDraft) -> ReportingUnitDraft
         egrid_subregion=draft.egrid_subregion,
         reporting_group=draft.reporting_group,
         owned_leased=draft.owned_leased,
+        applicable_activity_types=list(draft.applicable_activity_types),
     )
 
 
