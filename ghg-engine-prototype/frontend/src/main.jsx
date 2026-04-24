@@ -59,13 +59,21 @@ function buildTheme(mode) {
     // finish within a single animation frame-ish window. Dialogs in
     // particular appear almost-instantly, which is what the user
     // expects from a clicked button.
+    //
+    // Post-C4 round-4 item 12: the prior polish pass covered short /
+    // shorter / enteringScreen / leavingScreen, but accordion collapse
+    // and a handful of other components read from `standard` (300ms
+    // default) and `shortest` (150ms default). Compressing these two
+    // remaining slots removes the last "this accordion feels sluggish"
+    // perception. `complex` gets the same treatment so nothing in the
+    // theme's transition map still reads as slow.
     transitions: {
       duration: {
         shortest: 80,
         shorter: 100,
         short: 100,
-        standard: 120,
-        complex: 150,
+        standard: 100,
+        complex: 120,
         enteringScreen: 100,
         leavingScreen: 90,
       },
@@ -195,13 +203,23 @@ function buildTheme(mode) {
       MuiDataGrid: {
         styleOverrides: {
           root: ({ theme }) => ({
+            // Post-C4 round-4 item 10: MUI DataGrid's sticky column
+            // header strip (`.MuiDataGrid-columnHeaders`) ships with a
+            // transparent background by default. Our prior override
+            // only tinted the individual column-header cells, so the
+            // header-wrapping container remained see-through — scrolled
+            // rows bled through between the tinted cells. Layering an
+            // opaque `background.paper` fill on the container plus a
+            // high z-index makes the header bar fully opaque above
+            // scrolling data.
             "& .MuiDataGrid-columnHeaders": {
-              backgroundColor: theme.palette.mode === "dark"
-                ? "rgba(78, 159, 207, 0.08)"
-                : "rgba(0, 78, 130, 0.05)",
+              backgroundColor: theme.palette.background.paper,
               borderBottom: `2px solid ${theme.palette.mode === "dark"
                 ? "rgba(121, 186, 224, 0.35)"
                 : "rgba(0, 78, 130, 0.25)"}`,
+              position: "sticky",
+              top: 0,
+              zIndex: 3,
             },
             "& .MuiDataGrid-columnHeader": {
               backgroundColor: theme.palette.mode === "dark"

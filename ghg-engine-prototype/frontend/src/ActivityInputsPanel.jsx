@@ -449,10 +449,17 @@ export default function ActivityInputsPanel({
           top: "var(--sticky-top-height)",
           zIndex: (theme) => theme.zIndex.appBar - 1,
           bgcolor: "background.paper",
-          boxShadow: (theme) => `0 2px 6px ${
+          // Post-C4 round-4 item 7: the previous 0 2px 6px rgba(_, 0.08)
+          // shadow was almost invisible on the light-mode background;
+          // the user saw no visual break between the sticky bar and the
+          // data rows scrolling under it. Deepen the spread + darken
+          // the alpha so the bar reads as clearly "above" the content.
+          // Keep the dark-mode value heavier because the paper fill
+          // already blends more with the body gradient.
+          boxShadow: (theme) => `0 3px 10px ${
             theme.palette.mode === "dark"
-              ? "rgba(0, 0, 0, 0.35)"
-              : "rgba(0, 0, 0, 0.08)"
+              ? "rgba(0, 0, 0, 0.5)"
+              : "rgba(0, 0, 0, 0.14)"
           }`,
         }}
         data-testid="view-selector-bar"
