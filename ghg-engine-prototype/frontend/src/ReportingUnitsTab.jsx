@@ -4,18 +4,26 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
   Paper,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import TuneIcon from "@mui/icons-material/Tune";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import ConfigureSourcesDialog from "./ConfigureSourcesDialog";
 import { buildExistingPairsSet, computeReportingUnitProgress } from "./applicability";
 import { isEntryVisibleActivity } from "./activityDrafts";
 import { parseTSV } from "./usePasteHandler";
+import { countActivitiesWithDataForUnit } from "./reportingUnits";
 
 const US_STATE_OPTIONS = [
   "Alabama",
@@ -161,11 +169,17 @@ function GridAutocompleteEditCell(props) {
 // Reporting Unit card showing progress chips and the "+ Configure sources"
 // affordance. Highlighted with an onboarding accent when the unit is
 // newly-created this session and has no applicable_activity_types yet.
+//
+// The trash-icon button on the right edge opens a confirmation dialog
+// owned by the parent tab — destructive and irreversible (until the next
+// snapshot save reflects the deletion), so the parent can mention the
+// concrete count of activities that would be discarded.
 function ReportingUnitCard({
   reportingUnit,
   activityCatalog,
   activities,
   onConfigureSources,
+  onRequestDelete,
   isNewlyCreated,
 }) {
   const progress = React.useMemo(
@@ -219,6 +233,25 @@ function ReportingUnitCard({
             Configure sources
           </Button>
         </Tooltip>
+
+        {/*
+          Delete affordance on the far right — small icon button rather
+          than a full Button so it doesn't compete with "Configure
+          sources" for attention. Confirmation lives in the parent so
+          we don't fire a destructive action straight from the click.
+        */}
+        <Tooltip title="Delete this Reporting Unit">
+          <span>
+            <IconButton
+              size="small"
+              aria-label={`Delete Reporting Unit ${displayName}`}
+              onClick={() => onRequestDelete(reportingUnit.id)}
+              data-testid={`delete-reporting-unit-${reportingUnit.id}`}
+            >
+              <DeleteOutlineIcon fontSize="small" />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Stack>
       {needsOnboarding ? (
         <Typography variant="caption" color="warning.main" sx={{ display: "block", mt: 1 }}>
@@ -229,16 +262,96 @@ function ReportingUnitCard({
   );
 }
 
+// Confirmation dialog for delete. We surface:
+//   1. The unit's display name in the body so users can't misclick.
+//   2. A list of what gets removed (activity data, source config).
+//   3. An italic disclaimer that the action is destructive until the
+//      next snapshot save reflects the deletion.
+//   4. A pointed warning if the unit has any draft data attached.
+// Cancel is the default; Delete is `color="error"` and explicitly NOT
+// the default.
+function DeleteReportingUnitDialog({
+  open,
+  reportingUnit,
+  draftDataCount,
+  onCancel,
+  onConfirm,
+}) {
+  const displayName = reportingUnit?.facility_name?.trim() || "Untitled Reporting Unit";
+  return (
+    <Dialog open={Boolean(open)} onClose={onCancel} maxWidth="sm" fullWidth>
+      <DialogTitle>Delete this Reporting Unit?</DialogTitle>
+      <DialogContent dividers>
+        <DialogContentText component="div">
+          <Typography paragraph>
+            <strong>{displayName}</strong> and the following will be removed:
+          </Typography>
+          <ul style={{ marginTop: 0 }}>
+            <li>All activity data entered for this unit</li>
+            <li>The unit&apos;s source configuration (applicable activity types)</li>
+          </ul>
+          {draftDataCount > 0 ? (
+            <Typography sx={{ mt: 1, fontWeight: 600, color: "warning.dark" }}>
+              This unit has {draftDataCount} {draftDataCount === 1 ? "activity" : "activities"} with data — they will all be deleted.
+            </Typography>
+          ) : null}
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 2, fontStyle: "italic" }}>
+            This action cannot be undone from the Configure Sources dialog. The next snapshot you save will reflect the deletion.
+          </Typography>
+        </DialogContentText>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onCancel} autoFocus>
+          Cancel
+        </Button>
+        <Button onClick={onConfirm} color="error" variant="contained">
+          Delete
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 export default function ReportingUnitsTab({
   reportingUnits,
   setReportingUnits,
   onAddReportingUnit,
+  onRemoveReportingUnit,
   activityCatalog = [],
   activities = [],
   newlyCreatedIds,
 }) {
   const [configureUnitId, setConfigureUnitId] = React.useState("");
+  const [pendingDeleteId, setPendingDeleteId] = React.useState("");
   const configureUnit = reportingUnits.find((ru) => ru.id === configureUnitId) || null;
+  const pendingDeleteUnit = pendingDeleteId
+    ? reportingUnits.find((ru) => ru.id === pendingDeleteId) || null
+    : null;
+  const pendingDeleteDataCount = React.useMemo(
+    () => (pendingDeleteId ? countActivitiesWithDataForUnit(activities, pendingDeleteId) : 0),
+    [activities, pendingDeleteId],
+  );
+
+  const handleRequestDelete = React.useCallback((id) => {
+    setPendingDeleteId(id);
+  }, []);
+
+  const handleCancelDelete = React.useCallback(() => {
+    setPendingDeleteId("");
+  }, []);
+
+  const handleConfirmDelete = React.useCallback(() => {
+    if (pendingDeleteId && typeof onRemoveReportingUnit === "function") {
+      // Close the Configure Sources dialog if it happens to point at the
+      // unit we're about to remove — otherwise it'd render with a null
+      // reportingUnit on the next frame.
+      if (configureUnitId === pendingDeleteId) {
+        setConfigureUnitId("");
+      }
+      onRemoveReportingUnit(pendingDeleteId);
+    }
+    setPendingDeleteId("");
+  }, [configureUnitId, onRemoveReportingUnit, pendingDeleteId]);
 
   // Deferred activity types are omitted from the checklist — showing them
   // would invite users to apply types they cannot actually calculate with.
@@ -446,6 +559,7 @@ export default function ReportingUnitsTab({
               activityCatalog={selectableActivities}
               activities={activities}
               onConfigureSources={(id) => setConfigureUnitId(id)}
+              onRequestDelete={handleRequestDelete}
               isNewlyCreated={Boolean(newlyCreatedIds && newlyCreatedIds.has(ru.id))}
             />
           ))}
@@ -480,6 +594,14 @@ export default function ReportingUnitsTab({
         activityCatalog={selectableActivities}
         existingActivitiesByPair={existingPairsSet}
         onSave={handleSaveConfigureSources}
+      />
+
+      <DeleteReportingUnitDialog
+        open={Boolean(pendingDeleteUnit)}
+        reportingUnit={pendingDeleteUnit}
+        draftDataCount={pendingDeleteDataCount}
+        onCancel={handleCancelDelete}
+        onConfirm={handleConfirmDelete}
       />
     </Stack>
   );

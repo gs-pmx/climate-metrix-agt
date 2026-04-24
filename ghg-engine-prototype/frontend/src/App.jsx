@@ -33,6 +33,10 @@ import {
   withActivityTypeDefaults,
 } from "./activityDrafts";
 import { filterRowsApplicable } from "./applicability";
+import {
+  removeActivitiesForReportingUnit,
+  removeReportingUnitFromList,
+} from "./reportingUnits";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
@@ -604,6 +608,34 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     });
   }, []);
 
+  // Hard-delete a Reporting Unit. Pure-data filter logic lives in
+  // reportingUnits.js so it can be unit-tested; this callback handles
+  // the React-state side effects that can't be unit-tested:
+  //   - facilities and activities lists shrink in lock-step
+  //   - any pending "newly-created" highlight for this id clears
+  //   - any open dialog that referenced the unit (calc errors are
+  //     keyed by facility_id, which is fine to leave in place — the
+  //     filter helper will simply find no matching grid row)
+  // Wired into the Reporting Units tab's per-card delete affordance;
+  // confirmation lives in ReportingUnitsTab so the card's surrounding
+  // context (unit name, draft data count) is available there.
+  const removeReportingUnit = React.useCallback((id) => {
+    if (!id) return;
+    setFacilities((prev) => removeReportingUnitFromList(prev, id));
+    setActivities((prev) => removeActivitiesForReportingUnit(prev, id));
+    setNewlyCreatedReportingUnitIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    // Drop any backend errors keyed to this facility; otherwise stale
+    // chips remain bound to a Reporting Unit that no longer exists and
+    // pop up if the user re-creates a unit and reuses an id (rare but
+    // possible via uid collision over a long session).
+    setCalcErrors((prev) => prev.filter((err) => err?.facility_id !== id));
+  }, []);
+
   const runCalculation = async () => {
     if (!hasActiveProject) {
       show("Create or select a project first.", "warning");
@@ -752,14 +784,22 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         // they can see the per-row chips flip to "Calc error". Snackbar
         // surfaces the first error message; tooltips cover the rest.
         show(`Calculation failed: ${totalFailureMessage || "all activities errored"}`, "error");
+      } else if (partialSuccess) {
+        // Post-C4 round-5 item 4: previously partialSuccess flipped the
+        // tab to Results (3), which whisked the user away from the
+        // row-level error chips just as they appeared. The snackbar
+        // would auto-dismiss two seconds later and the user was left on
+        // the Results tab wondering what happened. Now we stay on the
+        // data-entry tab when ANY row failed so the per-row Calc error
+        // chips are immediately visible. The snackbar still names the
+        // count — the row chips are the persistent surface.
+        show(
+          `Some activities failed to calculate (${mergedErrors.length}) — see row details.`,
+          "warning",
+        );
       } else {
         setTab(3);
-        if (partialSuccess) {
-          show(
-            `Some activities failed to calculate (${mergedErrors.length}) — see row details.`,
-            "info",
-          );
-        } else if (skippedRows.length) {
+        if (skippedRows.length) {
           show(
             `Calculation complete. Skipped ${skippedRows.length} unsupported activity row${skippedRows.length === 1 ? "" : "s"} that are not calculable yet.`,
             "warning",
@@ -1021,6 +1061,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             reportingUnits={facilities}
             setReportingUnits={setFacilities}
             onAddReportingUnit={addReportingUnit}
+            onRemoveReportingUnit={removeReportingUnit}
             activityCatalog={activityCatalog}
             activities={activities}
             newlyCreatedIds={newlyCreatedReportingUnitIds}
@@ -1095,7 +1136,18 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </Alert>
       ) : null}
 
-      <Snackbar open={snack.open} autoHideDuration={2600} onClose={close}>
+      {/*
+        Post-C4 round-5 item 4: error/warning toasts get a longer
+        autoHide window so the user has time to read them before
+        attention shifts to the row-level chips. Success toasts keep
+        the previous 2.6s. The row chip stays the persistent surface;
+        the toast is just confirmation.
+      */}
+      <Snackbar
+        open={snack.open}
+        autoHideDuration={snack.sev === "error" || snack.sev === "warning" ? 6000 : 2600}
+        onClose={close}
+      >
         <Alert severity={snack.sev} onClose={close} variant="filled">
           {snack.msg}
         </Alert>
