@@ -83,6 +83,27 @@ def test_refrigerant_activity_is_repeatable_and_protocol_driven():
     assert activity.accounting_metadata["requires_gwp_set"] is True
 
 
+def test_refrigerant_type_is_enum_with_supported_options():
+    """Bug 4 regression: refrigerant_type must be an enum with a non-empty
+    options list so the frontend renders a dropdown instead of a free-text
+    field. Without this guard users can type unsupported refrigerants that
+    then silently drop at calculation time.
+    """
+
+    activity = _catalog().get_required("scope1_fugitive_refrigerant_release")
+    by_field_id = {field.field_id: field for field in activity.input_schema.fields}
+    refrigerant_field = by_field_id["refrigerant_type"]
+
+    assert refrigerant_field.kind == "enum"
+    assert refrigerant_field.required is True
+    assert len(refrigerant_field.options) >= 20
+    # Spot-check common refrigerants we support with AR6 GWP factors.
+    for canonical in ["HFC-134a", "HFC-32", "R-410A", "R-404A", "SF6", "NF3"]:
+        assert canonical in refrigerant_field.options, (
+            f"expected {canonical!r} in refrigerant_type.options"
+        )
+
+
 def test_status_filter_returns_only_requested_rows():
     catalog = _catalog()
 

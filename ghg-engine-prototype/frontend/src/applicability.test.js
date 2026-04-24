@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   buildExistingPairsSet,
   computeReportingUnitProgress,
+  ensureActivityApplicable,
   filterApplicableActivities,
   filterApplicableReportingUnits,
   groupActivitiesByScope,
@@ -257,6 +258,88 @@ test("progress ignores drafts for other reporting units", () => {
   });
   assert.equal(progress.withData, 0);
   assert.equal(progress.complete, 0);
+});
+
+// ---------------------------------------------------------------------------
+// ensureActivityApplicable - Bug 1 regression (auto-add-with-toast)
+// ---------------------------------------------------------------------------
+
+test("ensureActivityApplicable is a no-op for a legacy permissive unit", () => {
+  const permissive = makeRU({ id: "F1", applicable_activity_types: [] });
+  const rus = [permissive];
+  const result = ensureActivityApplicable({
+    reportingUnits: rus,
+    reportingUnitId: "F1",
+    activityTypeId: AT_NATURAL_GAS.activity_type_id,
+  });
+  assert.equal(result.wasAdded, false);
+  // Input array must be reference-identical so callers can skip state updates.
+  assert.equal(result.reportingUnits, rus);
+});
+
+test("ensureActivityApplicable appends activity to configured unit missing it", () => {
+  const configured = makeRU({
+    id: "F1",
+    applicable_activity_types: [AT_ELECTRICITY.activity_type_id],
+  });
+  const rus = [configured];
+  const result = ensureActivityApplicable({
+    reportingUnits: rus,
+    reportingUnitId: "F1",
+    activityTypeId: AT_NATURAL_GAS.activity_type_id,
+  });
+  assert.equal(result.wasAdded, true);
+  assert.notEqual(result.reportingUnits, rus);
+  assert.deepEqual(result.reportingUnits[0].applicable_activity_types, [
+    AT_ELECTRICITY.activity_type_id,
+    AT_NATURAL_GAS.activity_type_id,
+  ]);
+  // Original RU must not be mutated.
+  assert.deepEqual(configured.applicable_activity_types, [
+    AT_ELECTRICITY.activity_type_id,
+  ]);
+});
+
+test("ensureActivityApplicable is a no-op when the configured list already has it", () => {
+  const configured = makeRU({
+    id: "F1",
+    applicable_activity_types: [AT_NATURAL_GAS.activity_type_id],
+  });
+  const rus = [configured];
+  const result = ensureActivityApplicable({
+    reportingUnits: rus,
+    reportingUnitId: "F1",
+    activityTypeId: AT_NATURAL_GAS.activity_type_id,
+  });
+  assert.equal(result.wasAdded, false);
+  assert.equal(result.reportingUnits, rus);
+});
+
+test("ensureActivityApplicable is a no-op when the unit id is unknown", () => {
+  const rus = [
+    makeRU({ id: "F1", applicable_activity_types: [AT_ELECTRICITY.activity_type_id] }),
+  ];
+  const result = ensureActivityApplicable({
+    reportingUnits: rus,
+    reportingUnitId: "F_DOES_NOT_EXIST",
+    activityTypeId: AT_NATURAL_GAS.activity_type_id,
+  });
+  assert.equal(result.wasAdded, false);
+  assert.equal(result.reportingUnits, rus);
+});
+
+test("ensureActivityApplicable is a no-op with missing required args", () => {
+  const rus = [makeRU({ id: "F1", applicable_activity_types: ["x"] })];
+  assert.equal(
+    ensureActivityApplicable({ reportingUnits: rus, reportingUnitId: "", activityTypeId: "y" })
+      .wasAdded,
+    false,
+  );
+  assert.equal(
+    ensureActivityApplicable({ reportingUnits: rus, reportingUnitId: "F1", activityTypeId: "" })
+      .wasAdded,
+    false,
+  );
 });
 
 test("progress with 2 applicable + 1 complete + 1 blank yields 2/1/1", () => {

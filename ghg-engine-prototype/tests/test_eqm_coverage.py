@@ -146,7 +146,7 @@ def test_refrigerant_mass_to_gwp_supports_ar6_only():
         facility_id="F1",
         activity_type_id="scope1_fugitive_refrigerant_release",
         activity={"value": 10.0, "unit": "pounds"},
-        params={"refrigerant_type": "hfc-134a"},
+        params={"refrigerant_type": "HFC-134a"},
     )
 
     rows, trace = eng.calculate_one(activity, CalculationContext(inventory_year=2026, gwp_set="AR6"))
