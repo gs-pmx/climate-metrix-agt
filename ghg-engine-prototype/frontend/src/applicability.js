@@ -113,6 +113,55 @@ export function groupActivitiesByScope(activityTypes) {
 // When `applicable_activity_types` is empty we fall back to counting
 // across every activity present in the supplied catalog — legacy RUs
 // still get informative numbers instead of "0 / 0 / 0".
+// Ensure the given Reporting Unit has `activityTypeId` listed as applicable.
+//
+// Bug 1: when a user enters activity data through any entry mode for a
+// (reporting_unit_id, activity_type_id) pair where the RU's applicable
+// list is non-empty AND does not include that activity type, the
+// backend canonicalization filter silently drops the data during save.
+// To prevent that invisible drop this helper auto-appends the activity
+// type to the RU's list and signals the caller that it did so, so the
+// UI can surface a transient toast.
+//
+// Inputs are kept small so the helper can be unit tested without any
+// React state glue:
+//   - `reportingUnits`:    the current array of RUs in the session.
+//   - `reportingUnitId`:   which RU to ensure.
+//   - `activityTypeId`:    which activity type to ensure.
+// Returns `{ reportingUnits, wasAdded }`. The returned array is
+// reference-identical to the input when no change was made, so callers
+// can cheaply skip a state update.
+export function ensureActivityApplicable({
+  reportingUnits,
+  reportingUnitId,
+  activityTypeId,
+}) {
+  if (!Array.isArray(reportingUnits) || !reportingUnitId || !activityTypeId) {
+    return { reportingUnits, wasAdded: false };
+  }
+  const idx = reportingUnits.findIndex((ru) => ru?.id === reportingUnitId);
+  if (idx < 0) {
+    return { reportingUnits, wasAdded: false };
+  }
+  const ru = reportingUnits[idx];
+  const list = getApplicableList(ru);
+  // Legacy permissive: empty list means "show all" — filter does not
+  // apply, so no mutation is required and no toast should fire.
+  if (list.length === 0) {
+    return { reportingUnits, wasAdded: false };
+  }
+  if (list.includes(activityTypeId)) {
+    return { reportingUnits, wasAdded: false };
+  }
+  const nextUnit = {
+    ...ru,
+    applicable_activity_types: [...list, activityTypeId],
+  };
+  const next = reportingUnits.slice();
+  next[idx] = nextUnit;
+  return { reportingUnits: next, wasAdded: true };
+}
+
 export function computeReportingUnitProgress({
   reportingUnit,
   activityCatalog = [],

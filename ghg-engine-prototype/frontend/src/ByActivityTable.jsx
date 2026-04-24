@@ -156,7 +156,28 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
-          renderCell: (params) => <StatusChip draft={params.row.draft} activityType={activityType} rowErrors={params.row._rowErrors} />,
+          // Bug 3: derive the classifiable draft from the live grid cell
+          // values rather than the `draft` snapshot we wired up in
+          // `gridRows`. Without this the status chip lags the user's
+          // most recent commit by one cell because MUI DataGrid holds
+          // its updated `activity_value` internally before the parent
+          // re-renders with a refreshed `gridRows`.
+          renderCell: (params) => {
+            const liveDraft = {
+              ...params.row.draft,
+              activity: {
+                value: params.row.activity_value,
+                unit: params.row.activity_unit,
+              },
+            };
+            return (
+              <StatusChip
+                draft={liveDraft}
+                activityType={activityType}
+                rowErrors={params.row._rowErrors}
+              />
+            );
+          },
         },
         {
           field: "details",

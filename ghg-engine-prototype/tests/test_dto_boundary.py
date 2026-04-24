@@ -194,12 +194,16 @@ def test_project_snapshot_dto_serializes_reporting_units_under_facilities_key():
     # Reserved C2 stub field: present but empty.
     assert ru.applicable_activity_types == []
 
-    # JSON output must use the legacy ``facilities`` key (serialization alias).
+    # JSON output must use the legacy ``facilities`` key (serialization alias)
+    # and the legacy ``facility_name`` key on each unit so the frontend load
+    # path (which still reads ``facility_name``) does not silently drop the
+    # Reporting Unit's display name on checkpoint load.
     dumped = dto.model_dump(mode="json", by_alias=True)
     assert "facilities" in dumped
     assert "reporting_units" not in dumped
     assert dumped["facilities"][0]["id"] == "F1"
-    assert dumped["facilities"][0]["name"] == "Facility 1"
+    assert dumped["facilities"][0]["facility_name"] == "Facility 1"
+    assert "name" not in dumped["facilities"][0]
 
 
 def test_project_snapshot_dto_parses_legacy_facilities_json():

@@ -183,6 +183,49 @@ test("row with only a partially-entered quantity detail is missing-details", () 
   assert.ok(missingRequired.includes("Override Factor"));
 });
 
+// ---------------------------------------------------------------------------
+// Bug 3 regression: "live draft" synthesis pattern used by the grid
+// renderCells in ByActivityTable / ByReportingUnitTable. After a user
+// commits a cell, MUI DataGrid has the new value in its internal
+// `params.row.activity_value` but the nested `params.row.draft.activity.value`
+// can still be the pre-edit value for one render. The fix is for
+// renderCell to synthesize a draft from the live cell values rather
+// than reading the stale nested reference.
+// ---------------------------------------------------------------------------
+
+test("live-draft synthesis flips a stale not-started row to complete on cell commit", () => {
+  const staleDraft = draftWith({ activity: { value: "", unit: "scf" } });
+  // Simulate the post-commit grid row shape: live cell values diverged
+  // from the draft snapshot by one commit.
+  const liveDraft = {
+    ...staleDraft,
+    activity: {
+      value: "1000", // value the user just typed
+      unit: "scf",
+    },
+  };
+
+  // Classifying the stale draft must STILL report not-started — this is
+  // the bug-pre-fix behavior.
+  assert.equal(classifyRow(staleDraft, ACTIVITY_TYPE).status, ROW_STATUS.NOT_STARTED);
+  // Classifying the synthesized live draft reports complete, which is
+  // what the status chip must render immediately after a cell commit.
+  assert.equal(classifyRow(liveDraft, ACTIVITY_TYPE).status, ROW_STATUS.COMPLETE);
+});
+
+test("live-draft synthesis flips a stale complete row to invalid on unit edit", () => {
+  const staleDraft = draftWith({ activity: { value: "1000", unit: "scf" } });
+  const liveDraft = {
+    ...staleDraft,
+    activity: {
+      value: staleDraft.activity.value,
+      unit: "gallons", // user picked an invalid unit
+    },
+  };
+  assert.equal(classifyRow(staleDraft, ACTIVITY_TYPE).status, ROW_STATUS.COMPLETE);
+  assert.equal(classifyRow(liveDraft, ACTIVITY_TYPE).status, ROW_STATUS.INVALID);
+});
+
 test("classifyRepeatableRow with no entries is not-started", () => {
   const { status, count } = classifyRepeatableRow([], ACTIVITY_TYPE);
   assert.equal(status, ROW_STATUS.NOT_STARTED);
