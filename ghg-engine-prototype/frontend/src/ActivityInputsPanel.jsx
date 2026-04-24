@@ -30,7 +30,7 @@ import {
   withActivityTypeDefaults,
 } from "./activityDrafts";
 import { hasMeaningfulData, pairKey } from "./gridEditingHelpers";
-import { buildExistingPairsSet } from "./applicability";
+import { buildExistingPairsSet, ensureActivityApplicable } from "./applicability";
 import { makeApplyPerActivityUpdate } from "./configureSources";
 
 // Thin orchestrator: owns shared state, passes it down to the three view
@@ -60,6 +60,21 @@ export default function ActivityInputsPanel({
   const [viewMode, setViewMode] = React.useState("byActivity");
   const [detailDraftId, setDetailDraftId] = React.useState("");
   const [repeatableDialog, setRepeatableDialog] = React.useState(null);
+
+  // Bug 2 mitigation: whenever a calculation begins, force-close every
+  // detail dialog (which is where the Emission Factor Override field
+  // lives). Prior phases left it possible for a dialog to remain open
+  // across a Run Calculation click -- most obviously when a row-button
+  // dispatched `openDetailsForPair` synchronously with the calculate
+  // click. Explicitly resetting here prevents the dialog from showing
+  // up unexpectedly at calc time. See phased-development-plan.md Phase
+  // C3 Bug 2 for the diagnostic trace.
+  React.useEffect(() => {
+    if (calculating) {
+      setDetailDraftId("");
+      setRepeatableDialog(null);
+    }
+  }, [calculating]);
 
   const selectableActivities = React.useMemo(
     () => activityCatalog.filter((activityType) => isEntryVisibleActivity(activityType)),
@@ -135,8 +150,36 @@ export default function ActivityInputsPanel({
   const addActivity = () => setActivities((prev) => [...prev, createEmptyDraft()]);
   const removeActivity = (id) => setActivities((prev) => prev.filter((draft) => draft.id !== id));
 
+  // Bug 1: when a draft gets created for a (reporting_unit_id,
+  // activity_type_id) pair that falls outside the RU's configured
+  // applicable list, auto-append the activity type to that RU's list
+  // and fire a toast. Without this guard the backend canonicalization
+  // filter drops the data at calculation time with no user feedback.
+  const ensureApplicable = React.useCallback(
+    (facilityId, activityTypeId) => {
+      if (!facilityId || !activityTypeId || !setReportingUnits) return;
+      setReportingUnits((prev) => {
+        const { reportingUnits: next, wasAdded } = ensureActivityApplicable({
+          reportingUnits: prev,
+          reportingUnitId: facilityId,
+          activityTypeId,
+        });
+        if (wasAdded) {
+          const ru = next.find((r) => r?.id === facilityId);
+          const activityType = activityTypesById[activityTypeId];
+          const ruLabel = ru?.facility_name?.trim() || "this Reporting Unit";
+          const activityLabel = activityType?.label || activityTypeId;
+          show(`Added "${activityLabel}" to ${ruLabel}'s sources.`, "info");
+        }
+        return next;
+      });
+    },
+    [activityTypesById, setReportingUnits, show],
+  );
+
   const updateDraft = React.useCallback(
     (id, patch) => {
+      let nextSnapshot = null;
       setActivities((prev) => prev.map((draft) => {
         if (draft.id !== id) return draft;
         const nextDraft = {
@@ -145,23 +188,43 @@ export default function ActivityInputsPanel({
           activity: patch.activity ? patch.activity : draft.activity,
           params: patch.params ? sanitizeParams(patch.params) : draft.params,
         };
-        if (patch.activity_type_id) {
-          const activityType = activityTypesById[patch.activity_type_id];
-          return withActivityTypeDefaults(nextDraft, activityType);
-        }
-        return nextDraft;
+        const finalDraft = patch.activity_type_id
+          ? withActivityTypeDefaults(nextDraft, activityTypesById[patch.activity_type_id])
+          : nextDraft;
+        nextSnapshot = finalDraft;
+        return finalDraft;
       }));
+      // Row-by-row view sets facility_id, activity_type_id, and activity
+      // value independently. Fire the auto-add guard whenever both
+      // ids are set and the draft has meaningful data — this is the
+      // moment the canonicalization filter would otherwise silently
+      // drop the row on save (Bug 1).
+      if (
+        nextSnapshot
+        && nextSnapshot.facility_id
+        && nextSnapshot.activity_type_id
+        && hasMeaningfulData(nextSnapshot)
+      ) {
+        ensureApplicable(nextSnapshot.facility_id, nextSnapshot.activity_type_id);
+      }
     },
-    [activityTypesById, setActivities],
+    [activityTypesById, ensureApplicable, setActivities],
   );
 
   const upsertActivity = React.useCallback(
     (facilityId, activityType, value, unit) => {
+      const normalizedValue = value === "" || value == null ? "" : String(value);
+      // Auto-add the pair to the RU's applicable list on creation so
+      // the canonicalization filter does not silently drop the data
+      // (Bug 1). No-op when the RU's list is empty (legacy permissive)
+      // or already includes the activity type.
+      if (normalizedValue !== "") {
+        ensureApplicable(facilityId, activityType?.activity_type_id);
+      }
       setActivities((prev) => {
         const existingIndex = prev.findIndex(
           (draft) => draft.facility_id === facilityId && draft.activity_type_id === activityType.activity_type_id,
         );
-        const normalizedValue = value === "" || value == null ? "" : String(value);
         if (normalizedValue === "") {
           if (existingIndex >= 0) return prev.filter((_, index) => index !== existingIndex);
           return prev;
@@ -185,11 +248,15 @@ export default function ActivityInputsPanel({
         return [...prev, nextDraft];
       });
     },
-    [setActivities],
+    [ensureApplicable, setActivities],
   );
 
   const replaceActivitiesForPair = React.useCallback(
     (facilityId, activityType, nextDrafts) => {
+      const hasAnyMeaningful = (nextDrafts || []).some((draft) => hasMeaningfulData(draft));
+      if (hasAnyMeaningful) {
+        ensureApplicable(facilityId, activityType?.activity_type_id);
+      }
       setActivities((prev) => {
         const filtered = prev.filter(
           (draft) => !(draft.facility_id === facilityId && draft.activity_type_id === activityType.activity_type_id),
@@ -208,12 +275,20 @@ export default function ActivityInputsPanel({
         return [...filtered, ...normalized];
       });
     },
-    [setActivities],
+    [ensureApplicable, setActivities],
   );
 
   const openDetails = React.useCallback((draftId) => {
     setDetailDraftId(draftId);
   }, []);
+
+  // Ref-backed snapshot of the current activities list. Used below so the
+  // callback reads activities synchronously without capturing a stale
+  // closure, and without the anti-pattern of calling setState inside a
+  // setState updater (which re-runs twice under React strict mode and
+  // risked transiently opening the detail dialog on a ghost draft).
+  const activitiesRef = React.useRef(activities);
+  activitiesRef.current = activities;
 
   const openDetailsForPair = React.useCallback(
     (facilityId, activityTypeId) => {
@@ -222,26 +297,25 @@ export default function ActivityInputsPanel({
         setRepeatableDialog({ facilityId, activityTypeId });
         return;
       }
-      setActivities((prev) => {
-        const existing = prev.find(
-          (draft) => draft.facility_id === facilityId && draft.activity_type_id === activityTypeId,
-        );
-        if (existing) {
-          setDetailDraftId(existing.id);
-          return prev;
-        }
-        const draft = withActivityTypeDefaults(
-          {
-            ...EMPTY_ACTIVITY,
-            id: uid(),
-            facility_id: facilityId,
-            activity_type_id: activityTypeId,
-          },
-          activityType,
-        );
-        setDetailDraftId(draft.id);
-        return [...prev, draft];
-      });
+      const currentActivities = activitiesRef.current;
+      const existing = currentActivities.find(
+        (draft) => draft.facility_id === facilityId && draft.activity_type_id === activityTypeId,
+      );
+      if (existing) {
+        setDetailDraftId(existing.id);
+        return;
+      }
+      const draft = withActivityTypeDefaults(
+        {
+          ...EMPTY_ACTIVITY,
+          id: uid(),
+          facility_id: facilityId,
+          activity_type_id: activityTypeId,
+        },
+        activityType,
+      );
+      setActivities((prev) => [...prev, draft]);
+      setDetailDraftId(draft.id);
     },
     [activityTypesById, setActivities],
   );

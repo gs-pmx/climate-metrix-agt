@@ -120,11 +120,39 @@ function ReportingUnitAccordion({
         minWidth: 160,
         editable: false,
         sortable: false,
-        renderCell: (params) => (
-          params.row._repeatable
-            ? <RepeatableStatusChip drafts={params.row.drafts} activityType={params.row._activityType} rowErrors={params.row._rowErrors} />
-            : <StatusChip draft={params.row.draft} activityType={params.row._activityType} rowErrors={params.row._rowErrors} />
-        ),
+        renderCell: (params) => {
+          if (params.row._repeatable) {
+            return (
+              <RepeatableStatusChip
+                drafts={params.row.drafts}
+                activityType={params.row._activityType}
+                rowErrors={params.row._rowErrors}
+              />
+            );
+          }
+          // Bug 3: derive the classifiable draft from the live grid cell
+          // values (`activity_value`/`activity_unit`) rather than the
+          // stale `draft` snapshot we passed in via `gridRows`. MUI
+          // DataGrid commits `processRowUpdate` before the parent
+          // re-render lands, so `params.row.draft.activity.value` can
+          // lag behind `params.row.activity_value` by one cell commit.
+          // Synthesizing the draft here means the status chip reflects
+          // the value the user just typed, not the pre-edit value.
+          const liveDraft = {
+            ...params.row.draft,
+            activity: {
+              value: params.row.activity_value,
+              unit: params.row.activity_unit,
+            },
+          };
+          return (
+            <StatusChip
+              draft={liveDraft}
+              activityType={params.row._activityType}
+              rowErrors={params.row._rowErrors}
+            />
+          );
+        },
       },
       {
         field: "details",
