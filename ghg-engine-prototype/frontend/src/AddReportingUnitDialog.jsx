@@ -14,6 +14,19 @@ import {
 } from "@mui/material";
 import { buildReportingUnitSelection } from "./configureSources";
 
+// Post-C4 round-4 item 4: shallow-compare two {id:boolean} maps. Used to
+// detect whether the user has toggled anything relative to the RU's
+// current applicable list before allowing a silent close.
+function checkedMapsEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (Boolean(a[key]) !== Boolean(b[key])) return false;
+  }
+  return true;
+}
+
 // Per-activity dialog used from the By Activity view header. The dialog
 // lists every existing Reporting Unit with a checkbox indicating whether
 // the header activity_type_id is in its applicable_activity_types list.
@@ -49,12 +62,22 @@ export default function AddReportingUnitDialog({
     for (const row of initial) out[row.reportingUnit.id] = row.checked;
     return out;
   });
+  // Post-C4 round-4 item 4: snapshot initial checked state for
+  // unsaved-changes detection on close without save.
+  const [initialCheckedById, setInitialCheckedById] = React.useState(() => {
+    const out = {};
+    for (const row of initial) out[row.reportingUnit.id] = row.checked;
+    return out;
+  });
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
     const out = {};
     for (const row of initial) out[row.reportingUnit.id] = row.checked;
     setCheckedById(out);
+    setInitialCheckedById(out);
+    setConfirmOpen(false);
   }, [open, initial]);
 
   const handleToggle = (ruId) => {
@@ -65,11 +88,20 @@ export default function AddReportingUnitDialog({
     onSave?.(checkedById);
   };
 
+  const isDirty = !checkedMapsEqual(checkedById, initialCheckedById);
+  const handleAttemptClose = () => {
+    if (isDirty) {
+      setConfirmOpen(true);
+      return;
+    }
+    onClose?.();
+  };
+
   const atId = activityType?.activity_type_id;
   const empty = !Array.isArray(reportingUnits) || reportingUnits.length === 0;
 
   return (
-    <Dialog open={Boolean(open)} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={Boolean(open)} onClose={handleAttemptClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         Add Reporting Unit
         {activityType?.label ? (
@@ -127,9 +159,46 @@ export default function AddReportingUnitDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleAttemptClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSave} disabled={empty}>Save</Button>
       </DialogActions>
+      {/* Post-C4 round-4 item 4: unsaved-changes confirmation — same
+          Discard / Cancel / Save branch set as ConfigureSourcesDialog. */}
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Save changes?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            You have unsaved Reporting Unit selections. Save before closing, or discard to revert.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="inherit"
+            onClick={() => {
+              setConfirmOpen(false);
+              setCheckedById(initialCheckedById);
+              onClose?.();
+            }}
+          >
+            Discard
+          </Button>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmOpen(false);
+              handleSave();
+            }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }

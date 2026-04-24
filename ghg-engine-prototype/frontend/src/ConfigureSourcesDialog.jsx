@@ -53,6 +53,20 @@ import { colorForActivity, colorForSubcategory } from "./categoryColors";
 //
 // Props stay identical to the previous iteration so callers do not
 // need updating.
+// Post-C4 round-4 item 4: shared helper used by every data-entry dialog
+// to detect whether the user has unsaved edits. We snapshot the initial
+// state at open and compare the current working state against it on any
+// close attempt. Exposed here so AddReportingUnitDialog and
+// AddActivityDialog can reuse the same comparator without duplicating
+// the logic.
+function setsEqual(a, b) {
+  if (a === b) return true;
+  if (!(a instanceof Set) || !(b instanceof Set)) return false;
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
 export default function ConfigureSourcesDialog({
   open,
   onClose,
@@ -62,9 +76,34 @@ export default function ConfigureSourcesDialog({
   onSave,
 }) {
   const [checked, setChecked] = React.useState(() => initialSetFromReportingUnit(reportingUnit));
+  // Post-C4 round-4 item 4: snapshot the initial state at open so we can
+  // detect unsaved changes when the user tries to dismiss the dialog
+  // without hitting Save. Rebuilt each time `open` flips to true so the
+  // dialog is always comparing against the RU's last-committed state.
+  const [initialChecked, setInitialChecked] = React.useState(() => initialSetFromReportingUnit(reportingUnit));
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   React.useEffect(() => {
-    if (open) setChecked(initialSetFromReportingUnit(reportingUnit));
+    if (open) {
+      const snap = initialSetFromReportingUnit(reportingUnit);
+      setChecked(snap);
+      setInitialChecked(snap);
+      setConfirmOpen(false);
+    }
   }, [open, reportingUnit]);
+
+  const isDirty = !setsEqual(checked, initialChecked);
+
+  // Attempted-close handler — the ONE entry point the Dialog's own
+  // close triggers route through (close button, ESC, backdrop). If the
+  // user has dirty state, surface the nested confirmation instead of
+  // silently discarding.
+  const handleAttemptClose = () => {
+    if (isDirty) {
+      setConfirmOpen(true);
+      return;
+    }
+    onClose?.();
+  };
 
   const catalog = activityCatalog || [];
 
@@ -143,7 +182,19 @@ export default function ConfigureSourcesDialog({
   const hasOther = (libraryByScope.other.length + selectedByScope.other.length) > 0;
 
   return (
-    <Dialog open={Boolean(open)} onClose={onClose} maxWidth="lg" fullWidth>
+    <Dialog
+      open={Boolean(open)}
+      onClose={handleAttemptClose}
+      // Post-C4 round-4 item 2: previously `maxWidth="lg"` which made
+      // the dialog render ~1200px wide — a single scope's pills flowed
+      // across ~10 columns and the whole thing felt too airy. Shrink
+      // to `"sm"` (~600px) so each scope row shows ~4-5 pills before
+      // wrapping. Pills already use inline-flex with `flexWrap: wrap`
+      // (see the Box wrappers around each pill group) so they reflow
+      // naturally at the narrower width.
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>
         Configure sources
         {reportingUnit?.facility_name ? (
@@ -159,15 +210,22 @@ export default function ConfigureSourcesDialog({
 
         {/* Selected panel (top) — committed state. Elevated Paper, firm
             border, prominent h6 heading, count chip in header, subtle
-            tinted background. */}
+            tinted background.
+            Post-C4 round-4 item 3: thicken the border to 2px in the
+            primary accent color and lift the MUI elevation one step
+            higher so the panel reads as "the committed state" with
+            more visual weight. Shadow is the MUI-theme-provided one
+            at elevation=4, which gives a slightly deeper beat than
+            the prior elevation=3 without looking heavy. */}
         <Paper
-          elevation={3}
+          elevation={4}
           sx={{
             p: 1.75,
             mb: 2.5,
-            border: (theme) => `1px solid ${theme.palette.mode === "dark"
-              ? "rgba(121, 186, 224, 0.35)"
-              : "rgba(0, 78, 130, 0.25)"}`,
+            border: "2px solid",
+            borderColor: (theme) => theme.palette.mode === "dark"
+              ? "rgba(121, 186, 224, 0.55)"
+              : "rgba(0, 78, 130, 0.4)",
             backgroundColor: (theme) => theme.palette.mode === "dark"
               ? "rgba(78, 159, 207, 0.06)"
               : "rgba(0, 78, 130, 0.03)",
@@ -324,9 +382,48 @@ export default function ConfigureSourcesDialog({
         </Box>
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleAttemptClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSave}>Save</Button>
       </DialogActions>
+      {/* Post-C4 round-4 item 4: unsaved-changes confirmation. Nested
+          Dialog overlays the main one when the user tries to close
+          with dirty state. Discard -> revert + close, Save -> commit +
+          close (same as Save button), Cancel -> keep the dialog open. */}
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Save changes?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            You have unsaved source selections. Save before closing, or discard to revert.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="inherit"
+            onClick={() => {
+              setConfirmOpen(false);
+              setChecked(initialChecked);
+              onClose?.();
+            }}
+          >
+            Discard
+          </Button>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmOpen(false);
+              handleSave();
+            }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }

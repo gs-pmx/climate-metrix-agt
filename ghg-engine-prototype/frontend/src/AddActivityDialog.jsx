@@ -16,6 +16,20 @@ import {
 import { buildActivitySelection } from "./configureSources";
 import { groupActivitiesByScope } from "./applicability";
 
+// Post-C4 round-4 item 4: shared {id:boolean}-map equality check for
+// unsaved-changes detection. Mirrors the helper in
+// AddReportingUnitDialog so the three sibling dialogs gate close the
+// same way.
+function checkedMapsEqual(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const key of keys) {
+    if (Boolean(a[key]) !== Boolean(b[key])) return false;
+  }
+  return true;
+}
+
 // Mirror of AddReportingUnitDialog for the By Reporting Unit view.
 //
 // The By Activity view has a "+ Add Reporting Unit" button on each
@@ -54,12 +68,21 @@ export default function AddActivityDialog({
     for (const row of selection) out[row.activityType.activity_type_id] = row.checked;
     return out;
   });
+  // Post-C4 round-4 item 4: snapshot initial map for dirty-state detection.
+  const [initialCheckedById, setInitialCheckedById] = React.useState(() => {
+    const out = {};
+    for (const row of selection) out[row.activityType.activity_type_id] = row.checked;
+    return out;
+  });
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
     const out = {};
     for (const row of selection) out[row.activityType.activity_type_id] = row.checked;
     setCheckedById(out);
+    setInitialCheckedById(out);
+    setConfirmOpen(false);
   }, [open, selection]);
 
   const handleToggle = (atId) => {
@@ -68,6 +91,15 @@ export default function AddActivityDialog({
 
   const handleSave = () => {
     onSave?.(checkedById);
+  };
+
+  const isDirty = !checkedMapsEqual(checkedById, initialCheckedById);
+  const handleAttemptClose = () => {
+    if (isDirty) {
+      setConfirmOpen(true);
+      return;
+    }
+    onClose?.();
   };
 
   // Group rendering so users can scan by scope, matching the existing
@@ -80,7 +112,7 @@ export default function AddActivityDialog({
   const empty = !Array.isArray(activityCatalog) || activityCatalog.length === 0;
 
   return (
-    <Dialog open={Boolean(open)} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={Boolean(open)} onClose={handleAttemptClose} maxWidth="sm" fullWidth>
       <DialogTitle>
         Add Activity
         {reportingUnit?.facility_name ? (
@@ -149,9 +181,46 @@ export default function AddActivityDialog({
         )}
       </DialogContent>
       <DialogActions>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleAttemptClose}>Cancel</Button>
         <Button variant="contained" onClick={handleSave} disabled={empty}>Save</Button>
       </DialogActions>
+      {/* Post-C4 round-4 item 4: unsaved-changes confirmation nested
+          dialog — Discard / Cancel / Save. */}
+      <Dialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>Save changes?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            You have unsaved activity selections. Save before closing, or discard to revert.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button
+            color="inherit"
+            onClick={() => {
+              setConfirmOpen(false);
+              setCheckedById(initialCheckedById);
+              onClose?.();
+            }}
+          >
+            Discard
+          </Button>
+          <Button onClick={() => setConfirmOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              setConfirmOpen(false);
+              handleSave();
+            }}
+          >
+            Save
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Dialog>
   );
 }
