@@ -32,6 +32,7 @@ import {
   uid,
   withActivityTypeDefaults,
 } from "./activityDrafts";
+import { filterRowsApplicable } from "./applicability";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
@@ -550,15 +551,39 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       setTab(1);
       return;
     }
-    const rows = activities.filter(
+    const allPopulatedRows = activities.filter(
       (draft) =>
         dataEntryFacilityIds.has(draft.facility_id)
         && draft.activity_type_id
         && draft.activity?.value !== "",
     );
-    if (!rows.length) {
+    if (!allPopulatedRows.length) {
       show("Add at least one activity row with facility, activity, and value.", "warning");
       return;
+    }
+
+    // Filter out rows for (RU, activity) pairs that aren't in the RU's
+    // applicable_activity_types list. Deselected sources must not flow
+    // into the /calculate payload even when they still carry data —
+    // otherwise the engine trips on missing params (e.g., fuel efficiency
+    // MPG) for sources the user has explicitly excluded. The underlying
+    // draft data is preserved in the snapshot (soft-hide).
+    const rows = filterRowsApplicable(allPopulatedRows, facilities);
+    const deselectedCount = allPopulatedRows.length - rows.length;
+    if (!rows.length) {
+      show(
+        deselectedCount
+          ? `All ${deselectedCount} populated row(s) are for deselected sources — nothing to calculate. Enable the sources on each Reporting Unit's Configure Sources dialog to include them.`
+          : "Add at least one activity row with facility, activity, and value.",
+        "warning",
+      );
+      return;
+    }
+    if (deselectedCount) {
+      show(
+        `Skipped ${deselectedCount} row(s) for sources that are not selected on their Reporting Unit.`,
+        "info",
+      );
     }
 
     const calculableRows = rows.filter((draft) => isCalculableActivity(activityTypesById[draft.activity_type_id]));

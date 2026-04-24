@@ -7,6 +7,7 @@ import {
   ensureActivityApplicable,
   filterApplicableActivities,
   filterApplicableReportingUnits,
+  filterRowsApplicable,
   groupActivitiesByScope,
   isActivityApplicable,
 } from "./applicability.js";
@@ -357,4 +358,69 @@ test("progress with 2 applicable + 1 complete + 1 blank yields 2/1/1", () => {
   assert.equal(progress.withData, 1);
   assert.equal(progress.complete, 1);
   assert.equal(progress.total, 2);
+});
+
+// ---------------------------------------------------------------------------
+// filterRowsApplicable — guards the /calculate payload from deselected rows
+// ---------------------------------------------------------------------------
+
+test("filterRowsApplicable passes rows for units with empty applicable list", () => {
+  const rus = [{ id: "ru1", applicable_activity_types: [] }];
+  const rows = [
+    { facility_id: "ru1", activity_type_id: "scope1_mobile_diesel" },
+    { facility_id: "ru1", activity_type_id: "scope1_stationary_natural_gas" },
+  ];
+  const out = filterRowsApplicable(rows, rus);
+  assert.equal(out.length, 2);
+});
+
+test("filterRowsApplicable excludes rows for (RU, activity) pairs not in the RU's applicable list", () => {
+  const rus = [
+    { id: "ru1", applicable_activity_types: ["scope1_stationary_natural_gas"] },
+  ];
+  const rows = [
+    { facility_id: "ru1", activity_type_id: "scope1_stationary_natural_gas", activity: { value: 100 } },
+    { facility_id: "ru1", activity_type_id: "scope1_mobile_diesel", activity: { value: 25 } },
+  ];
+  const out = filterRowsApplicable(rows, rus);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].activity_type_id, "scope1_stationary_natural_gas");
+});
+
+test("filterRowsApplicable treats unknown facility_id as permissive (empty-list semantic)", () => {
+  // isActivityApplicable treats undefined/missing RU as an empty applicable
+  // list, which is legacy permissive. Rows for unknown facility_ids are
+  // ultimately filtered out at the dataEntryFacilityIds.has() gate in the
+  // calling runCalculation, not here. This helper stays permissive so it
+  // composes cleanly with that outer filter.
+  const rus = [{ id: "ru1", applicable_activity_types: ["scope1_stationary_natural_gas"] }];
+  const rows = [
+    { facility_id: "ru_unknown", activity_type_id: "scope1_stationary_natural_gas" },
+  ];
+  const out = filterRowsApplicable(rows, rus);
+  assert.equal(out.length, 1);
+});
+
+test("filterRowsApplicable returns [] for non-array rows input", () => {
+  assert.deepEqual(filterRowsApplicable(undefined, []), []);
+  assert.deepEqual(filterRowsApplicable(null, []), []);
+});
+
+test("filterRowsApplicable respects each RU independently across a mixed payload", () => {
+  const rus = [
+    { id: "ru1", applicable_activity_types: ["scope1_stationary_natural_gas"] },
+    { id: "ru2", applicable_activity_types: [] },
+  ];
+  const rows = [
+    { facility_id: "ru1", activity_type_id: "scope1_stationary_natural_gas" },
+    { facility_id: "ru1", activity_type_id: "scope1_mobile_diesel" },
+    { facility_id: "ru2", activity_type_id: "scope1_mobile_diesel" },
+    { facility_id: "ru2", activity_type_id: "scope1_stationary_natural_gas" },
+  ];
+  const out = filterRowsApplicable(rows, rus);
+  assert.equal(out.length, 3);
+  assert.ok(out.some((r) => r.facility_id === "ru1" && r.activity_type_id === "scope1_stationary_natural_gas"));
+  assert.ok(out.some((r) => r.facility_id === "ru2" && r.activity_type_id === "scope1_mobile_diesel"));
+  assert.ok(out.some((r) => r.facility_id === "ru2" && r.activity_type_id === "scope1_stationary_natural_gas"));
+  assert.ok(!out.some((r) => r.facility_id === "ru1" && r.activity_type_id === "scope1_mobile_diesel"));
 });

@@ -60,6 +60,20 @@ export function filterApplicableReportingUnits(reportingUnits, activityTypeId) {
   return reportingUnits.filter((ru) => isActivityApplicable(ru, activityTypeId));
 }
 
+// Filter a list of activity drafts down to those whose (facility_id,
+// activity_type_id) pair is applicable to its owning Reporting Unit.
+// Used at calculate time so deselected sources — which may still carry
+// draft data via soft-hide — do not flow into the /calculate payload
+// and blow up on missing params in the engine. Legacy permissive
+// units (empty applicable list) let every row through.
+export function filterRowsApplicable(rows, reportingUnits) {
+  if (!Array.isArray(rows)) return [];
+  const byId = new Map((reportingUnits || []).map((ru) => [ru?.id, ru]));
+  return rows.filter((draft) =>
+    isActivityApplicable(byId.get(draft?.facility_id), draft?.activity_type_id),
+  );
+}
+
 // Set of composite pair keys (facility_id::activity_type_id) for which
 // the project has at least one meaningful draft entry. Used by the
 // configure-sources dialog to warn on uncheck.
