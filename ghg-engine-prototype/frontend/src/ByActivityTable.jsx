@@ -97,6 +97,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Typography variant="body2">
               {params.row.draft_count ? `${params.row.draft_count} entries` : "No entries"}
@@ -110,6 +112,8 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => <RepeatableStatusChip drafts={params.row.drafts} activityType={activityType} rowErrors={params.row._rowErrors} />,
         },
         {
@@ -119,6 +123,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Button
               size="small"
@@ -160,6 +166,8 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => {
             const liveDraft = {
               ...params.row.draft,
@@ -184,6 +192,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Button
               size="small"
