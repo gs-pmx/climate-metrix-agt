@@ -359,7 +359,11 @@ export default function ByActivityTable({
       },
       {
         root: null,
-        rootMargin: "-96px 0px -60% 0px",
+        // Top rootMargin should match (top-layer + secondary-layer)
+        // approximately so the scroll-spy flags the section just under
+        // the sticky stack as active. Uses a fixed px value rather than
+        // CSS vars because IntersectionObserver does not accept vars.
+        rootMargin: "-288px 0px -60% 0px",
         threshold: [0, 0.1],
       },
     );
@@ -431,7 +435,12 @@ export default function ByActivityTable({
                           id={sectionAnchorId(scope.id, sub.id)}
                           ref={registerSectionRef(key)}
                           data-toc-key={key}
-                          sx={{ scrollMarginTop: 96 }}
+                          sx={{
+                            // Keep anchors clear of both sticky layers
+                            // when clicked from the TOC.
+                            scrollMarginTop:
+                              "calc(var(--sticky-top-height) + var(--sticky-secondary-height) + 16px)",
+                          }}
                         >
                           <Typography
                             variant="h6"

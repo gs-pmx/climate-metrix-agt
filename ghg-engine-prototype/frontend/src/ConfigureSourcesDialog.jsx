@@ -24,7 +24,6 @@ import {
   initialSetFromReportingUnit,
   selectAllInScope,
   setDefaultsAsChecked,
-  shouldWarnOnUncheck,
   toggleActivity,
 } from "./configureSources";
 import { categorizeForTOC } from "./categorizeForTOC";
@@ -32,27 +31,28 @@ import { colorForActivity, colorForSubcategory } from "./categoryColors";
 
 // Configure-sources dialog for a single Reporting Unit.
 //
-// Phase C4 redesign: the previous version was a long vertical list of
-// checkboxes grouped by scope. User feedback item 18 asked for a
-// tag-library pattern — a library panel of unselected pills and a
-// horizontal "selected" row per scope. This version implements that.
+// Post-C4 redesign (items 6 + 7): panel order is Selected (top) and
+// Library (bottom). Selected is the "committed state" — elevated Paper
+// with a prominent heading and a count chip, firmer border. Library is
+// the "rest of the catalog" — no card, just a subdued section label
+// with a faint divider, so it reads as lighter / less load-bearing.
+// Pills themselves stay visually consistent across both panels so
+// moving a pill between them feels continuous; what differs is the
+// container around them.
 //
 // Behavior summary:
-//   - Library panel (top): all unselected activities, color-coded by
-//     subcategory (see categoryColors.js) and internally grouped by
-//     scope. Clicking a library pill moves it to the correct selected
-//     row based on its scope.
-//   - Selected panel (bottom): three horizontal rows, one per scope.
-//     Clicking the `x` on a selected pill moves it back to the library.
+//   - Selected panel (top): three horizontal rows per scope plus a
+//     count chip and per-scope "Select all" button. Clicking the x on
+//     a pill moves it back to the library. The "Starter defaults"
+//     button lives here because it mutates the selection.
+//   - Library panel (bottom): all unselected activities, color-coded
+//     by subcategory, grouped by scope. Clicking a library pill moves
+//     it to the correct selected row based on its scope.
 //   - Warn-on-uncheck: removing a pill that has draft data shows an
 //     inline warn glyph + tooltip matching the legacy warn copy.
-//   - Select All per scope: a small "Select all" button on each selected
-//     row adds every unselected activity in that scope.
-//   - Reset to defaults: one button that sets starter defaults when the
-//     selection is empty, otherwise adds them.
 //
-// Props stay identical to the previous iteration so callers do not need
-// updating.
+// Props stay identical to the previous iteration so callers do not
+// need updating.
 export default function ConfigureSourcesDialog({
   open,
   onClose,
@@ -157,20 +157,123 @@ export default function ConfigureSourcesDialog({
           Click a pill in the library to add it. Click the x on a selected pill to remove it. Pills are color-coded by category.
         </Typography>
 
-        <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-          <Button size="small" variant="outlined" onClick={handleDefaults}>
-            {defaultsLabel}
-          </Button>
-          <Typography variant="caption" color="text.secondary" sx={{ alignSelf: "center" }}>
-            Natural gas, mobile diesel, grid electricity, waste operations.
-          </Typography>
-        </Stack>
+        {/* Selected panel (top) — committed state. Elevated Paper, firm
+            border, prominent h6 heading, count chip in header, subtle
+            tinted background. */}
+        <Paper
+          elevation={3}
+          sx={{
+            p: 1.75,
+            mb: 2.5,
+            border: (theme) => `1px solid ${theme.palette.mode === "dark"
+              ? "rgba(121, 186, 224, 0.35)"
+              : "rgba(0, 78, 130, 0.25)"}`,
+            backgroundColor: (theme) => theme.palette.mode === "dark"
+              ? "rgba(78, 159, 207, 0.06)"
+              : "rgba(0, 78, 130, 0.03)",
+          }}
+          data-testid="tag-selected-panel"
+        >
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1.25 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, flexGrow: 1 }}>
+              Selected for this Reporting Unit
+            </Typography>
+            <Chip
+              size="small"
+              color="primary"
+              label={`${checked.size} selected`}
+              data-testid="selected-count-chip"
+            />
+            <Button size="small" variant="outlined" onClick={handleDefaults}>
+              {defaultsLabel}
+            </Button>
+          </Stack>
+          <Stack spacing={1.25}>
+            {SCOPE_ROWS.map((scope) => {
+              const pills = selectedByScope[scope.id] || [];
+              return (
+                <Box key={scope.id}>
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
+                    <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: 1, flexGrow: 1 }}>
+                      {scope.label}
+                    </Typography>
+                    <Button size="small" onClick={() => handleSelectAllScope(scope.id)}>
+                      Select all {scope.label.split(" - ")[0]}
+                    </Button>
+                  </Stack>
+                  <Divider sx={{ mb: 0.75 }} />
+                  {pills.length === 0 ? (
+                    <Typography variant="body2" color="text.secondary">
+                      No {scope.label.split(" - ")[0]} activities selected yet.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                      {pills.map((row) => {
+                        const id = row.activityType.activity_type_id;
+                        // The legacy `shouldWarnOnUncheck` helper was
+                        // parameterized for a checkbox model. In the
+                        // pill UX we surface warn whenever the RU has
+                        // existing draft data for the activity, because
+                        // removing the pill hides (not deletes) that
+                        // data.
+                        const hasExistingData = (() => {
+                          if (!existingActivitiesByPair || !reportingUnit?.id) return false;
+                          const key = `${reportingUnit.id}::${id}`;
+                          return existingActivitiesByPair instanceof Set
+                            ? existingActivitiesByPair.has(key)
+                            : Boolean(existingActivitiesByPair[key]);
+                        })();
+                        return (
+                          <SelectedPill
+                            key={id}
+                            activityType={row.activityType}
+                            subcategoryId={row.subcategory}
+                            onRemove={() => handleTogglePill(id)}
+                            warn={hasExistingData}
+                          />
+                        );
+                      })}
+                    </Box>
+                  )}
+                </Box>
+              );
+            })}
+            {selectedByScope.other.length > 0 ? (
+              <Box>
+                <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: 1 }}>
+                  Other
+                </Typography>
+                <Divider sx={{ mb: 0.75 }} />
+                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
+                  {selectedByScope.other.map((row) => (
+                    <SelectedPill
+                      key={row.activityType.activity_type_id}
+                      activityType={row.activityType}
+                      subcategoryId={row.subcategory}
+                      onRemove={() => handleTogglePill(row.activityType.activity_type_id)}
+                      warn={false}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            ) : null}
+          </Stack>
+        </Paper>
 
-        {/* Library panel (top) */}
-        <Paper variant="outlined" sx={{ p: 1.25, mb: 2 }} data-testid="tag-library-panel">
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-            Library
-          </Typography>
+        {/* Library panel (bottom) — available options. No card shell,
+            just a subdued label + faint divider. Lighter visual weight
+            than the Selected panel above so the user's eye lands on
+            the committed state first. */}
+        <Box data-testid="tag-library-panel" sx={{ px: 0.5 }}>
+          <Stack direction="row" alignItems="baseline" spacing={1} sx={{ mb: 0.5 }}>
+            <Typography variant="subtitle2" sx={{ color: "text.secondary", fontWeight: 600 }}>
+              Source library
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              click a pill to add it
+            </Typography>
+          </Stack>
+          <Divider sx={{ mb: 1.25 }} />
           <Stack spacing={1.5}>
             {SCOPE_ROWS.map((scope) => {
               const pills = libraryByScope[scope.id] || [];
@@ -218,94 +321,7 @@ export default function ConfigureSourcesDialog({
               </Box>
             ) : null}
           </Stack>
-        </Paper>
-
-        {/* Selected panel (bottom) */}
-        <Paper variant="outlined" sx={{ p: 1.25 }} data-testid="tag-selected-panel">
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 700 }}>
-            Selected for this Reporting Unit
-          </Typography>
-          <Stack spacing={1.25}>
-            {SCOPE_ROWS.map((scope) => {
-              const pills = selectedByScope[scope.id] || [];
-              return (
-                <Box key={scope.id}>
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 0.5 }}>
-                    <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: 1, flexGrow: 1 }}>
-                      {scope.label}
-                    </Typography>
-                    <Button size="small" onClick={() => handleSelectAllScope(scope.id)}>
-                      Select all {scope.label.split(" - ")[0]}
-                    </Button>
-                  </Stack>
-                  <Divider sx={{ mb: 0.75 }} />
-                  {pills.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No {scope.label.split(" - ")[0]} activities selected yet.
-                    </Typography>
-                  ) : (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                      {pills.map((row) => {
-                        const id = row.activityType.activity_type_id;
-                        const warn = shouldWarnOnUncheck({
-                          reportingUnit,
-                          activityTypeId: id,
-                          currentChecked: true,
-                          existingPairsSet: existingActivitiesByPair,
-                        });
-                        // `currentChecked=true` passed above simulates
-                        // "still selected" — but we actually want the
-                        // warn to trigger when the user is about to
-                        // remove data. The legacy warning fires when
-                        // `currentChecked=false` after a toggle. In this
-                        // tag-library UX there is no "currently
-                        // unchecked" state inside the selected panel —
-                        // the warn we surface is "removing this pill
-                        // will hide existing data." So we recompute the
-                        // condition directly here.
-                        const hasExistingData = (() => {
-                          if (!existingActivitiesByPair || !reportingUnit?.id) return false;
-                          const key = `${reportingUnit.id}::${id}`;
-                          return existingActivitiesByPair instanceof Set
-                            ? existingActivitiesByPair.has(key)
-                            : Boolean(existingActivitiesByPair[key]);
-                        })();
-                        return (
-                          <SelectedPill
-                            key={id}
-                            activityType={row.activityType}
-                            subcategoryId={row.subcategory}
-                            onRemove={() => handleTogglePill(id)}
-                            warn={hasExistingData}
-                          />
-                        );
-                      })}
-                    </Box>
-                  )}
-                </Box>
-              );
-            })}
-            {selectedByScope.other.length > 0 ? (
-              <Box>
-                <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: 1 }}>
-                  Other
-                </Typography>
-                <Divider sx={{ mb: 0.75 }} />
-                <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.75 }}>
-                  {selectedByScope.other.map((row) => (
-                    <SelectedPill
-                      key={row.activityType.activity_type_id}
-                      activityType={row.activityType}
-                      subcategoryId={row.subcategory}
-                      onRemove={() => handleTogglePill(row.activityType.activity_type_id)}
-                      warn={false}
-                    />
-                  ))}
-                </Box>
-              </Box>
-            ) : null}
-          </Stack>
-        </Paper>
+        </Box>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>

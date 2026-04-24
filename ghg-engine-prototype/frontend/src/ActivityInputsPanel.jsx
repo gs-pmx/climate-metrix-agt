@@ -12,7 +12,6 @@ import {
   Typography,
 } from "@mui/material";
 import ActivityDetailDialog from "./ActivityDetailDialog";
-import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
 import NoticesBanner from "./NoticesBanner";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
@@ -430,7 +429,23 @@ export default function ActivityInputsPanel({
         storageKey="ghgp.notices.activityInputs.dismissed"
       />
 
-      <Paper sx={{ p: 2 }}>
+      {/*
+        Post-C4 item 2: the view-selector + save/run bar sticks just
+        below the app-level top bar (Layer 1 -> Layer 2 stack). The
+        bar's zIndex stays under the app nav's so the dropdown shadows
+        don't punch through. `--sticky-top-height` is set in main.jsx
+        root styles.
+      */}
+      <Paper
+        sx={{
+          p: 2,
+          position: "sticky",
+          top: "var(--sticky-top-height)",
+          zIndex: (theme) => theme.zIndex.appBar - 1,
+          backdropFilter: "blur(6px)",
+        }}
+        data-testid="view-selector-bar"
+      >
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
           <ToggleButtonGroup
             value={viewMode}
@@ -503,8 +518,6 @@ export default function ActivityInputsPanel({
           show={show}
         />
       ) : null}
-
-      <CatalogCoverageBrowser activityCatalog={activityCatalog} />
 
       <ActivityDetailDialog
         open={Boolean(detailDraft && detailActivityType)}
