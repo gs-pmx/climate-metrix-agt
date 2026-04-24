@@ -136,9 +136,73 @@ function toMetricTonFactor(value, unit) {
   };
 }
 
+// Scroll distance (in px) past which the full header fades out and the
+// compact sticky bar takes over. Kept well above 0 so the collapse feels
+// intentional and doesn't flicker for mousewheel nudges.
+const COLLAPSED_HEADER_SCROLL_THRESHOLD = 48;
+
+function useIsScrolled(threshold = COLLAPSED_HEADER_SCROLL_THRESHOLD) {
+  const [scrolled, setScrolled] = React.useState(false);
+  React.useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    let ticking = false;
+    const update = () => {
+      ticking = false;
+      setScrolled(window.scrollY > threshold);
+    };
+    const handler = () => {
+      if (ticking) return;
+      ticking = true;
+      window.requestAnimationFrame(update);
+    };
+    // Initialize from current position so the compact bar shows up on a
+    // deep-linked/hash-navigated page without waiting for a scroll event.
+    update();
+    window.addEventListener("scroll", handler, { passive: true });
+    return () => window.removeEventListener("scroll", handler);
+  }, [threshold]);
+  return scrolled;
+}
+
+// Measure the sticky top bar's rendered height and publish it as the
+// `--sticky-top-height` CSS variable on document root. Downstream sticky
+// bars (view-selector, TOC sidebar) read this variable for their own
+// `top` offsets — measuring dynamically keeps the layers flush even when
+// the bar's actual height differs from the hardcoded fallback in
+// main.jsx (e.g. MUI tab size changes, future additions to the bar).
+function useStickyTopHeightVar(ref) {
+  React.useLayoutEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const node = ref.current;
+    if (!node) return undefined;
+    const update = () => {
+      const height = node.getBoundingClientRect().height;
+      if (height > 0) {
+        document.documentElement.style.setProperty(
+          "--sticky-top-height",
+          `${Math.round(height)}px`,
+        );
+      }
+    };
+    update();
+    const observer = typeof ResizeObserver !== "undefined"
+      ? new ResizeObserver(update)
+      : null;
+    if (observer) observer.observe(node);
+    window.addEventListener("resize", update);
+    return () => {
+      if (observer) observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [ref]);
+}
+
 export default function App({ colorMode = "light", onToggleColorMode = () => {} }) {
   const { snack, show, close } = useSnack();
   const [tab, setTab] = React.useState(0);
+  const isScrolled = useIsScrolled();
+  const topBarRef = React.useRef(null);
+  useStickyTopHeightVar(topBarRef);
   const [activityCatalog, setActivityCatalog] = React.useState([]);
   const [projects, setProjects] = React.useState([]);
   const [projectVersions, setProjectVersions] = React.useState([]);
@@ -715,46 +779,64 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
   return (
     <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
-      <Box
+      {/*
+        Post-C4 polish item 1: split the former single sticky shell into
+        two cooperating elements:
+          1. A non-sticky full header Paper that scrolls away naturally.
+          2. A sticky compact bar that carries the tabs at all times and
+             fades in a compact project chip after the user scrolls past
+             the header. This gives the user one visual anchor at the top
+             of the page instead of two.
+        The tabs Paper itself is the sticky top layer — its height feeds
+        the `--sticky-top-height` CSS variable so downstream sticky bars
+        (view-selector in ActivityInputsPanel, TOC sidebar) line up.
+      */}
+      <Paper
         sx={{
+          mb: 1,
+          p: { xs: 2, md: 2.5 },
+          // Fade the full header out as the compact bar takes over so
+          // the two don't ghost each other during the transition.
+          opacity: isScrolled ? 0 : 1,
+          // `pointer-events: none` when faded prevents stale click targets
+          // (e.g. toggle color-mode button) under a covering compact bar.
+          pointerEvents: isScrolled ? "none" : "auto",
+          transition: "opacity 180ms ease",
+        }}
+      >
+        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
+          <Box>
+            <Typography variant="h4">GHG Calculation Workspace</Typography>
+            <Typography variant="body2" color="text.secondary">
+              Project-based data entry with immutable version snapshots.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1} alignItems="center">
+            {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
+            <Button variant="outlined" onClick={onToggleColorMode}>
+              {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
+            </Button>
+          </Stack>
+        </Stack>
+      </Paper>
+
+      <Paper
+        ref={topBarRef}
+        sx={{
+          px: 1.5,
+          pt: 0.5,
           position: "sticky",
           top: 0,
           zIndex: (theme) => theme.zIndex.appBar,
           mb: 2,
-          // Blur the background behind the sticky shell so content scrolling
-          // under it stays legible without adding a hard color.
-          "&::before": {
-            content: '""',
-            position: "absolute",
-            inset: 0,
-            backdropFilter: "blur(8px)",
-            background: (theme) => (theme.palette.mode === "dark"
-              ? "rgba(31, 40, 49, 0.65)"
-              : "rgba(241, 243, 244, 0.65)"),
-            zIndex: -1,
-            borderRadius: (theme) => `${theme.shape.borderRadius}px`,
-          },
+          // Opaque fill so scrolling rows don't read through. Matches the
+          // view-selector bar below for a contiguous top stack.
+          bgcolor: "background.paper",
         }}
+        data-testid="app-top-bar"
       >
-        <Paper sx={{ mb: 1, p: { xs: 2, md: 2.5 } }}>
-          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
-            <Box>
-              <Typography variant="h4">GHG Calculation Workspace</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Project-based data entry with immutable version snapshots.
-              </Typography>
-            </Box>
-            <Stack direction="row" spacing={1} alignItems="center">
-              {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
-              <Button variant="outlined" onClick={onToggleColorMode}>
-                {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
-              </Button>
-            </Stack>
-          </Stack>
-        </Paper>
-
-        <Paper sx={{ px: 1.5, pt: 0.5 }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: "100%" }}>
+          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flexGrow: 1, minHeight: 48 }}>
             <Tab label="Projects" />
             <Tab label="Reporting Units" disabled={!hasActiveProject} />
             <Tab label="Activity Inputs" disabled={!hasActiveProject} />
@@ -763,8 +845,20 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             <Tab label="Audit" disabled={!hasActiveProject} />
             <Tab label="Catalog" />
           </Tabs>
-        </Paper>
-      </Box>
+          {isScrolled && activeProject ? (
+            <Chip
+              color="secondary"
+              size="small"
+              label={`Project: ${activeProject.name}`}
+              sx={{
+                mr: 1,
+                opacity: isScrolled ? 1 : 0,
+                transition: "opacity 180ms ease",
+              }}
+            />
+          ) : null}
+        </Stack>
+      </Paper>
 
       {tab === 0 && (
         <Stack spacing={2}>

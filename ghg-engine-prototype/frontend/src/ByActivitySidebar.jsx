@@ -67,7 +67,39 @@ export default function ByActivitySidebar({
 
   const tocList = (
     <Stack spacing={0.5} sx={{ p: 1, minWidth: 220 }} data-testid="toc-list">
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ px: 0.5 }}>
+      {/*
+        Post-C4 round-3 item 2: pin the header row (title + collapse
+        toggle) to the top of the sidebar's own scroll container. The
+        outer Paper is sticky to the viewport, but its internal content
+        (this Stack) can exceed maxHeight and therefore scrolls inside
+        the Paper. Previously the toggle was just the first child and
+        scrolled off with the TOC, leaving the user no way to collapse
+        the sidebar once they'd scanned partway down the tree.
+
+        `position: sticky; top: 0` anchors this header to the top of
+        the scrollable area, and a small background + bottom border
+        keeps it legible when TOC items scroll under it. zIndex lifts
+        it above Button hover highlights. The margin-inline-negative
+        flush with the Stack's padding makes the sticky strip extend
+        to the Paper's inner edge; the padding is restored via px.
+      */}
+      <Stack
+        direction="row"
+        alignItems="center"
+        spacing={1}
+        sx={{
+          position: "sticky",
+          top: 0,
+          zIndex: 2,
+          mx: -1,
+          mt: -1,
+          mb: 0.25,
+          px: 1.5,
+          py: 0.75,
+          backgroundColor: "background.paper",
+          borderBottom: (t) => `1px solid ${t.palette.divider}`,
+        }}
+      >
         <Typography variant="overline" sx={{ letterSpacing: 1, color: "text.secondary", flexGrow: 1 }}>
           Navigation
         </Typography>

@@ -82,7 +82,15 @@ function ReportingUnitAccordion({
   const columns = React.useMemo(
     () => [
       { field: "activity_label", headerName: "Activity", flex: 1, minWidth: 220, editable: false },
-      { field: "scope", headerName: "Scope", flex: 0.55, minWidth: 100, editable: false },
+      {
+        field: "scope",
+        headerName: "Scope",
+        flex: 0.55,
+        minWidth: 100,
+        editable: false,
+        align: "center",
+        headerAlign: "center",
+      },
       {
         field: "activity_value",
         headerName: "Activity Value",
@@ -93,13 +101,25 @@ function ReportingUnitAccordion({
         valueFormatter: (value) => formatNumericDisplay(value),
         align: "right",
         headerAlign: "right",
-        renderCell: (params) => (
-          params.row._repeatable ? (
-            <Typography variant="body2" color="text.secondary">
-              {params.row.draft_count ? `${params.row.draft_count} entries` : "Manage in details"}
-            </Typography>
-          ) : formatNumericDisplay(params.value)
-        ),
+        renderCell: (params) => {
+          if (params.row._repeatable) {
+            // Post-C4 polish item 6: the "Manage in details" helper copy
+            // used to render top-aligned because the raw Typography
+            // inherits the cell's top-of-flow placement; wrap it in a
+            // full-height flex container so it sits on the row's
+            // vertical center alongside the status chip and button.
+            // Empty-state copy mirrors the ByActivityTable repeatable
+            // column ("No entries") so the two views stay consistent.
+            return (
+              <Box sx={{ display: "flex", alignItems: "center", height: "100%", width: "100%", justifyContent: "flex-end" }}>
+                <Typography variant="body2" color="text.secondary">
+                  {params.row.draft_count ? `${params.row.draft_count} entries` : "No entries"}
+                </Typography>
+              </Box>
+            );
+          }
+          return formatNumericDisplay(params.value);
+        },
       },
       {
         field: "activity_unit",
@@ -110,11 +130,22 @@ function ReportingUnitAccordion({
         type: "singleSelect",
         valueOptions: ({ row }) => row?._unitOptions || [],
         renderEditCell: (params) => <SingleSelectEditCell {...params} />,
-        renderCell: (params) => (
-          params.row._repeatable ? (
-            <Typography variant="body2" color="text.secondary">Details</Typography>
-          ) : params.value
-        ),
+        renderCell: (params) => {
+          if (params.row._repeatable) {
+            // Post-C4 polish item 7: the literal "Details" string in the
+            // unit column read like a unit of measurement; swap it for a
+            // centered em-dash ("not applicable" convention) so repeatable
+            // rows clearly show "no single unit here".
+            return (
+              <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", width: "100%" }}>
+                <Typography variant="body2" color="text.secondary">
+                  —
+                </Typography>
+              </Box>
+            );
+          }
+          return params.value;
+        },
       },
       {
         field: "status",
@@ -123,6 +154,8 @@ function ReportingUnitAccordion({
         minWidth: 160,
         editable: false,
         sortable: false,
+        align: "center",
+        headerAlign: "center",
         renderCell: (params) => {
           if (params.row._repeatable) {
             return (
@@ -164,6 +197,8 @@ function ReportingUnitAccordion({
         minWidth: 120,
         editable: false,
         sortable: false,
+        align: "center",
+        headerAlign: "center",
         renderCell: (params) => (
           <Button
             size="small"

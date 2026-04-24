@@ -435,6 +435,12 @@ export default function ActivityInputsPanel({
         bar's zIndex stays under the app nav's so the dropdown shadows
         don't punch through. `--sticky-top-height` is set in main.jsx
         root styles.
+        Post-C4 polish items 4 + 5: the bar is now fully opaque
+        (bgcolor instead of a blur layer) so rows don't bleed through,
+        and carries a subtle bottom shadow so the flowing data rows
+        below it feel visually distinct. The sticky `top` sits flush
+        with the nav bar's bottom edge so there is no see-through gap
+        between the two layers.
       */}
       <Paper
         sx={{
@@ -442,7 +448,12 @@ export default function ActivityInputsPanel({
           position: "sticky",
           top: "var(--sticky-top-height)",
           zIndex: (theme) => theme.zIndex.appBar - 1,
-          backdropFilter: "blur(6px)",
+          bgcolor: "background.paper",
+          boxShadow: (theme) => `0 2px 6px ${
+            theme.palette.mode === "dark"
+              ? "rgba(0, 0, 0, 0.35)"
+              : "rgba(0, 0, 0, 0.08)"
+          }`,
         }}
         data-testid="view-selector-bar"
       >

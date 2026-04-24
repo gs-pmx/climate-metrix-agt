@@ -41,6 +41,26 @@ const SCROLLABLE_TABLE_SX = {
   overflowX: "auto",
 };
 
+// Post-C4 round-3 item 3: distinct accent color per scope so the scope
+// sections read as clearly separate "bands" while scanning the By
+// Activity view. Mapped to MUI's palette slots so the colors move with
+// the theme (light/dark) and any future palette tuning. Choice of
+// slots:
+//   - Scope 1 (direct emissions, e.g., stationary/mobile combustion):
+//       error.main — warm red/orange, signals "on-site combustion".
+//   - Scope 2 (purchased energy): primary.main — app blue, signals
+//       "grid/utility".
+//   - Scope 3 (value chain/indirect): success.main — green, signals
+//       "supply chain / broader footprint".
+// Fallback (if a scope id we don't recognize appears): text.secondary.
+function scopeAccentPaletteSlot(scopeId) {
+  const id = String(scopeId || "").toLowerCase();
+  if (id.includes("scope_1") || id === "scope1" || id === "1") return "error.main";
+  if (id.includes("scope_2") || id === "scope2" || id === "2") return "primary.main";
+  if (id.includes("scope_3") || id === "scope3" || id === "3") return "success.main";
+  return "text.secondary";
+}
+
 function ActivityAccordion({
   activityType,
   activitiesByPair,
@@ -97,6 +117,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Typography variant="body2">
               {params.row.draft_count ? `${params.row.draft_count} entries` : "No entries"}
@@ -110,6 +132,8 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => <RepeatableStatusChip drafts={params.row.drafts} activityType={activityType} rowErrors={params.row._rowErrors} />,
         },
         {
@@ -119,6 +143,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Button
               size="small"
@@ -160,6 +186,8 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => {
             const liveDraft = {
               ...params.row.draft,
@@ -184,6 +212,8 @@ function ActivityAccordion({
           minWidth: 120,
           editable: false,
           sortable: false,
+          align: "center",
+          headerAlign: "center",
           renderCell: (params) => (
             <Button
               size="small"
@@ -392,18 +422,35 @@ export default function ByActivityTable({
 
       <Box sx={{ flexGrow: 1, minWidth: 0, width: "100%" }}>
         <Stack spacing={3}>
-          {tree.map((scope) => {
+          {tree.map((scope, scopeIndex) => {
             const collapsed = Boolean(scopeCollapsed[scope.id]);
+            const accentColor = scopeAccentPaletteSlot(scope.id);
             return (
-              <Box key={scope.id}>
+              <Box
+                key={scope.id}
+                sx={{
+                  // Post-C4 round-3 item 3: extra top breathing room
+                  // between scopes to reinforce section boundaries. The
+                  // first scope keeps its baseline spacing so it doesn't
+                  // push away from the view-selector bar above.
+                  mt: scopeIndex === 0 ? 0 : 2,
+                }}
+              >
                 <Stack
                   direction="row"
                   spacing={1}
                   alignItems="center"
                   sx={{
                     py: 1,
+                    pl: 1.25,
                     cursor: "pointer",
                     userSelect: "none",
+                    // Colored accent strip on the left edge of each
+                    // scope header so users can pattern-match Scope 1
+                    // vs 2 vs 3 while scanning.
+                    borderLeft: "4px solid",
+                    borderLeftColor: accentColor,
+                    borderRadius: 1,
                   }}
                   onClick={() => setScopeCollapsed((prev) => ({ ...prev, [scope.id]: !prev?.[scope.id] }))}
                   data-testid={`scope-header-${scope.id}`}
@@ -414,7 +461,19 @@ export default function ByActivityTable({
                       transition: "transform 120ms ease",
                     }}
                   />
-                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      fontWeight: 700,
+                      // Uppercase + loose letter-spacing gives scope
+                      // headers the "dominant rhythm" role in the
+                      // heading hierarchy; subcategory h6 stays
+                      // mixed-case so scopes always read louder.
+                      textTransform: "uppercase",
+                      letterSpacing: "0.08em",
+                      fontSize: "1.15rem",
+                    }}
+                  >
                     {scope.label}
                   </Typography>
                   <Box sx={{ flexGrow: 1 }} />
@@ -427,7 +486,7 @@ export default function ByActivityTable({
                 <Divider sx={{ mb: 1 }} />
                 <Collapse in={!collapsed} unmountOnExit>
                   <Stack spacing={2}>
-                    {scope.subcategories.map((sub) => {
+                    {scope.subcategories.map((sub, subIndex) => {
                       const key = `${scope.id}::${sub.id}`;
                       return (
                         <Box
@@ -440,6 +499,16 @@ export default function ByActivityTable({
                             // when clicked from the TOC.
                             scrollMarginTop:
                               "calc(var(--sticky-top-height) + var(--sticky-secondary-height) + 16px)",
+                            // Post-C4 round-3 item 3: thin horizontal
+                            // rule above each subcategory (except the
+                            // first, which already sits right under the
+                            // scope's Divider) with padding so it reads
+                            // as "new subgroup starts here" without
+                            // shouting.
+                            ...(subIndex > 0 && {
+                              borderTop: (t) => `1px solid ${t.palette.divider}`,
+                              pt: 2,
+                            }),
                           }}
                         >
                           <Typography

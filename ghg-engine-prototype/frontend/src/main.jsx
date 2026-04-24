@@ -31,6 +31,45 @@ function buildTheme(mode) {
   return createTheme({
     palette: mode === "dark" ? darkPalette : lightPalette,
     shape: { borderRadius: 7 },
+    // Post-C4 round-3 item 1: shrink global MUI transition durations so
+    // clicks feel instantaneous.
+    //
+    // Prior polish had already disabled the Button ripple (~550ms), but
+    // clicks still felt laggy. Root cause: MUI's default theme ships
+    // with `transitions.duration` values that are honored by Button's
+    // built-in background/box-shadow/color transitions on hover/active
+    // AND by Dialog mount/unmount animations:
+    //   - shortest: 150ms (tooltip/hover)
+    //   - shorter:  200ms (button background, select)
+    //   - short:    250ms (button/chip background)
+    //   - standard: 300ms (default)
+    //   - complex:  375ms
+    //   - enteringScreen: 225ms (Dialog open)
+    //   - leavingScreen:  195ms (Dialog close)
+    //
+    // On a click, the button background darkens over 250ms and a dialog
+    // (if that's the action) fades in over 225ms — stacked, that's
+    // ~475ms of "the app is still thinking" visual feedback before the
+    // user sees the result. Combined with any synchronous state work,
+    // it reads as ~half a second of lag even though the handler fired
+    // immediately.
+    //
+    // Compressing everything to <=100ms keeps animations perceptible
+    // enough to feel polished (pure 0ms is jarring) while making them
+    // finish within a single animation frame-ish window. Dialogs in
+    // particular appear almost-instantly, which is what the user
+    // expects from a clicked button.
+    transitions: {
+      duration: {
+        shortest: 80,
+        shorter: 100,
+        short: 100,
+        standard: 120,
+        complex: 150,
+        enteringScreen: 100,
+        leavingScreen: 90,
+      },
+    },
     typography: {
       fontFamily: '"Assistant", "Public Sans", "IBM Plex Sans", "Segoe UI", sans-serif',
       h1: { fontFamily: '"Public Sans", "Assistant", sans-serif', fontWeight: 700 },
@@ -46,17 +85,16 @@ function buildTheme(mode) {
         styleOverrides: {
           // Post-C4 sticky-stack CSS variables. Three layers stack from
           // top to bottom inside the scroll container:
-          //   Layer 1: app nav bar (project/tabs shell)         -> --sticky-top-height
-          //   Layer 2: view-selector + save/run action bar      -> --sticky-secondary-height
+          //   Layer 1: app nav bar (compact tabs bar)            -> --sticky-top-height
+          //   Layer 2: view-selector + save/run action bar       -> --sticky-secondary-height
           //   Layer 3: By Activity TOC sidebar (see sidebar sx)
-          // Hardcoded for v1 after visual measurement — tuning these two
-          // numbers is the one-line knob for future adjustments. The
-          // top bar contains the project-info Paper (~108px) plus the
-          // Tabs Paper (~56px) plus an 8px gap, rounded to 176px. The
-          // secondary bar (view-selector + save/run + helper copy) is
-          // ~112px.
+          // Post-C4 polish item 1 collapsed the app nav from a full
+          // header + tabs (~176px) down to just the tabs row (~64px);
+          // the full header now scrolls away naturally and only the
+          // tabs remain sticky. Tuning these two numbers is the
+          // one-line knob for future adjustments.
           ":root": {
-            "--sticky-top-height": "176px",
+            "--sticky-top-height": "64px",
             "--sticky-secondary-height": "112px",
           },
           body: {
@@ -115,11 +153,45 @@ function buildTheme(mode) {
           disableRipple: true,
         },
       },
+      // Post-C4 round-3 item 1b: belts-and-suspenders button transition
+      // compression. The `theme.transitions.duration.short` cut above
+      // flows into most MUI components automatically, but Button's
+      // built-in background-color transition explicitly references
+      // `short` via the emotion createTransitions helper at theme build
+      // time. If a downstream sx prop re-invokes transitions.create
+      // with an older duration, it would bypass our theme override.
+      // Pin the Button background transition to ~80ms directly so
+      // click feedback never feels draggy regardless of what the
+      // component override resolves to.
+      MuiButton: {
+        styleOverrides: {
+          root: {
+            transition:
+              "background-color 80ms ease, box-shadow 80ms ease, border-color 80ms ease, color 80ms ease",
+          },
+        },
+      },
+      // Post-C4 round-3 item 1c: Dialog mount animation also sped up.
+      // MUI Dialog's Grow transition reads from
+      // theme.transitions.duration.enteringScreen (cut above to 100ms),
+      // but some callers pass explicit TransitionProps. Override the
+      // default here so every Dialog inherits the snappy timing without
+      // per-call-site edits.
+      MuiDialog: {
+        defaultProps: {
+          transitionDuration: { enter: 100, exit: 90 },
+        },
+      },
       // Post-C4 item 4: give DataGrid column headers a visible contrast
       // against data rows. Previously headers blended into the body — a
       // subtle background tint plus a stronger bottom border and bolder
       // font solves it without shouting. Applied at the theme level so
       // every DataGrid instance gets the treatment uniformly.
+      // Post-C4 polish item 2: subtle vertical separators between
+      // columns (cells + headers) using the theme's `divider` color so
+      // they stay quiet in both light and dark mode. The last cell /
+      // header in a row intentionally has no right border so we don't
+      // double-draw against the grid's own outer edge.
       MuiDataGrid: {
         styleOverrides: {
           root: ({ theme }) => ({
@@ -135,9 +207,19 @@ function buildTheme(mode) {
               backgroundColor: theme.palette.mode === "dark"
                 ? "rgba(78, 159, 207, 0.08)"
                 : "rgba(0, 78, 130, 0.05)",
+              borderRight: `1px solid ${theme.palette.divider}`,
+            },
+            "& .MuiDataGrid-columnHeader:last-of-type": {
+              borderRight: "none",
             },
             "& .MuiDataGrid-columnHeaderTitle": {
               fontWeight: 700,
+            },
+            "& .MuiDataGrid-cell": {
+              borderRight: `1px solid ${theme.palette.divider}`,
+            },
+            "& .MuiDataGrid-cell:last-of-type": {
+              borderRight: "none",
             },
           }),
         },
