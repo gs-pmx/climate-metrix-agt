@@ -10,6 +10,7 @@ import {
   Divider,
   Stack,
   Typography,
+  alpha,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
@@ -44,21 +45,32 @@ const SCROLLABLE_TABLE_SX = {
 // Post-C4 round-3 item 3: distinct accent color per scope so the scope
 // sections read as clearly separate "bands" while scanning the By
 // Activity view. Mapped to MUI's palette slots so the colors move with
-// the theme (light/dark) and any future palette tuning. Choice of
-// slots:
-//   - Scope 1 (direct emissions, e.g., stationary/mobile combustion):
-//       error.main — warm red/orange, signals "on-site combustion".
-//   - Scope 2 (purchased energy): primary.main — app blue, signals
-//       "grid/utility".
-//   - Scope 3 (value chain/indirect): success.main — green, signals
-//       "supply chain / broader footprint".
-// Fallback (if a scope id we don't recognize appears): text.secondary.
-function scopeAccentPaletteSlot(scopeId) {
+// the theme (light/dark) and any future palette tuning.
+//
+// Post-C4 round-4 item 5: step down from the `.main` saturated slot to
+// the `.light` variant for the border color — the original `.main`
+// values read as loud against the data-entry UI. We also return the
+// `.main` slot separately so callers can derive a very light (<=8%
+// alpha) background tint for the whole header bar. That "barely-there
+// wash" reinforces the scope boundary without shouting.
+//
+// Choice of slots:
+//   - Scope 1 (direct emissions): error — warm red/orange.
+//   - Scope 2 (purchased energy): primary — app blue.
+//   - Scope 3 (value chain / indirect): success — green.
+// Fallback (unknown scope id): text.secondary with no tint.
+function scopeAccentPalette(scopeId) {
   const id = String(scopeId || "").toLowerCase();
-  if (id.includes("scope_1") || id === "scope1" || id === "1") return "error.main";
-  if (id.includes("scope_2") || id === "scope2" || id === "2") return "primary.main";
-  if (id.includes("scope_3") || id === "scope3" || id === "3") return "success.main";
-  return "text.secondary";
+  if (id.includes("scope_1") || id === "scope1" || id === "1") {
+    return { border: "error.light", tint: "error.main" };
+  }
+  if (id.includes("scope_2") || id === "scope2" || id === "2") {
+    return { border: "primary.light", tint: "primary.main" };
+  }
+  if (id.includes("scope_3") || id === "scope3" || id === "3") {
+    return { border: "success.light", tint: "success.main" };
+  }
+  return { border: "text.secondary", tint: null };
 }
 
 function ActivityAccordion({
@@ -178,6 +190,11 @@ function ActivityAccordion({
           type: "singleSelect",
           valueOptions: unitOptions,
           renderEditCell: (params) => <SingleSelectEditCell {...params} />,
+          // Post-C4 round-4 item 1: Unit column centered to match
+          // Scope / Status / Details. Prior polish centered those
+          // columns but missed Unit, leaving it visually out of step.
+          align: "center",
+          headerAlign: "center",
         },
         {
           field: "status",
@@ -361,11 +378,29 @@ export default function ByActivityTable({
       const key = `${scopeId}::${subId}`;
       const node = sectionRefs.current.get(key);
       if (node && typeof node.scrollIntoView === "function") {
-        node.scrollIntoView({ behavior: "smooth", block: "start" });
-        setActiveSubcategoryId(subId);
-        // If the scope is collapsed make sure we open it so the target
-        // section is visible after the scroll lands.
-        setScopeCollapsed((prev) => (prev?.[scopeId] ? { ...prev, [scopeId]: false } : prev));
+        // Post-C4 round-4 item 12: sidebar nav used
+        // behavior: "smooth" which animates the scroll over hundreds of
+        // ms (browser-tuned) — a click on a subcategory row felt slow
+        // even though the handler fired immediately. Switch to instant
+        // scroll so the click feels synchronous.
+        //
+        // State updates that follow (active subcategory highlight,
+        // scope expansion) are wrapped in startTransition so React
+        // treats them as non-urgent. The scroll still happens
+        // immediately; the highlighted-row repaint lands as soon as
+        // the browser has a frame to spare.
+        node.scrollIntoView({ behavior: "auto", block: "start" });
+        const applyState = () => {
+          setActiveSubcategoryId(subId);
+          // If the scope is collapsed make sure we open it so the target
+          // section is visible after the scroll lands.
+          setScopeCollapsed((prev) => (prev?.[scopeId] ? { ...prev, [scopeId]: false } : prev));
+        };
+        if (typeof React.startTransition === "function") {
+          React.startTransition(applyState);
+        } else {
+          applyState();
+        }
       }
     },
     [],
@@ -424,7 +459,7 @@ export default function ByActivityTable({
         <Stack spacing={3}>
           {tree.map((scope, scopeIndex) => {
             const collapsed = Boolean(scopeCollapsed[scope.id]);
-            const accentColor = scopeAccentPaletteSlot(scope.id);
+            const accent = scopeAccentPalette(scope.id);
             return (
               <Box
                 key={scope.id}
@@ -433,7 +468,13 @@ export default function ByActivityTable({
                   // between scopes to reinforce section boundaries. The
                   // first scope keeps its baseline spacing so it doesn't
                   // push away from the view-selector bar above.
-                  mt: scopeIndex === 0 ? 0 : 2,
+                  //
+                  // Post-C4 round-4 item 6: bump the extra top margin
+                  // so scope-to-scope transitions read more clearly
+                  // (user wanted "a tiny touch more" than the prior
+                  // mt: 2 / 16px). 24px (mt: 3) lands in the
+                  // 8-12px-above-baseline range they asked for.
+                  mt: scopeIndex === 0 ? 0 : 3,
                 }}
               >
                 <Stack
@@ -443,14 +484,28 @@ export default function ByActivityTable({
                   sx={{
                     py: 1,
                     pl: 1.25,
+                    pr: 1.25,
                     cursor: "pointer",
                     userSelect: "none",
                     // Colored accent strip on the left edge of each
                     // scope header so users can pattern-match Scope 1
                     // vs 2 vs 3 while scanning.
+                    //
+                    // Post-C4 round-4 item 5: desaturate from .main to
+                    // .light and layer a very light (~5% alpha) wash
+                    // of the same color across the whole header bar so
+                    // the scope row reads as a gentle "section
+                    // heading" instead of a saturated strip.
                     borderLeft: "4px solid",
-                    borderLeftColor: accentColor,
+                    borderLeftColor: accent.border,
                     borderRadius: 1,
+                    backgroundColor: (theme) => (accent.tint
+                      ? alpha(
+                        theme.palette[accent.tint.split(".")[0]]?.main
+                          || theme.palette.text.primary,
+                        theme.palette.mode === "dark" ? 0.08 : 0.05,
+                      )
+                      : "transparent"),
                   }}
                   onClick={() => setScopeCollapsed((prev) => ({ ...prev, [scope.id]: !prev?.[scope.id] }))}
                   data-testid={`scope-header-${scope.id}`}
@@ -485,7 +540,12 @@ export default function ByActivityTable({
                 </Stack>
                 <Divider sx={{ mb: 1 }} />
                 <Collapse in={!collapsed} unmountOnExit>
-                  <Stack spacing={2}>
+                  {/* Post-C4 round-4 item 6: extra vertical rhythm
+                      between subcategories. Prior spacing={2} (16px)
+                      felt cramped once the scope header gained its
+                      tinted background; bumping to spacing={3} (24px)
+                      adds the 8px beat the user asked for. */}
+                  <Stack spacing={3}>
                     {scope.subcategories.map((sub, subIndex) => {
                       const key = `${scope.id}::${sub.id}`;
                       return (
@@ -505,9 +565,13 @@ export default function ByActivityTable({
                             // scope's Divider) with padding so it reads
                             // as "new subgroup starts here" without
                             // shouting.
+                            //
+                            // Post-C4 round-4 item 6: tip the top
+                            // padding up from 2 -> 2.5 so the break
+                            // between subcategories feels roomier.
                             ...(subIndex > 0 && {
                               borderTop: (t) => `1px solid ${t.palette.divider}`,
-                              pt: 2,
+                              pt: 2.5,
                             }),
                           }}
                         >

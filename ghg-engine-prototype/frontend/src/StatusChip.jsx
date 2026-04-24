@@ -36,6 +36,28 @@ function tooltipFor(status, fieldErrors, missingRequired, error) {
 // to this row. When non-empty, the chip switches to the backend-error
 // variant (filled red) to distinguish it from client-side invalid
 // (outlined red).
+//
+// Post-C4 round-4 item 9: emphasize the backend-error chip so it reads
+// as unmistakable. Prior polish used `variant="filled"` + `color="error"`
+// which is already red-on-white, but against the muted-gray
+// "missing details" chip the two still read close enough in glance that
+// a frustrated user called the error "soft blue". Layering on a
+// fontWeight bump, a thicker outline, and a darker/deeper fill raises
+// the visual weight so the error chip is the loudest thing on the row
+// when it shows up.
+const BACKEND_ERROR_CHIP_SX = {
+  fontWeight: 700,
+  letterSpacing: 0.3,
+  // Force a deeper red than the default error.main so the chip stands
+  // out from the outlined-red "Invalid" chip. Use the theme's error.dark
+  // slot for contrast parity across light/dark mode.
+  backgroundColor: "error.dark",
+  color: "error.contrastText",
+  border: "1px solid",
+  borderColor: "error.dark",
+  "& .MuiChip-label": { fontWeight: 700 },
+};
+
 export function StatusChip({ draft, activityType, rowErrors = [] }) {
   const { status, fieldErrors, missingRequired, error } = classifyRow(draft, activityType, rowErrors);
   const label = getRowStatusLabel(status);
@@ -45,13 +67,18 @@ export function StatusChip({ draft, activityType, rowErrors = [] }) {
   // "Invalid" chip.
   const variant = status === ROW_STATUS.BACKEND_ERROR ? "filled" : "outlined";
   const tooltip = tooltipFor(status, fieldErrors, missingRequired, error);
+  const chipSx = status === ROW_STATUS.BACKEND_ERROR
+    ? BACKEND_ERROR_CHIP_SX
+    : status === ROW_STATUS.NOT_STARTED
+      ? { opacity: 0.55 }
+      : undefined;
   const chip = (
     <Chip
       label={label}
       color={color}
       size="small"
       variant={variant}
-      sx={status === ROW_STATUS.NOT_STARTED ? { opacity: 0.55 } : undefined}
+      sx={chipSx}
     />
   );
   return tooltip ? <Tooltip title={tooltip} arrow>{chip}</Tooltip> : chip;
@@ -66,13 +93,18 @@ export function RepeatableStatusChip({ drafts, activityType, rowErrors = [] }) {
     : getRowStatusLabel(status);
   const color = getRowStatusColor(status);
   const variant = status === ROW_STATUS.BACKEND_ERROR ? "filled" : "outlined";
+  const chipSx = status === ROW_STATUS.BACKEND_ERROR
+    ? BACKEND_ERROR_CHIP_SX
+    : status === ROW_STATUS.NOT_STARTED
+      ? { opacity: 0.55 }
+      : undefined;
   const chip = (
     <Chip
       label={label}
       color={color}
       size="small"
       variant={variant}
-      sx={status === ROW_STATUS.NOT_STARTED ? { opacity: 0.55 } : undefined}
+      sx={chipSx}
     />
   );
   if (status === ROW_STATUS.BACKEND_ERROR && error) {
