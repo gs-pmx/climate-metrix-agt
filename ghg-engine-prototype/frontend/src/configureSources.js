@@ -112,3 +112,115 @@ export function makeApplyPerActivityUpdate({ activityTypeId, checkedById }) {
     });
   };
 }
+
+// Derive the dialog's in-scope activity list for the per-Reporting-Unit
+// "+ Add Activity" dialog. Given the reporting unit + the full catalog,
+// returns (activityType, checked) tuples we render as checkboxes. Checked
+// mirrors whether the activity_type_id appears in the RU's
+// applicable_activity_types list today. Mirror of
+// `buildReportingUnitSelection`, but keyed on activityType instead of RU.
+export function buildActivitySelection(reportingUnit, activityCatalog) {
+  const current = new Set(
+    Array.isArray(reportingUnit?.applicable_activity_types)
+      ? reportingUnit.applicable_activity_types
+      : [],
+  );
+  return (activityCatalog || []).map((at) => ({
+    activityType: at,
+    checked: current.has(at?.activity_type_id),
+  }));
+}
+
+// Given a map of {activity_type_id -> checked boolean} produced by the
+// per-Reporting-Unit "+ Add Activity" dialog, return an updater function
+// suitable for `setFacilities`. Only the single reporting unit
+// `reportingUnitId` is mutated; other RUs pass through unchanged.
+//
+// Semantics:
+//   - checked=true  -> activity_type_id is added to the RU's
+//                      applicable_activity_types (if not already there).
+//   - checked=false -> activity_type_id is removed from the RU's list.
+//   - ids not present in `checkedById` are not touched.
+//
+// Empty applicable_activity_types (legacy permissive) is handled the
+// same way as an explicit list: adding an id materializes a non-empty
+// list, which flips the RU out of legacy permissive mode. That matches
+// what the user explicitly asked for by clicking into this dialog.
+export function makeApplyPerReportingUnitUpdate({ reportingUnitId, checkedById }) {
+  return function applyUpdate(reportingUnits) {
+    return (reportingUnits || []).map((ru) => {
+      if (ru?.id !== reportingUnitId) return ru;
+      const current = Array.isArray(ru.applicable_activity_types)
+        ? ru.applicable_activity_types
+        : [];
+      const currentSet = new Set(current);
+      let changed = false;
+      for (const [atId, isChecked] of Object.entries(checkedById || {})) {
+        const has = currentSet.has(atId);
+        if (isChecked && !has) {
+          currentSet.add(atId);
+          changed = true;
+        } else if (!isChecked && has) {
+          currentSet.delete(atId);
+          changed = true;
+        }
+      }
+      if (!changed) return ru;
+      // Preserve original catalog order by iterating `current` first and
+      // appending anything newly-added in the order it appeared in the
+      // checkedById map.
+      const nextList = [];
+      for (const id of current) if (currentSet.has(id)) nextList.push(id);
+      for (const id of Object.keys(checkedById || {})) {
+        if (currentSet.has(id) && !nextList.includes(id)) nextList.push(id);
+      }
+      return { ...ru, applicable_activity_types: nextList };
+    });
+  };
+}
+
+// Phase C4 starter-default set for the Configure Sources tag library.
+// The IDs match the closest catalog match as of the Phase C4 catalog
+// inspection; when a future catalog rename breaks one of these, the
+// dialog still works — unknown ids are just skipped by the union/set
+// helpers below. Keep the list small (one representative activity per
+// scope) so clicking "Use starter defaults" does not overwhelm a new
+// user with twenty pre-selected pills.
+export const STARTER_DEFAULT_IDS = [
+  "scope1_stationary_natural_gas",
+  "scope1_mobile_diesel",
+  "scope2_purchased_electricity_grid_mix",
+  "scope3_waste_generated_in_operations",
+];
+
+// Filter the defaults to only those present in the catalog. This keeps
+// the dialog from trying to add activities the catalog does not ship.
+export function defaultsPresentInCatalog(activityCatalog, defaults = STARTER_DEFAULT_IDS) {
+  const catalogIds = new Set((activityCatalog || []).map((at) => at?.activity_type_id).filter(Boolean));
+  return defaults.filter((id) => catalogIds.has(id));
+}
+
+// Union a set of existing checked ids with the defaults present in the
+// catalog. Used by the "Add starter defaults" action.
+export function addDefaultsToChecked(checkedSet, activityCatalog, defaults = STARTER_DEFAULT_IDS) {
+  const next = new Set(checkedSet instanceof Set ? checkedSet : (checkedSet || []));
+  for (const id of defaultsPresentInCatalog(activityCatalog, defaults)) next.add(id);
+  return next;
+}
+
+// Replace the checked set with the defaults. Used by the "Use starter
+// defaults" action when nothing is currently selected.
+export function setDefaultsAsChecked(activityCatalog, defaults = STARTER_DEFAULT_IDS) {
+  return new Set(defaultsPresentInCatalog(activityCatalog, defaults));
+}
+
+// "Select all Scope N" helper. Returns a new Set that unions
+// `checkedSet` with every activity_type_id in the catalog whose scope
+// matches `scopeMatcher(scope)`.
+export function selectAllInScope(checkedSet, activityCatalog, scopeMatcher) {
+  const next = new Set(checkedSet instanceof Set ? checkedSet : (checkedSet || []));
+  for (const at of activityCatalog || []) {
+    if (scopeMatcher(at?.scope)) next.add(at.activity_type_id);
+  }
+  return next;
+}

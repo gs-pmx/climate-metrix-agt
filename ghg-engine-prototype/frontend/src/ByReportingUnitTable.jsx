@@ -9,8 +9,10 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
+import AddActivityDialog from "./AddActivityDialog";
 import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
@@ -40,6 +42,7 @@ function ReportingUnitAccordion({
   upsertActivity,
   openDetailsForPair,
   calcErrors,
+  onOpenAddActivity,
   show,
 }) {
   // Phase C2 filter: only show activities in this unit's applicable list.
@@ -224,6 +227,21 @@ function ReportingUnitAccordion({
             <Chip label="Legacy: all sources" size="small" variant="outlined" color="info" />
           ) : null}
           <Box sx={{ flexGrow: 1 }} />
+          <Button
+            size="small"
+            variant="text"
+            startIcon={<AddIcon />}
+            // Stop propagation so clicking the button does not also
+            // toggle the surrounding accordion — MUI forwards clicks to
+            // the AccordionSummary otherwise. Mirrors the "+ Add
+            // Reporting Unit" button in the By Activity view header.
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpenAddActivity?.(reportingUnit);
+            }}
+          >
+            Add Activity
+          </Button>
           <Typography variant="body2" color="text.secondary">
             {filledCount}/{applicableActivities.length} activities
           </Typography>
@@ -260,8 +278,19 @@ export default function ByReportingUnitTable({
   upsertActivity,
   openDetailsForPair,
   calcErrors = [],
+  onApplyAddActivity,
+  existingActivitiesByPair,
   show,
 }) {
+  const [addDialogRu, setAddDialogRu] = React.useState(null);
+
+  const handleSaveAdd = (checkedById) => {
+    if (addDialogRu && onApplyAddActivity) {
+      onApplyAddActivity(addDialogRu.id, checkedById);
+    }
+    setAddDialogRu(null);
+  };
+
   return (
     <Stack spacing={1}>
       {reportingUnits.map((reportingUnit) => (
@@ -274,9 +303,19 @@ export default function ByReportingUnitTable({
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
           calcErrors={calcErrors}
+          onOpenAddActivity={(ru) => setAddDialogRu(ru)}
           show={show}
         />
       ))}
+
+      <AddActivityDialog
+        open={Boolean(addDialogRu)}
+        reportingUnit={addDialogRu}
+        activityCatalog={selectableActivities}
+        existingActivitiesByPair={existingActivitiesByPair}
+        onClose={() => setAddDialogRu(null)}
+        onSave={handleSaveAdd}
+      />
     </Stack>
   );
 }

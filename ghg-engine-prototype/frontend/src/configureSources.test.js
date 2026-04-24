@@ -2,10 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  STARTER_DEFAULT_IDS,
+  addDefaultsToChecked,
+  buildActivitySelection,
   buildReportingUnitSelection,
   collectChecked,
+  defaultsPresentInCatalog,
   initialSetFromReportingUnit,
   makeApplyPerActivityUpdate,
+  makeApplyPerReportingUnitUpdate,
+  selectAllInScope,
+  setDefaultsAsChecked,
   shouldWarnOnUncheck,
   toggleActivity,
 } from "./configureSources.js";
@@ -202,4 +209,155 @@ test("per-activity save leaves RUs not present in checkedById untouched", () => 
   assert.deepEqual(next[0].applicable_activity_types, ["scope1_stationary_natural_gas"]);
   // F2 identity preserved
   assert.equal(next[1], units[1]);
+});
+
+// ---------------------------------------------------------------------------
+// Phase C4: starter defaults + per-scope select-all helpers
+// ---------------------------------------------------------------------------
+
+test("defaultsPresentInCatalog filters to ids actually in the catalog", () => {
+  const catalog = [
+    { activity_type_id: "scope1_stationary_natural_gas" },
+    { activity_type_id: "scope2_purchased_electricity_grid_mix" },
+  ];
+  const result = defaultsPresentInCatalog(catalog);
+  assert.deepEqual(result, [
+    "scope1_stationary_natural_gas",
+    "scope2_purchased_electricity_grid_mix",
+  ]);
+});
+
+test("addDefaultsToChecked unions with the existing set", () => {
+  const checked = new Set(["custom_x"]);
+  const catalog = [
+    { activity_type_id: "scope1_stationary_natural_gas" },
+    { activity_type_id: "scope3_waste_generated_in_operations" },
+  ];
+  const next = addDefaultsToChecked(checked, catalog);
+  assert.ok(next.has("custom_x"));
+  assert.ok(next.has("scope1_stationary_natural_gas"));
+  assert.ok(next.has("scope3_waste_generated_in_operations"));
+});
+
+test("setDefaultsAsChecked discards existing selections", () => {
+  const catalog = [
+    { activity_type_id: "scope1_stationary_natural_gas" },
+    { activity_type_id: "scope2_purchased_electricity_grid_mix" },
+  ];
+  const next = setDefaultsAsChecked(catalog);
+  assert.equal(next.size, 2);
+  assert.ok(next.has("scope1_stationary_natural_gas"));
+});
+
+test("STARTER_DEFAULT_IDS covers all three scopes", () => {
+  assert.ok(STARTER_DEFAULT_IDS.some((id) => id.startsWith("scope1_")));
+  assert.ok(STARTER_DEFAULT_IDS.some((id) => id.startsWith("scope2_")));
+  assert.ok(STARTER_DEFAULT_IDS.some((id) => id.startsWith("scope3_")));
+});
+
+// ---------------------------------------------------------------------------
+// Phase C4: per-Reporting-Unit "+ Add Activity" dialog helpers
+// ---------------------------------------------------------------------------
+
+test("buildActivitySelection exposes per-activity checked state for a reporting unit", () => {
+  const ru = {
+    id: "F1",
+    applicable_activity_types: ["scope2_electricity"],
+  };
+  const catalog = [
+    { activity_type_id: "scope1_stationary_natural_gas", label: "NG" },
+    { activity_type_id: "scope2_electricity", label: "Elec" },
+    { activity_type_id: "scope3_business_travel", label: "BT" },
+  ];
+  const rows = buildActivitySelection(ru, catalog);
+  assert.equal(rows.length, 3);
+  assert.equal(rows[0].checked, false);
+  assert.equal(rows[1].checked, true);
+  assert.equal(rows[2].checked, false);
+});
+
+test("buildActivitySelection treats missing applicable_activity_types as nothing-checked", () => {
+  const ru = { id: "F1" };
+  const catalog = [{ activity_type_id: "scope1_a" }];
+  const rows = buildActivitySelection(ru, catalog);
+  assert.equal(rows[0].checked, false);
+});
+
+test("per-RU save adds newly-checked activity_type_ids", () => {
+  const units = [
+    { id: "F1", applicable_activity_types: ["scope2_electricity"] },
+    { id: "F2", applicable_activity_types: ["scope3_business_travel"] },
+  ];
+  const apply = makeApplyPerReportingUnitUpdate({
+    reportingUnitId: "F1",
+    checkedById: { scope1_stationary_natural_gas: true },
+  });
+  const next = apply(units);
+  assert.deepEqual(next[0].applicable_activity_types, [
+    "scope2_electricity",
+    "scope1_stationary_natural_gas",
+  ]);
+  assert.equal(next[1], units[1]);
+});
+
+test("per-RU save removes newly-unchecked activity_type_ids", () => {
+  const units = [
+    { id: "F1", applicable_activity_types: ["scope2_electricity", "scope1_stationary_natural_gas"] },
+  ];
+  const apply = makeApplyPerReportingUnitUpdate({
+    reportingUnitId: "F1",
+    checkedById: { scope2_electricity: false },
+  });
+  const next = apply(units);
+  assert.deepEqual(next[0].applicable_activity_types, ["scope1_stationary_natural_gas"]);
+});
+
+test("per-RU save leaves other RUs untouched", () => {
+  const units = [
+    { id: "F1", applicable_activity_types: [] },
+    { id: "F2", applicable_activity_types: ["scope2_electricity"] },
+  ];
+  const apply = makeApplyPerReportingUnitUpdate({
+    reportingUnitId: "F1",
+    checkedById: { scope1_stationary_natural_gas: true },
+  });
+  const next = apply(units);
+  assert.equal(next[1], units[1]);
+  assert.deepEqual(next[0].applicable_activity_types, ["scope1_stationary_natural_gas"]);
+});
+
+test("per-RU save is identity-stable when no actual change is requested", () => {
+  const units = [
+    { id: "F1", applicable_activity_types: ["scope2_electricity"] },
+  ];
+  const apply = makeApplyPerReportingUnitUpdate({
+    reportingUnitId: "F1",
+    checkedById: { scope2_electricity: true, scope3_business_travel: false },
+  });
+  const next = apply(units);
+  assert.equal(next[0], units[0]);
+});
+
+test("per-RU save materializes an empty permissive list when the first activity is added", () => {
+  const units = [{ id: "F1", applicable_activity_types: [] }];
+  const apply = makeApplyPerReportingUnitUpdate({
+    reportingUnitId: "F1",
+    checkedById: { scope1_stationary_natural_gas: true },
+  });
+  const next = apply(units);
+  assert.deepEqual(next[0].applicable_activity_types, ["scope1_stationary_natural_gas"]);
+});
+
+test("selectAllInScope adds every matching activity and preserves existing", () => {
+  const catalog = [
+    { activity_type_id: "scope1_a", scope: "Scope 1" },
+    { activity_type_id: "scope1_b", scope: "Scope 1" },
+    { activity_type_id: "scope2_c", scope: "Scope 2" },
+  ];
+  const starting = new Set(["custom_x"]);
+  const next = selectAllInScope(starting, catalog, (s) => /scope\s*1/i.test(s || ""));
+  assert.ok(next.has("custom_x"));
+  assert.ok(next.has("scope1_a"));
+  assert.ok(next.has("scope1_b"));
+  assert.ok(!next.has("scope2_c"));
 });

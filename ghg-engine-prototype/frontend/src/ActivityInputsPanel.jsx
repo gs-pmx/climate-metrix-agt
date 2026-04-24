@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import ActivityDetailDialog from "./ActivityDetailDialog";
 import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
+import NoticesBanner from "./NoticesBanner";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
 import ByReportingUnitTable from "./ByReportingUnitTable";
@@ -31,7 +32,7 @@ import {
 } from "./activityDrafts";
 import { hasMeaningfulData, pairKey } from "./gridEditingHelpers";
 import { buildExistingPairsSet, ensureActivityApplicable } from "./applicability";
-import { makeApplyPerActivityUpdate } from "./configureSources";
+import { makeApplyPerActivityUpdate, makeApplyPerReportingUnitUpdate } from "./configureSources";
 
 // Thin orchestrator: owns shared state, passes it down to the three view
 // components. All heavy rendering lives in ByActivityTable,
@@ -332,6 +333,18 @@ export default function ActivityInputsPanel({
     [setReportingUnits],
   );
 
+  // Symmetric per-RU "+ Add Activity" save handler. Mutates the single
+  // target RU's applicable_activity_types based on the activity-type map
+  // the dialog hands back.
+  const applyAddActivity = React.useCallback(
+    (reportingUnitId, checkedById) => {
+      if (!setReportingUnits) return;
+      const updater = makeApplyPerReportingUnitUpdate({ reportingUnitId, checkedById });
+      setReportingUnits((prev) => updater(prev));
+    },
+    [setReportingUnits],
+  );
+
   const detailDraft = visibleActivities.find((draft) => draft.id === detailDraftId) || null;
   const detailActivityType = detailDraft ? activityTypesById[detailDraft.activity_type_id] : null;
   const repeatableActivityType = repeatableDialog ? activityTypesById[repeatableDialog.activityTypeId] : null;
@@ -390,16 +403,32 @@ export default function ActivityInputsPanel({
         </Alert>
       ) : null}
 
-      {activePartialActivities.map((activityType) => (
-        <Alert key={activityType.activity_type_id} severity="warning">
-          <strong>{activityType.label}:</strong> {getPartialReason(activityType) || "Catalog metadata marks this activity as partial support."}
-        </Alert>
-      ))}
-      {unsupportedActivityNotices.map(({ activityType, notice }) => (
-        <Alert key={activityType.activity_type_id} severity={notice?.severity || "info"}>
-          <strong>{activityType.label}:</strong> {notice?.message || "Visible for draft entry and snapshotting, but not available for calculation yet."}
-        </Alert>
-      ))}
+      {/*
+        Phase C4: the partial/unsupported advisory stack used to be one
+        full-width Alert per activity. It grew to ~6-8 persistent banners
+        whenever a project had the mix of activity types our test users
+        actually work with. We now collapse the whole stack into a single
+        NoticesBanner row that stays out of the way until the user asks
+        for it. The critical "no reporting units" alert above is kept as
+        a top-level Alert because it gates the entire data-entry flow.
+      */}
+      <NoticesBanner
+        notices={[
+          ...activePartialActivities.map((activityType) => ({
+            id: `partial::${activityType.activity_type_id}`,
+            severity: "warning",
+            title: activityType.label,
+            message: getPartialReason(activityType) || "Catalog metadata marks this activity as partial support.",
+          })),
+          ...unsupportedActivityNotices.map(({ activityType, notice }) => ({
+            id: `unsupported::${activityType.activity_type_id}`,
+            severity: notice?.severity || "info",
+            title: activityType.label,
+            message: notice?.message || "Visible for draft entry and snapshotting, but not available for calculation yet.",
+          })),
+        ]}
+        storageKey="ghgp.notices.activityInputs.dismissed"
+      />
 
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
@@ -469,6 +498,8 @@ export default function ActivityInputsPanel({
           upsertActivity={upsertActivity}
           openDetailsForPair={openDetailsForPair}
           calcErrors={calcErrors}
+          onApplyAddActivity={applyAddActivity}
+          existingActivitiesByPair={existingActivitiesByPair}
           show={show}
         />
       ) : null}

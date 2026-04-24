@@ -21,14 +21,16 @@ function buildTheme(mode) {
     text: { primary: "#deebf4", secondary: "#b7cad7" },
   };
 
-  // Slightly tighter corner radius (10 instead of 14) — the previous
-  // rounding made table corners show background slivers when accordions
-  // expanded, and the new value is visually cleaner at small surfaces
-  // like chips and buttons. Accordion/table seam fixes live inside the
-  // components that render them.
+  // Phase C4 tightens the global corner radius another increment (from 10
+  // to 7). The previous 10px value still felt rounded-pillow on dense
+  // MUI surfaces (Paper cards, Dialog shells, the chip library in
+  // Configure Sources). 7px keeps enough softness to avoid pure sharp
+  // edges while visually sharpening the overall data-entry UI. The
+  // change cascades through every Paper / Dialog / Chip / Alert / Button
+  // / table shell via MUI's `theme.shape.borderRadius` token.
   return createTheme({
     palette: mode === "dark" ? darkPalette : lightPalette,
-    shape: { borderRadius: 10 },
+    shape: { borderRadius: 7 },
     typography: {
       fontFamily: '"Assistant", "Public Sans", "IBM Plex Sans", "Segoe UI", sans-serif',
       h1: { fontFamily: '"Public Sans", "Assistant", sans-serif', fontWeight: 700 },
