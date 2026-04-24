@@ -8,6 +8,7 @@ import {
   filterApplicableActivities,
   filterApplicableReportingUnits,
   filterRowsApplicable,
+  getSelectedActivityTypeIds,
   groupActivitiesByScope,
   isActivityApplicable,
 } from "./applicability.js";
@@ -404,6 +405,64 @@ test("filterRowsApplicable treats unknown facility_id as permissive (empty-list 
 test("filterRowsApplicable returns [] for non-array rows input", () => {
   assert.deepEqual(filterRowsApplicable(undefined, []), []);
   assert.deepEqual(filterRowsApplicable(null, []), []);
+});
+
+// ---------------------------------------------------------------------------
+// getSelectedActivityTypeIds — feeds the "hide unused" toggle in By Activity
+// ---------------------------------------------------------------------------
+
+test("getSelectedActivityTypeIds returns empty set when every unit's list is empty", () => {
+  const rus = [
+    makeRU({ id: "F1", applicable_activity_types: [] }),
+    makeRU({ id: "F2", applicable_activity_types: [] }),
+  ];
+  const set = getSelectedActivityTypeIds(rus);
+  assert.equal(set.size, 0);
+});
+
+test("getSelectedActivityTypeIds unions a single configured unit alongside an empty unit", () => {
+  const rus = [
+    makeRU({
+      id: "F1",
+      applicable_activity_types: [AT_NATURAL_GAS.activity_type_id, AT_ELECTRICITY.activity_type_id],
+    }),
+    makeRU({ id: "F2", applicable_activity_types: [] }),
+  ];
+  const set = getSelectedActivityTypeIds(rus);
+  assert.equal(set.size, 2);
+  assert.ok(set.has(AT_NATURAL_GAS.activity_type_id));
+  assert.ok(set.has(AT_ELECTRICITY.activity_type_id));
+});
+
+test("getSelectedActivityTypeIds unions overlapping lists across units without double-counting", () => {
+  const rus = [
+    makeRU({
+      id: "F1",
+      applicable_activity_types: [AT_NATURAL_GAS.activity_type_id, AT_ELECTRICITY.activity_type_id],
+    }),
+    makeRU({
+      id: "F2",
+      applicable_activity_types: [AT_ELECTRICITY.activity_type_id, AT_BIZ_TRAVEL.activity_type_id],
+    }),
+  ];
+  const set = getSelectedActivityTypeIds(rus);
+  assert.equal(set.size, 3);
+  assert.ok(set.has(AT_NATURAL_GAS.activity_type_id));
+  assert.ok(set.has(AT_ELECTRICITY.activity_type_id));
+  assert.ok(set.has(AT_BIZ_TRAVEL.activity_type_id));
+});
+
+test("getSelectedActivityTypeIds handles undefined / non-array input defensively", () => {
+  assert.equal(getSelectedActivityTypeIds(undefined).size, 0);
+  assert.equal(getSelectedActivityTypeIds(null).size, 0);
+  assert.equal(getSelectedActivityTypeIds("nope").size, 0);
+  assert.equal(getSelectedActivityTypeIds([{ applicable_activity_types: "nope" }]).size, 0);
+  assert.equal(getSelectedActivityTypeIds([{}]).size, 0);
+  // Falsy ids inside a list are skipped.
+  assert.equal(
+    getSelectedActivityTypeIds([{ applicable_activity_types: ["", null, undefined] }]).size,
+    0,
+  );
 });
 
 test("filterRowsApplicable respects each RU independently across a mixed payload", () => {
