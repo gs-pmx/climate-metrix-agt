@@ -6,6 +6,8 @@ import {
   Box,
   Button,
   Chip,
+  Collapse,
+  Divider,
   Stack,
   Typography,
 } from "@mui/material";
@@ -13,6 +15,7 @@ import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
 import AddReportingUnitDialog from "./AddReportingUnitDialog";
+import ByActivitySidebar from "./ByActivitySidebar";
 import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
@@ -31,6 +34,7 @@ import {
 } from "./gridEditingHelpers";
 import { filterApplicableReportingUnits } from "./applicability";
 import { formatNumericDisplay } from "./numericFormat";
+import { groupByTOC, sectionAnchorId } from "./categorizeForTOC";
 
 const SCROLLABLE_TABLE_SX = {
   width: "100%",
@@ -156,12 +160,6 @@ function ActivityAccordion({
           minWidth: 160,
           editable: false,
           sortable: false,
-          // Bug 3: derive the classifiable draft from the live grid cell
-          // values rather than the `draft` snapshot we wired up in
-          // `gridRows`. Without this the status chip lags the user's
-          // most recent commit by one cell because MUI DataGrid holds
-          // its updated `activity_value` internally before the parent
-          // re-renders with a refreshed `gridRows`.
           renderCell: (params) => {
             const liveDraft = {
               ...params.row.draft,
@@ -297,29 +295,6 @@ function ActivityAccordion({
   );
 }
 
-// Scope 1/2/3 header groups. Purely visual — does not filter.
-function scopeMatches(raw, digit) {
-  const s = String(raw || "").toLowerCase();
-  const pattern = new RegExp(`(?:^|\\b|scope)[\\s_]*${digit}(?:\\b|$)`);
-  return pattern.test(s);
-}
-
-const SCOPE_GROUPS = [
-  { key: "scope_1", label: "Scope 1 - Direct emissions", match: (s) => scopeMatches(s, 1) },
-  { key: "scope_2", label: "Scope 2 - Purchased energy", match: (s) => scopeMatches(s, 2) },
-  { key: "scope_3", label: "Scope 3 - Value chain", match: (s) => scopeMatches(s, 3) },
-  { key: "other", label: "Other", match: () => true },
-];
-
-function groupActivitiesByScope(activities) {
-  const buckets = SCOPE_GROUPS.map((group) => ({ ...group, activities: [] }));
-  for (const activityType of activities) {
-    const bucket = buckets.find((b) => b.match(activityType.scope));
-    if (bucket) bucket.activities.push(activityType);
-  }
-  return buckets.filter((b) => b.activities.length > 0);
-}
-
 export default function ByActivityTable({
   activitiesByPair,
   reportingUnits,
@@ -331,8 +306,66 @@ export default function ByActivityTable({
   existingActivitiesByPair,
   show,
 }) {
-  const groups = React.useMemo(() => groupActivitiesByScope(selectableActivities), [selectableActivities]);
+  const [sidebarOpen, setSidebarOpen] = React.useState(true);
+  const [scopeCollapsed, setScopeCollapsed] = React.useState({});
+  const [activeSubcategoryId, setActiveSubcategoryId] = React.useState("");
   const [addDialogActivity, setAddDialogActivity] = React.useState(null);
+
+  // Build the TOC tree from the catalog. Falls back to an empty tree
+  // when the catalog is still loading.
+  const tree = React.useMemo(() => groupByTOC(selectableActivities), [selectableActivities]);
+
+  // Refs for every rendered subcategory section so we can both scroll on
+  // click and observe visibility for the scroll-spy.
+  const sectionRefs = React.useRef(new Map());
+  const registerSectionRef = React.useCallback((key) => (node) => {
+    if (!node) {
+      sectionRefs.current.delete(key);
+    } else {
+      sectionRefs.current.set(key, node);
+    }
+  }, []);
+
+  const handleNavigate = React.useCallback(
+    (scopeId, subId) => {
+      const key = `${scopeId}::${subId}`;
+      const node = sectionRefs.current.get(key);
+      if (node && typeof node.scrollIntoView === "function") {
+        node.scrollIntoView({ behavior: "smooth", block: "start" });
+        setActiveSubcategoryId(subId);
+        // If the scope is collapsed make sure we open it so the target
+        // section is visible after the scroll lands.
+        setScopeCollapsed((prev) => (prev?.[scopeId] ? { ...prev, [scopeId]: false } : prev));
+      }
+    },
+    [],
+  );
+
+  // Scroll-spy: the subcategory whose top edge is closest to (but below)
+  // the sticky header gets highlighted. IntersectionObserver approximates
+  // this by preferring entries crossing a near-top rootMargin.
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) return undefined;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length === 0) return;
+        const top = visible[0];
+        const key = top.target.dataset.tocKey || "";
+        const [, subId] = key.split("::");
+        if (subId) setActiveSubcategoryId(subId);
+      },
+      {
+        root: null,
+        rootMargin: "-96px 0px -60% 0px",
+        threshold: [0, 0.1],
+      },
+    );
+    for (const node of sectionRefs.current.values()) observer.observe(node);
+    return () => observer.disconnect();
+  }, [tree]);
 
   const handleSaveAdd = (checkedById) => {
     if (addDialogActivity && onApplyAddReportingUnit) {
@@ -342,30 +375,101 @@ export default function ByActivityTable({
   };
 
   return (
-    <Stack spacing={2}>
-      {groups.map((group) => (
-        <Stack key={group.key} spacing={1}>
-          <Typography variant="overline" sx={{ color: "text.secondary", letterSpacing: 1 }}>
-            {group.label}
-          </Typography>
-          <Stack spacing={1}>
-            {group.activities.map((activityType) => (
-              <ActivityAccordion
-                key={activityType.activity_type_id}
-                activityType={activityType}
-                activitiesByPair={activitiesByPair}
-                reportingUnits={reportingUnits}
-                totalActivities={selectableActivities.length}
-                upsertActivity={upsertActivity}
-                openDetailsForPair={openDetailsForPair}
-                calcErrors={calcErrors}
-                onOpenAddReportingUnit={(at) => setAddDialogActivity(at)}
-                show={show}
-              />
-            ))}
-          </Stack>
+    <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="flex-start">
+      <ByActivitySidebar
+        tree={tree}
+        activeSubcategoryId={activeSubcategoryId}
+        scopeCollapsedState={scopeCollapsed}
+        setScopeCollapsedState={setScopeCollapsed}
+        onNavigate={handleNavigate}
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+      />
+
+      <Box sx={{ flexGrow: 1, minWidth: 0, width: "100%" }}>
+        <Stack spacing={3}>
+          {tree.map((scope) => {
+            const collapsed = Boolean(scopeCollapsed[scope.id]);
+            return (
+              <Box key={scope.id}>
+                <Stack
+                  direction="row"
+                  spacing={1}
+                  alignItems="center"
+                  sx={{
+                    py: 1,
+                    cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                  onClick={() => setScopeCollapsed((prev) => ({ ...prev, [scope.id]: !prev?.[scope.id] }))}
+                  data-testid={`scope-header-${scope.id}`}
+                >
+                  <ExpandMoreIcon
+                    sx={{
+                      transform: collapsed ? "rotate(-90deg)" : "rotate(0deg)",
+                      transition: "transform 120ms ease",
+                    }}
+                  />
+                  <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                    {scope.label}
+                  </Typography>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <Chip
+                    size="small"
+                    variant="outlined"
+                    label={`${scope.subcategories.reduce((n, s) => n + s.activities.length, 0)} activities`}
+                  />
+                </Stack>
+                <Divider sx={{ mb: 1 }} />
+                <Collapse in={!collapsed} unmountOnExit>
+                  <Stack spacing={2}>
+                    {scope.subcategories.map((sub) => {
+                      const key = `${scope.id}::${sub.id}`;
+                      return (
+                        <Box
+                          key={sub.id}
+                          id={sectionAnchorId(scope.id, sub.id)}
+                          ref={registerSectionRef(key)}
+                          data-toc-key={key}
+                          sx={{ scrollMarginTop: 96 }}
+                        >
+                          <Typography
+                            variant="h6"
+                            sx={{ fontWeight: 600, mb: 1, pl: 0.5 }}
+                          >
+                            {sub.label}
+                          </Typography>
+                          <Stack spacing={1}>
+                            {sub.activities.map((activityType) => (
+                              <ActivityAccordion
+                                key={activityType.activity_type_id}
+                                activityType={activityType}
+                                activitiesByPair={activitiesByPair}
+                                reportingUnits={reportingUnits}
+                                totalActivities={selectableActivities.length}
+                                upsertActivity={upsertActivity}
+                                openDetailsForPair={openDetailsForPair}
+                                calcErrors={calcErrors}
+                                onOpenAddReportingUnit={(at) => setAddDialogActivity(at)}
+                                show={show}
+                              />
+                            ))}
+                          </Stack>
+                        </Box>
+                      );
+                    })}
+                  </Stack>
+                </Collapse>
+              </Box>
+            );
+          })}
+          {tree.length === 0 ? (
+            <Typography variant="body2" color="text.secondary">
+              No selectable activities in the catalog yet.
+            </Typography>
+          ) : null}
         </Stack>
-      ))}
+      </Box>
 
       <AddReportingUnitDialog
         open={Boolean(addDialogActivity)}
