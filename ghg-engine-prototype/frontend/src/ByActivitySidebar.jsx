@@ -201,9 +201,13 @@ export default function ByActivitySidebar({
         width: 260,
         flexShrink: 0,
         position: "sticky",
-        top: 72,
+        // Stack below the sticky top bar (Layer 1) AND the view-selector
+        // bar (Layer 2). Previously hardcoded to 72px, which caused the
+        // TOC to be visually overlapped by the top bar. The CSS vars
+        // resolve to the combined height of both sticky layers above.
+        top: "calc(var(--sticky-top-height) + var(--sticky-secondary-height) + 16px)",
         alignSelf: "flex-start",
-        maxHeight: "calc(100vh - 96px)",
+        maxHeight: "calc(100vh - var(--sticky-top-height) - var(--sticky-secondary-height) - 32px)",
         overflowY: "auto",
       }}
       data-testid="toc-sidebar"

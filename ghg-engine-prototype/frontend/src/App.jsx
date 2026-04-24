@@ -38,6 +38,7 @@ const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
 const ResultsTab = React.lazy(() => import("./ResultsTab"));
 const DashboardTab = React.lazy(() => import("./DashboardTab"));
 const AuditTab = React.lazy(() => import("./AuditTab"));
+const CatalogTab = React.lazy(() => import("./CatalogTab"));
 
 function LazyTabFallback() {
   return (
@@ -735,6 +736,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             <Tab label="Results" disabled={!hasActiveProject} />
             <Tab label="Dashboard" disabled={!hasActiveProject} />
             <Tab label="Audit" disabled={!hasActiveProject} />
+            <Tab label="Catalog" />
           </Tabs>
         </Paper>
       </Box>
@@ -949,7 +951,13 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {!hasActiveProject && tab !== 0 ? (
+      {tab === 6 && (
+        <React.Suspense fallback={<LazyTabFallback />}>
+          <CatalogTab activityCatalog={activityCatalog} />
+        </React.Suspense>
+      )}
+
+      {!hasActiveProject && tab !== 0 && tab !== 6 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
           Create or select a project in the Projects tab to unlock data entry and calculation tabs.
         </Alert>
