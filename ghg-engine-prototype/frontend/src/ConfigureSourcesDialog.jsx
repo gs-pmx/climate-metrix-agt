@@ -187,12 +187,13 @@ export default function ConfigureSourcesDialog({
       onClose={handleAttemptClose}
       // Post-C4 round-4 item 2: previously `maxWidth="lg"` which made
       // the dialog render ~1200px wide — a single scope's pills flowed
-      // across ~10 columns and the whole thing felt too airy. Shrink
-      // to `"sm"` (~600px) so each scope row shows ~4-5 pills before
-      // wrapping. Pills already use inline-flex with `flexWrap: wrap`
-      // (see the Box wrappers around each pill group) so they reflow
-      // naturally at the narrower width.
-      maxWidth="sm"
+      // across ~10 columns and the whole thing felt too airy. We tried
+      // `"sm"` (~600px) which overcorrected — only ~4-5 pills per row.
+      // `"md"` (~900px) lands between the two and surfaces ~6-7 pills
+      // per row, the sweet spot for scanning. Pills already use
+      // inline-flex with `flexWrap: wrap` (see the Box wrappers around
+      // each pill group) so they reflow naturally at any width.
+      maxWidth="md"
       fullWidth
     >
       <DialogTitle>

@@ -1,3 +1,5 @@
+import { parseNumericInput } from "./numericFormat.js";
+
 export const SNAPSHOT_VERSION = 2;
 
 export const EMPTY_ACTIVITY = {
@@ -177,8 +179,12 @@ export function validateDraft(draft, activityType) {
   if (!draft?.facility_id) errors.push("facility");
   if (!draft?.activity_type_id) errors.push("activity");
   if (isBlankValue(draft?.activity?.value)) errors.push("activity value");
-  const numericValue = Number(draft?.activity?.value);
-  if (!isBlankValue(draft?.activity?.value) && !Number.isFinite(numericValue)) {
+  // parseNumericInput accepts comma-formatted strings like "1,234" — using
+  // it here keeps validation aligned with the on-screen NumericField
+  // helper. Falling back to Number() would reject any value that came
+  // back formatted on blur.
+  const numericValue = parseNumericInput(draft?.activity?.value);
+  if (!isBlankValue(draft?.activity?.value) && numericValue == null) {
     errors.push("activity value must be numeric");
   }
   const allowedUnits = getAllowedUnits(activityType);
@@ -203,7 +209,7 @@ export function validateDraft(draft, activityType) {
         errors.push(`${field.label} must be numeric`);
         continue;
       }
-      if (!Number.isFinite(Number(rawQuantityValue))) {
+      if (parseNumericInput(rawQuantityValue) == null) {
         errors.push(`${field.label} must be numeric`);
       }
       const quantityUnits = getFieldUnits(field);
@@ -219,7 +225,7 @@ export function validateDraft(draft, activityType) {
       continue;
     }
     if (isBlankValue(value)) continue;
-    if (field.kind === "number" && !Number.isFinite(Number(value))) {
+    if (field.kind === "number" && parseNumericInput(value) == null) {
       errors.push(`${field.label} must be numeric`);
     }
     if (field.kind === "enum" && !field.options.includes(String(value))) {
@@ -230,6 +236,67 @@ export function validateDraft(draft, activityType) {
     valid: errors.length === 0,
     errors,
   };
+}
+
+// Strip thousands separators from `params` values that the catalog
+// declares as numeric before the payload is shipped. Without this step,
+// values formatted on blur in the detail dialog (e.g., "1,234" for MPG)
+// reach the backend unchanged and the engine rejects them with
+// invalid_param_value because Python's float("1,234") raises.
+//
+// Strings are kept as strings (just with commas stripped to a clean
+// "1234"); the backend's float() accepts numeric strings, and existing
+// snapshots already store quantity values as strings, so this preserves
+// shape compatibility. Values that aren't comma-formatted, or that
+// don't parse as numeric at all, pass through untouched.
+//
+// Catalog fields with non-numeric kinds (enum, boolean, text) and any
+// field the catalog doesn't know about pass through untouched.
+//
+// Exported for direct unit-testing — the live submit flow calls it from
+// `normalizeActivityForSubmit`.
+export function coerceNumericParamsForSubmit(params, activityType) {
+  if (!params || typeof params !== "object") return {};
+  const fields = (activityType?.input_schema?.fields || []).filter((field) => !field.is_primary);
+  const fieldsByKey = new Map();
+  for (const field of fields) {
+    fieldsByKey.set(field.param_key || field.field_id, field);
+  }
+  const cleanScalar = (value) => {
+    if (typeof value !== "string") return value;
+    if (!value.includes(",")) return value;
+    const parsed = parseNumericInput(value);
+    if (parsed == null) return value;
+    // Re-stringify to keep the existing string-vs-number shape rather
+    // than flipping the JSON type for snapshots that already round-trip
+    // string-typed quantities.
+    return String(parsed);
+  };
+  const out = {};
+  for (const [key, value] of Object.entries(params)) {
+    const field = fieldsByKey.get(key);
+    if (!field) {
+      out[key] = value;
+      continue;
+    }
+    if (field.kind === "number") {
+      out[key] = cleanScalar(value);
+      continue;
+    }
+    if (field.kind === "quantity") {
+      if (value && typeof value === "object") {
+        out[key] = {
+          ...value,
+          value: cleanScalar(value.value),
+        };
+      } else {
+        out[key] = value;
+      }
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
 }
 
 export function getCompletionState(draft, activityType) {
@@ -277,14 +344,23 @@ export function normalizeActivityForSubmit(draft, activityType) {
   if (!validation.valid) {
     throw new Error(validation.errors.join(", "));
   }
+  // parseNumericInput strips thousands separators so values formatted on
+  // blur ("1,234") survive the trip to the backend. Number() alone would
+  // serialize them as NaN, which the engine rejects with
+  // invalid_param_value. Falling back to Number() keeps prior behavior
+  // for already-numeric inputs and exotic non-comma formats.
+  const primaryNumeric = parseNumericInput(draft.activity.value);
   return {
     facility_id: draft.facility_id,
     activity_type_id: draft.activity_type_id,
     activity: {
-      value: Number(draft.activity.value),
+      value: primaryNumeric == null ? Number(draft.activity.value) : primaryNumeric,
       unit: draft.activity.unit,
     },
-    params: sanitizeParams(draft.params || {}),
+    params: coerceNumericParamsForSubmit(
+      sanitizeParams(draft.params || {}),
+      activityType,
+    ),
   };
 }
 
