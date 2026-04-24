@@ -44,6 +44,21 @@ function buildTheme(mode) {
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          // Post-C4 sticky-stack CSS variables. Three layers stack from
+          // top to bottom inside the scroll container:
+          //   Layer 1: app nav bar (project/tabs shell)         -> --sticky-top-height
+          //   Layer 2: view-selector + save/run action bar      -> --sticky-secondary-height
+          //   Layer 3: By Activity TOC sidebar (see sidebar sx)
+          // Hardcoded for v1 after visual measurement — tuning these two
+          // numbers is the one-line knob for future adjustments. The
+          // top bar contains the project-info Paper (~108px) plus the
+          // Tabs Paper (~56px) plus an 8px gap, rounded to 176px. The
+          // secondary bar (view-selector + save/run + helper copy) is
+          // ~112px.
+          ":root": {
+            "--sticky-top-height": "176px",
+            "--sticky-secondary-height": "112px",
+          },
           body: {
             minHeight: "100vh",
             background:
@@ -83,6 +98,48 @@ function buildTheme(mode) {
           root: {
             overflow: "hidden",
           },
+        },
+      },
+      // Post-C4 item 3: disable MUI's Button ripple animation. The
+      // default ripple timing (~550ms) made clicks feel laggy — the
+      // action fires synchronously but the visual cue completes after
+      // the ripple settles, giving the appearance that the button took
+      // half a second to react. Disabling the ripple makes the click
+      // feedback instantaneous while MUI still handles hover/focus
+      // visuals. disableRipple on the shared MuiButtonBase default
+      // propagates to Button, IconButton, ToggleButton, MenuItem, Tab,
+      // and Chip (when clickable), so one switch covers every clickable
+      // surface in the app.
+      MuiButtonBase: {
+        defaultProps: {
+          disableRipple: true,
+        },
+      },
+      // Post-C4 item 4: give DataGrid column headers a visible contrast
+      // against data rows. Previously headers blended into the body — a
+      // subtle background tint plus a stronger bottom border and bolder
+      // font solves it without shouting. Applied at the theme level so
+      // every DataGrid instance gets the treatment uniformly.
+      MuiDataGrid: {
+        styleOverrides: {
+          root: ({ theme }) => ({
+            "& .MuiDataGrid-columnHeaders": {
+              backgroundColor: theme.palette.mode === "dark"
+                ? "rgba(78, 159, 207, 0.08)"
+                : "rgba(0, 78, 130, 0.05)",
+              borderBottom: `2px solid ${theme.palette.mode === "dark"
+                ? "rgba(121, 186, 224, 0.35)"
+                : "rgba(0, 78, 130, 0.25)"}`,
+            },
+            "& .MuiDataGrid-columnHeader": {
+              backgroundColor: theme.palette.mode === "dark"
+                ? "rgba(78, 159, 207, 0.08)"
+                : "rgba(0, 78, 130, 0.05)",
+            },
+            "& .MuiDataGrid-columnHeaderTitle": {
+              fontWeight: 700,
+            },
+          }),
         },
       },
     },
