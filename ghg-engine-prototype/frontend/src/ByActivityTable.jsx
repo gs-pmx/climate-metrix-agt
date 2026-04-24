@@ -7,7 +7,6 @@ import {
   Button,
   Chip,
   Collapse,
-  Divider,
   Stack,
   Typography,
   alpha,
@@ -538,7 +537,15 @@ export default function ByActivityTable({
                     label={`${scope.subcategories.reduce((n, s) => n + s.activities.length, 0)} activities`}
                   />
                 </Stack>
-                <Divider sx={{ mb: 1 }} />
+                {/*
+                  Post-C4 round-5 item 3: removed the horizontal rule
+                  that previously sat under each scope header. The
+                  colored left border + 5/8% alpha tint background +
+                  uppercase letter-spacing on the scope label give the
+                  header more than enough demarcation; the Divider read
+                  as a leftover legacy underline.
+                */}
+                <Box sx={{ mb: 1 }} />
                 <Collapse in={!collapsed} unmountOnExit>
                   {/* Post-C4 round-4 item 6: extra vertical rhythm
                       between subcategories. Prior spacing={2} (16px)
