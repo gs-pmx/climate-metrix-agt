@@ -46,17 +46,16 @@ function buildTheme(mode) {
         styleOverrides: {
           // Post-C4 sticky-stack CSS variables. Three layers stack from
           // top to bottom inside the scroll container:
-          //   Layer 1: app nav bar (project/tabs shell)         -> --sticky-top-height
-          //   Layer 2: view-selector + save/run action bar      -> --sticky-secondary-height
+          //   Layer 1: app nav bar (compact tabs bar)            -> --sticky-top-height
+          //   Layer 2: view-selector + save/run action bar       -> --sticky-secondary-height
           //   Layer 3: By Activity TOC sidebar (see sidebar sx)
-          // Hardcoded for v1 after visual measurement — tuning these two
-          // numbers is the one-line knob for future adjustments. The
-          // top bar contains the project-info Paper (~108px) plus the
-          // Tabs Paper (~56px) plus an 8px gap, rounded to 176px. The
-          // secondary bar (view-selector + save/run + helper copy) is
-          // ~112px.
+          // Post-C4 polish item 1 collapsed the app nav from a full
+          // header + tabs (~176px) down to just the tabs row (~64px);
+          // the full header now scrolls away naturally and only the
+          // tabs remain sticky. Tuning these two numbers is the
+          // one-line knob for future adjustments.
           ":root": {
-            "--sticky-top-height": "176px",
+            "--sticky-top-height": "64px",
             "--sticky-secondary-height": "112px",
           },
           body: {
@@ -120,6 +119,11 @@ function buildTheme(mode) {
       // subtle background tint plus a stronger bottom border and bolder
       // font solves it without shouting. Applied at the theme level so
       // every DataGrid instance gets the treatment uniformly.
+      // Post-C4 polish item 2: subtle vertical separators between
+      // columns (cells + headers) using the theme's `divider` color so
+      // they stay quiet in both light and dark mode. The last cell /
+      // header in a row intentionally has no right border so we don't
+      // double-draw against the grid's own outer edge.
       MuiDataGrid: {
         styleOverrides: {
           root: ({ theme }) => ({
@@ -135,9 +139,19 @@ function buildTheme(mode) {
               backgroundColor: theme.palette.mode === "dark"
                 ? "rgba(78, 159, 207, 0.08)"
                 : "rgba(0, 78, 130, 0.05)",
+              borderRight: `1px solid ${theme.palette.divider}`,
+            },
+            "& .MuiDataGrid-columnHeader:last-of-type": {
+              borderRight: "none",
             },
             "& .MuiDataGrid-columnHeaderTitle": {
               fontWeight: 700,
+            },
+            "& .MuiDataGrid-cell": {
+              borderRight: `1px solid ${theme.palette.divider}`,
+            },
+            "& .MuiDataGrid-cell:last-of-type": {
+              borderRight: "none",
             },
           }),
         },
