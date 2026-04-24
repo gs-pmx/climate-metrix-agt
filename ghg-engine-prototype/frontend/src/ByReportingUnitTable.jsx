@@ -130,6 +130,11 @@ function ReportingUnitAccordion({
         type: "singleSelect",
         valueOptions: ({ row }) => row?._unitOptions || [],
         renderEditCell: (params) => <SingleSelectEditCell {...params} />,
+        // Post-C4 round-4 item 1: center Unit column to match Scope /
+        // Status / Details (prior polish centered those but missed
+        // Unit, leaving it left-aligned and out of rhythm).
+        align: "center",
+        headerAlign: "center",
         renderCell: (params) => {
           if (params.row._repeatable) {
             // Post-C4 polish item 7: the literal "Details" string in the
@@ -249,11 +254,30 @@ function ReportingUnitAccordion({
       sx={{
         overflow: "hidden",
         "& .MuiAccordionDetails-root": { overflow: "hidden" },
+        // Post-C4 round-4 item 8: breathing room between successive
+        // Reporting Unit cards so each card reads as its own unit of
+        // information. 14px is the low end of the 12-16px range the
+        // user asked for — conservative because too much gap makes
+        // the view feel fragmented.
+        "&:not(:last-of-type)": { mb: "14px" },
       }}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
         <Stack direction="row" spacing={1.5} alignItems="center" sx={{ width: "100%" }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
+          {/* Post-C4 round-4 item 8: bump the Reporting Unit name from
+              a plain subtitle1/600 to a full-weight h6 in text.primary.
+              Previously the name read like any other row header; now
+              it asserts itself as the section title. Line-height kept
+              snug so the row height doesn't balloon. */}
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              color: "text.primary",
+              fontSize: "1.05rem",
+              lineHeight: 1.3,
+            }}
+          >
             {reportingUnit.facility_name}
           </Typography>
           {reportingUnit.state ? <Chip label={reportingUnit.state} size="small" variant="outlined" /> : null}

@@ -801,7 +801,20 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           // `pointer-events: none` when faded prevents stale click targets
           // (e.g. toggle color-mode button) under a covering compact bar.
           pointerEvents: isScrolled ? "none" : "auto",
-          transition: "opacity 180ms ease",
+          // Post-C4 round-4 item 11: asymmetric fade durations. The
+          // fade-out (scrolling down past 48px) stays at the prior
+          // 180ms because users don't watch it closely. The fade-in
+          // (scrolling back to the top) used the same duration and
+          // read as jarringly slow — the header would reveal itself
+          // well after the user had already arrived at the top. Shrink
+          // fade-in to ~70ms so the header snaps back in. When
+          // isScrolled=false we're targeting opacity 1 (fade-in in
+          // progress); when isScrolled=true we're targeting opacity 0
+          // (fade-out in progress). The active transition is the one
+          // rendered at the target end state.
+          transition: isScrolled
+            ? "opacity 180ms ease"
+            : "opacity 70ms ease",
         }}
       >
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
