@@ -75,3 +75,69 @@ def test_docs_remain_available_when_frontend_is_served(client_with_frontend: Tes
 
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+
+
+def test_save_and_load_version_round_trips_reporting_unit_display_name(
+    client_api_only: TestClient,
+):
+    """Bug 5 regression: a frontend-style save payload (keyed ``facilities``
+    with ``facility_name`` on each unit) must round-trip through SQLite and
+    be returned to the frontend on load under the same ``facility_name``
+    key. Before the fix the response used ``"name"``, causing the frontend
+    to see blank display names and drop the unit from data-entry grids.
+    """
+
+    project = client_api_only.post(
+        "/api/projects",
+        json={"name": "Round Trip", "inventory_year": 2024},
+    ).json()
+    project_id = project["project_id"]
+
+    frontend_style_snapshot = {
+        "snapshot_version": 2,
+        "facilities": [
+            {
+                "id": "ru_1",
+                "facility_name": "Reporting Unit 1",
+                "location": "Seattle, WA",
+                "region": "",
+                "country": "US",
+                "state": "Washington",
+                "egrid_subregion": "NWPP",
+                "reporting_group": "",
+                "owned_leased": "Owned",
+                "applicable_activity_types": ["scope1_mobile_gasoline"],
+            }
+        ],
+        "activities": [],
+        "result_rows": [],
+        "summary_rows": [],
+        "trace_rows": [],
+        "audit_rows": [],
+    }
+
+    save_response = client_api_only.post(
+        f"/api/projects/{project_id}/versions",
+        json={
+            "inventory_year": 2024,
+            "gwp_set": "AR6",
+            "include_trace": False,
+            "snapshot": frontend_style_snapshot,
+            "note": None,
+        },
+    )
+    assert save_response.status_code == 200, save_response.text
+
+    load_response = client_api_only.get(f"/api/projects/{project_id}/snapshot")
+    assert load_response.status_code == 200, load_response.text
+    body = load_response.json()
+
+    facilities = body["snapshot"]["facilities"]
+    assert len(facilities) == 1
+    unit = facilities[0]
+    # The frontend reads ``facility_name``; this is the bug-5 assertion.
+    assert unit["facility_name"] == "Reporting Unit 1"
+    assert unit["state"] == "Washington"
+    assert unit["egrid_subregion"] == "NWPP"
+    assert unit["applicable_activity_types"] == ["scope1_mobile_gasoline"]
+    assert "name" not in unit

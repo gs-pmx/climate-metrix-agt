@@ -20,7 +20,7 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from ghg_engine.activity_catalog import (
     ActivityInputField,
@@ -221,10 +221,23 @@ class ReportingUnitDraftDTO(BaseModel):
     calculation tables are filtered accordingly. An empty list preserves
     legacy "show all" behavior so snapshots saved before the feature
     shipped continue to canonicalize unchanged.
+
+    The ``name`` attribute serializes under the legacy ``facility_name``
+    key so the JSON shape returned to the frontend matches what the
+    frontend sends on save. Before Phase C3 the DTO serialized as
+    ``"name"`` while the frontend expected ``"facility_name"``; that
+    mismatch dropped every Reporting Unit's display name on checkpoint
+    load.
     """
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
-    name: str = ""
+    name: str = Field(
+        default="",
+        validation_alias=AliasChoices("name", "facility_name"),
+        serialization_alias="facility_name",
+    )
     location: str = ""
     region: str = ""
     country: str = "US"
