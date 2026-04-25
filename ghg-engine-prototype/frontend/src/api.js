@@ -108,5 +108,75 @@ export const api = {
     request(`/projects/${projectId}/snapshot${versionNumber == null ? "" : `?version_number=${versionNumber}`}`),
   saveProjectVersion: (projectId, payload) =>
     request(`/projects/${projectId}/versions`, { method: "POST", body: JSON.stringify(payload) }),
+  // Phase D1 — autosave draft buffer. The autosave hook calls these
+  // through the ``saveDraftViaBeacon`` helper for ``visibilitychange``
+  // flushes; the periodic debounced path goes through ``saveDraft``.
+  loadDraft: (projectId) => request(`/projects/${projectId}/draft`),
+  saveDraft: (projectId, payload) =>
+    request(`/projects/${projectId}/draft`, { method: "POST", body: JSON.stringify(payload) }),
+  deleteDraft: (projectId) =>
+    request(`/projects/${projectId}/draft`, { method: "DELETE" }),
   getSchemaMigrations: () => request("/schema/migrations"),
 };
+
+// Build a "best-effort" save URL for ``navigator.sendBeacon`` /
+// ``fetch({keepalive: true})``. Beacons must be POSTed against an
+// absolute URL, so we resolve the first API base candidate (the
+// canonical one) rather than the multi-base fallback used by ``request``.
+// If ``window.location`` is unavailable (test environments), we return
+// a relative URL — callers should treat a beacon failure as soft.
+export function draftBeaconUrl(projectId) {
+  const base = apiBaseCandidates()[0] || "/api";
+  return `${base}/projects/${encodeURIComponent(projectId)}/draft`;
+}
+
+/**
+ * Best-effort autosave on tab close / window hide.
+ *
+ * Tries ``navigator.sendBeacon`` first because the browser commits to
+ * the request even if the page is unloading. Falls back to ``fetch``
+ * with ``keepalive: true`` for the same property in modern browsers
+ * that don't expose ``sendBeacon`` (rare; included for defensive
+ * coverage).
+ *
+ * Returns true when a beacon/keepalive request was queued. The autosave
+ * hook treats failures as silent — the next visibility-visible event
+ * (or a debounced save) will catch up.
+ */
+export function saveDraftViaBeacon(projectId, payload) {
+  if (!projectId || payload == null) return false;
+  const url = draftBeaconUrl(projectId);
+  let body;
+  try {
+    body = JSON.stringify(payload);
+  } catch {
+    return false;
+  }
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    try {
+      const blob = new Blob([body], { type: "application/json" });
+      const ok = navigator.sendBeacon(url, blob);
+      if (ok) return true;
+    } catch {
+      // sendBeacon throws synchronously when the page is in a state
+      // that disallows network requests (e.g. detached iframe). Fall
+      // through to keepalive fetch.
+    }
+  }
+  if (typeof fetch === "function") {
+    try {
+      // Fire-and-forget; the browser will deliver the request even if
+      // the page unloads thanks to ``keepalive: true``.
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+        keepalive: true,
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return false;
+}
