@@ -45,6 +45,30 @@ class SQLiteWorkspaceDraftStore:
             """
         )
 
+    @staticmethod
+    def ensure_draft_schema(conn: sqlite3.Connection) -> None:
+        """Create the autosave ``project_drafts`` buffer table.
+
+        One row per project (``PRIMARY KEY`` on ``project_id``). The
+        autosave path UPSERTs into this table; the explicit
+        ``save_and_materialize`` path deletes the row so a saved version
+        is the canonical state.
+        """
+
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS project_drafts (
+                project_id TEXT PRIMARY KEY,
+                updated_at TEXT NOT NULL,
+                inventory_year INTEGER NOT NULL,
+                gwp_set TEXT NOT NULL,
+                include_trace INTEGER NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
+            );
+            """
+        )
+
     def _connect(self) -> sqlite3.Connection:
         return connect_sqlite(self._db_path)
 
@@ -220,6 +244,125 @@ class SQLiteWorkspaceDraftStore:
             raise ValueError(f"Unsupported snapshot schema for project '{project_id}': {exc}") from exc
         payload["include_trace"] = bool(payload["include_trace"])
         return payload
+
+    # ------------------------------------------------------------------
+    # Draft buffer (Phase D1): a single in-flight working state per
+    # project. Saved by the periodic autosave path; cleared when an
+    # explicit version is saved through ``save_and_materialize``.
+    # ------------------------------------------------------------------
+
+    def save_draft(
+        self,
+        *,
+        project_id: str,
+        inventory_year: int,
+        gwp_set: str,
+        include_trace: bool,
+        snapshot: ProjectSnapshot,
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        """UPSERT one row in ``project_drafts``.
+
+        The PRIMARY KEY on ``project_id`` keeps a single row per project;
+        ``ON CONFLICT`` replaces the prior row in place. Returns
+        ``{project_id, updated_at}`` so the caller can surface a "saved
+        at" timestamp in the UI.
+        """
+
+        if conn is None:
+            with self._connect() as own_conn:
+                return self.save_draft(
+                    project_id=project_id,
+                    inventory_year=inventory_year,
+                    gwp_set=gwp_set,
+                    include_trace=include_trace,
+                    snapshot=snapshot,
+                    conn=own_conn,
+                )
+        project_row = conn.execute(
+            "SELECT project_id FROM projects WHERE project_id = ?",
+            (project_id,),
+        ).fetchone()
+        if project_row is None:
+            raise KeyError("Project not found.")
+        now = utc_now_iso()
+        conn.execute(
+            """
+            INSERT INTO project_drafts (
+                project_id, updated_at, inventory_year, gwp_set, include_trace, snapshot_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(project_id) DO UPDATE SET
+                updated_at = excluded.updated_at,
+                inventory_year = excluded.inventory_year,
+                gwp_set = excluded.gwp_set,
+                include_trace = excluded.include_trace,
+                snapshot_json = excluded.snapshot_json
+            """,
+            (
+                project_id,
+                now,
+                inventory_year,
+                gwp_set,
+                int(include_trace),
+                snapshot.model_dump_json(by_alias=True),
+            ),
+        )
+        return {"project_id": project_id, "updated_at": now}
+
+    def load_draft(
+        self,
+        project_id: str,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any] | None:
+        """Return the draft row for ``project_id`` or ``None`` if absent.
+
+        The snapshot is parsed via the same alias-aware Pydantic
+        deserialization used by :meth:`get_version_snapshot`, so the
+        ``facilities`` legacy JSON key continues to canonicalize into
+        ``ReportingUnitDraft`` objects.
+        """
+
+        if conn is None:
+            with self._connect() as own_conn:
+                return self.load_draft(project_id, conn=own_conn)
+        row = conn.execute(
+            """
+            SELECT project_id, updated_at, inventory_year, gwp_set, include_trace, snapshot_json
+            FROM project_drafts
+            WHERE project_id = ?
+            """,
+            (project_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        payload = dict(row)
+        try:
+            payload["snapshot"] = ProjectSnapshot.model_validate_json(payload.pop("snapshot_json"))
+        except Exception as exc:
+            raise ValueError(f"Unsupported draft snapshot for project '{project_id}': {exc}") from exc
+        payload["include_trace"] = bool(payload["include_trace"])
+        return payload
+
+    def delete_draft(
+        self,
+        project_id: str,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> None:
+        """Idempotent delete of the draft row for ``project_id``.
+
+        Called by the explicit-version save path so a committed snapshot
+        is not shadowed by an orphan draft, and by the API ``DELETE``
+        endpoint when the user dismisses a restore prompt.
+        """
+
+        if conn is None:
+            with self._connect() as own_conn:
+                self.delete_draft(project_id, conn=own_conn)
+                return
+        conn.execute("DELETE FROM project_drafts WHERE project_id = ?", (project_id,))
 
     def save_workspace_snapshot(
         self,
