@@ -21,7 +21,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { api, ApiError } from "./api";
+import { api, ApiError, saveDraftViaBeacon } from "./api";
 import {
   EMPTY_ACTIVITY,
   buildSnapshot,
@@ -37,6 +37,8 @@ import {
   removeActivitiesForReportingUnit,
   removeReportingUnitFromList,
 } from "./reportingUnits";
+import { useAutosave } from "./useAutosave";
+import AutosaveStatusChip from "./AutosaveStatusChip";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
@@ -234,6 +236,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [catalogError, setCatalogError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
+  // Phase D1: when a project is loaded and a newer-than-latest-version
+  // draft exists in the backend, hold it here until the user accepts or
+  // discards via the restore banner. ``null`` means no banner shown.
+  const [pendingDraft, setPendingDraft] = React.useState(null);
 
   const hasActiveProject = Boolean(activeProjectId);
   const activeProject = React.useMemo(
@@ -329,18 +335,66 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
   const loadLatestSnapshot = React.useCallback(
     async (projectId) => {
-      if (!projectId) return;
+      if (!projectId) return null;
       try {
         const payload = await api.getProjectSnapshot(projectId);
         applySnapshot(payload);
+        // Return so the caller can compare ``created_at`` against any
+        // pending draft's ``updated_at`` to decide whether to show the
+        // restore banner.
+        return payload;
       } catch (e) {
         const msg = String(e?.message || e);
         if (!msg.includes("404")) {
           show(`Failed to load latest snapshot: ${msg}`, "error");
         }
+        return null;
       }
     },
     [applySnapshot, show],
+  );
+
+  // Phase D1: after loading the latest version, ask the backend for a
+  // draft. If it exists AND is newer than the latest version, surface
+  // the restore banner. If older (shouldn't happen — drafts clear on
+  // version save — but defensively), discard silently. If no draft,
+  // no banner.
+  const checkForDraft = React.useCallback(
+    async (projectId, latestVersionPayload) => {
+      if (!projectId) return;
+      let draft;
+      try {
+        draft = await api.loadDraft(projectId);
+      } catch (e) {
+        const msg = String(e?.message || e);
+        if (!msg.includes("404")) {
+          // Soft-fail: surfacing a banner is best-effort. Don't block
+          // the user from working if the draft endpoint hiccups.
+          show(`Failed to check for unsaved draft: ${msg}`, "warning");
+        }
+        setPendingDraft(null);
+        return;
+      }
+      if (!draft) {
+        setPendingDraft(null);
+        return;
+      }
+      const latestCreatedAt = latestVersionPayload?.created_at || null;
+      if (latestCreatedAt && draft.updated_at <= latestCreatedAt) {
+        // Stale draft — version save was supposed to clear it but
+        // somehow didn't. Discard silently rather than offering a
+        // confusing "restore" prompt for older state.
+        try {
+          await api.deleteDraft(projectId);
+        } catch {
+          // ignore
+        }
+        setPendingDraft(null);
+        return;
+      }
+      setPendingDraft(draft);
+    },
+    [show],
   );
 
   const saveCurrentVersion = React.useCallback(
@@ -351,22 +405,28 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       }
       setProjectBusy(true);
       try {
+        const snapshotPayload = buildSnapshot({
+          facilities,
+          activities,
+          resultRows,
+          summaryRows,
+          traceRows,
+          auditRows,
+        });
         const saved = await api.saveProjectVersion(activeProjectId, {
           inventory_year: Number(inventoryYear),
           gwp_set: gwpSet,
           include_trace: includeTrace,
-          snapshot: buildSnapshot({
-            facilities,
-            activities,
-            resultRows,
-            summaryRows,
-            traceRows,
-            auditRows,
-          }),
+          snapshot: snapshotPayload,
           note: note || null,
         });
         await refreshVersions(activeProjectId);
         await refreshProjects();
+        // Phase D1: the explicit version is the new baseline. The
+        // backend already deleted the draft row inside the same
+        // transaction; reset the autosave baseline locally too so the
+        // chip flips back to "All changes saved".
+        autosaveMarkBaseline(snapshotPayload);
         show(`Saved version v${saved.version_number}.`, "success");
       } catch (e) {
         show(`Save failed: ${e.message || e}`, "error");
@@ -378,6 +438,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       activeProjectId,
       activities,
       auditRows,
+      autosaveMarkBaseline,
       facilities,
       gwpSet,
       includeTrace,
@@ -402,6 +463,60 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     return () => window.removeEventListener("keydown", handler);
   }, [hasActiveProject, saveCurrentVersion]);
 
+  // Phase D1 — autosave wiring.
+  //
+  // Build the live snapshot every render so the autosave hook can
+  // dirty-check it. ``null`` whenever there's no active project so the
+  // hook short-circuits.
+  const liveSnapshot = React.useMemo(() => {
+    if (!activeProjectId) return null;
+    return buildSnapshot({
+      facilities,
+      activities,
+      resultRows,
+      summaryRows,
+      traceRows,
+      auditRows,
+    });
+  }, [activeProjectId, facilities, activities, resultRows, summaryRows, traceRows, auditRows]);
+
+  const autosaveSave = React.useCallback(
+    async (snapshot) => {
+      if (!activeProjectId) return;
+      await api.saveDraft(activeProjectId, {
+        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
+        gwp_set: gwpSet,
+        include_trace: includeTrace,
+        snapshot,
+      });
+    },
+    [activeProjectId, inventoryYear, gwpSet, includeTrace],
+  );
+
+  const autosaveBeacon = React.useCallback(
+    (snapshot) => {
+      if (!activeProjectId) return false;
+      return saveDraftViaBeacon(activeProjectId, {
+        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
+        gwp_set: gwpSet,
+        include_trace: includeTrace,
+        snapshot,
+      });
+    },
+    [activeProjectId, inventoryYear, gwpSet, includeTrace],
+  );
+
+  const autosave = useAutosave({
+    snapshot: liveSnapshot,
+    saveFn: autosaveSave,
+    beaconFn: autosaveBeacon,
+    // Don't fire autosaves while a restore banner is up — the user is
+    // about to choose between the draft and the latest version, and an
+    // autosave during that window would race with whichever they pick.
+    enabled: hasActiveProject && !pendingDraft,
+  });
+  const autosaveMarkBaseline = autosave.markBaseline;
+
   const selectProject = React.useCallback(
     async (projectId) => {
       setActiveProjectId(projectId);
@@ -410,10 +525,15 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         setInventoryYear(String(p.inventory_year));
         setProjectRenameDraft(p.name);
       }
+      // Reset autosave baseline; the freshly loaded snapshot will
+      // become the new baseline once ``applySnapshot`` runs.
+      autosaveMarkBaseline(null);
+      setPendingDraft(null);
       await refreshVersions(projectId);
-      await loadLatestSnapshot(projectId);
+      const latest = await loadLatestSnapshot(projectId);
+      await checkForDraft(projectId, latest);
     },
-    [loadLatestSnapshot, projects, refreshVersions],
+    [autosaveMarkBaseline, checkForDraft, loadLatestSnapshot, projects, refreshVersions],
   );
 
   React.useEffect(() => {
@@ -449,7 +569,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           setInventoryYear(String(newest.inventory_year));
           setProjectRenameDraft(newest.name);
           await refreshVersions(newest.project_id);
-          await loadLatestSnapshot(newest.project_id);
+          const latest = await loadLatestSnapshot(newest.project_id);
+          await checkForDraft(newest.project_id, latest);
         }
       } catch (e) {
         if (!mounted) return;
@@ -461,7 +582,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     return () => {
       mounted = false;
     };
-  }, [activeProjectId, loadLatestSnapshot, refreshProjects, refreshVersions, show]);
+  }, [activeProjectId, checkForDraft, loadLatestSnapshot, refreshProjects, refreshVersions, show]);
 
   const createProject = async () => {
     const cleanName = projectNameDraft.trim();
@@ -595,6 +716,43 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     a.click();
     window.URL.revokeObjectURL(url);
   };
+
+  // Phase D1 — restore-banner actions.
+  //
+  // ``restoreDraft`` pulls the draft snapshot into local state via the
+  // existing ``applySnapshot`` mapper. The resulting state will look
+  // dirty against the loaded-version baseline, so the autosave hook
+  // will start its 30-second debounce — that's intentional, the user
+  // may keep editing immediately.
+  //
+  // ``discardDraft`` deletes the server-side draft and dismisses the
+  // banner so the user works from the latest committed version.
+  const restoreDraft = React.useCallback(() => {
+    if (!pendingDraft) return;
+    applySnapshot({
+      snapshot: pendingDraft.snapshot,
+      inventory_year: pendingDraft.inventory_year,
+      gwp_set: pendingDraft.gwp_set,
+      include_trace: pendingDraft.include_trace,
+    });
+    setPendingDraft(null);
+    show("Draft restored. Autosave is on.", "success");
+  }, [applySnapshot, pendingDraft, show]);
+
+  const discardDraft = React.useCallback(async () => {
+    if (!pendingDraft || !activeProjectId) {
+      setPendingDraft(null);
+      return;
+    }
+    try {
+      await api.deleteDraft(activeProjectId);
+      show("Discarded unsaved draft.", "info");
+    } catch (e) {
+      show(`Failed to discard draft: ${e.message || e}`, "warning");
+    } finally {
+      setPendingDraft(null);
+    }
+  }, [activeProjectId, pendingDraft, show]);
 
   const addReportingUnit = React.useCallback(() => {
     const id = uid();
@@ -913,6 +1071,33 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </Stack>
       </Paper>
 
+      {/*
+        Phase D1 — restore banner. Surfaces when a draft was found on
+        project load that's newer than the latest committed version.
+        Non-blocking: tabs remain interactive (the banner persists until
+        the user clicks Restore or Discard).
+      */}
+      {pendingDraft ? (
+        <Alert
+          severity="info"
+          data-testid="autosave-restore-banner"
+          sx={{ mb: 2 }}
+          action={
+            <Stack direction="row" spacing={1}>
+              <Button color="inherit" size="small" onClick={restoreDraft}>
+                Restore draft
+              </Button>
+              <Button color="inherit" size="small" onClick={discardDraft}>
+                Discard draft
+              </Button>
+            </Stack>
+          }
+        >
+          You have unsaved changes from{" "}
+          {pendingDraft.updated_at ? formatTimestamp(pendingDraft.updated_at) : "earlier"}. Restore them?
+        </Alert>
+      ) : null}
+
       {tab === 0 && (
         <Stack spacing={2}>
           <Paper sx={{ p: 2 }}>
@@ -965,6 +1150,9 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                 <Button variant="outlined" disabled={!hasActiveProject || projectBusy} onClick={() => saveCurrentVersion(versionNote)}>
                   Save Snapshot
                 </Button>
+                {hasActiveProject ? (
+                  <AutosaveStatusChip status={autosave.status} lastSavedAt={autosave.lastSavedAt} />
+                ) : null}
                 <Button
                   variant="outlined"
                   disabled={!hasActiveProject || projectBusy}

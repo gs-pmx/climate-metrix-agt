@@ -36,6 +36,27 @@ class WorkspaceDraftRepository(Protocol):
     ) -> dict[str, Any]:
         ...
 
+    # ------------------------------------------------------------------
+    # Draft buffer (Phase D1) — autosave methods.
+    # ------------------------------------------------------------------
+
+    def save_draft(
+        self,
+        *,
+        project_id: str,
+        inventory_year: int,
+        gwp_set: str,
+        include_trace: bool,
+        snapshot: ProjectSnapshot,
+    ) -> dict[str, Any]:
+        ...
+
+    def load_draft(self, project_id: str) -> dict[str, Any] | None:
+        ...
+
+    def delete_draft(self, project_id: str) -> None:
+        ...
+
 
 class InventoryRepository(Protocol):
     def save_inventory_version(

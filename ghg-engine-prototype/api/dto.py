@@ -391,6 +391,34 @@ class ProjectSnapshotSaveResponseDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase D1 — autosave draft DTOs
+# ---------------------------------------------------------------------------
+
+
+class ProjectDraftResponseDTO(BaseModel):
+    """Wire shape returned from ``GET /projects/{id}/draft``.
+
+    ``updated_at`` is the autosave timestamp; ``snapshot`` is the same
+    shape the explicit-version endpoint emits so the frontend can apply
+    a draft using the existing snapshot-application code path.
+    """
+
+    project_id: str
+    updated_at: str
+    inventory_year: int
+    gwp_set: str
+    include_trace: bool
+    snapshot: ProjectSnapshotDTO
+
+
+class ProjectDraftSaveResponseDTO(BaseModel):
+    """Wire shape returned from ``POST /projects/{id}/draft``."""
+
+    project_id: str
+    updated_at: str
+
+
+# ---------------------------------------------------------------------------
 # Mapper functions (domain / internal -> DTO)
 # ---------------------------------------------------------------------------
 
@@ -600,6 +628,8 @@ __all__ = [
     "ProjectVersionSummaryDTO",
     "ProjectSnapshotResponseDTO",
     "ProjectSnapshotSaveResponseDTO",
+    "ProjectDraftResponseDTO",
+    "ProjectDraftSaveResponseDTO",
     "activity_input_field_to_dto",
     "activity_input_schema_to_dto",
     "factor_query_template_to_dto",

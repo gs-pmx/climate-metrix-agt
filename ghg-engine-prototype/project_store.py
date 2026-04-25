@@ -79,6 +79,10 @@ class ProjectService:
             applicability=_applicability_map(snapshot),
             conn=conn,
         )
+        # Phase D1: explicit version supersedes any in-flight draft.
+        # Cleared in the same transaction so a partial failure rolls
+        # back the draft delete along with the rest.
+        self._workspace.delete_draft(project_id, conn=conn)
         return saved
 
 
@@ -159,6 +163,11 @@ class ProjectStore:
                     6,
                     "canonical factor warehouse and split draft inventory storage",
                     self._migration_6_canonical_storage_split,
+                ),
+                (
+                    7,
+                    "autosave draft buffer (project_drafts)",
+                    self._migration_7_project_drafts,
                 ),
             ]
             for version, description, fn in migrations:
@@ -536,6 +545,13 @@ class ProjectStore:
         self._inventory.ensure_schema(conn)
         self._factors.ensure_schema(conn)
 
+    def _migration_7_project_drafts(self, conn: sqlite3.Connection) -> None:
+        # Phase D1 — autosave buffer. One row per project; UPSERTed by
+        # the periodic autosave path. Cleared when a real version is
+        # saved through ``ProjectService.save_and_materialize`` so the
+        # explicit-version snapshot remains the canonical checkpoint.
+        self._workspace.ensure_draft_schema(conn)
+
     # ------------------------------------------------------------------
     # Factor-store delegates (public API surface on the facade).
     # ------------------------------------------------------------------
@@ -622,6 +638,32 @@ class ProjectStore:
 
     def get_version_snapshot(self, project_id: str, version_number: int | None = None) -> dict[str, Any]:
         return self._workspace.get_version_snapshot(project_id, version_number=version_number)
+
+    # ------------------------------------------------------------------
+    # Draft-buffer delegates (Phase D1 autosave surface).
+    # ------------------------------------------------------------------
+    def save_project_draft(
+        self,
+        *,
+        project_id: str,
+        inventory_year: int,
+        gwp_set: str,
+        include_trace: bool,
+        snapshot: ProjectSnapshot,
+    ) -> dict[str, Any]:
+        return self._workspace.save_draft(
+            project_id=project_id,
+            inventory_year=inventory_year,
+            gwp_set=gwp_set,
+            include_trace=include_trace,
+            snapshot=snapshot,
+        )
+
+    def load_project_draft(self, project_id: str) -> dict[str, Any] | None:
+        return self._workspace.load_draft(project_id)
+
+    def delete_project_draft(self, project_id: str) -> None:
+        self._workspace.delete_draft(project_id)
 
     # ------------------------------------------------------------------
     # Service delegate (orchestration entry point).
