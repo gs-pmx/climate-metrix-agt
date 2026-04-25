@@ -52,6 +52,29 @@ export function filterApplicableActivities(reportingUnit, activityTypes) {
   return activityTypes.filter((at) => set.has(at?.activity_type_id));
 }
 
+// Union of every Reporting Unit's *non-empty* applicable_activity_types
+// list. Represents "what the user has EXPLICITLY selected somewhere in
+// this project." Legacy permissive units (empty list = show-all) do
+// not contribute to the union — they have no explicit selection to
+// surface. Used by the By Activity view's "hide unused" toggle to
+// decide which catalog activities should render by default.
+//
+// Defensive: undefined / non-array `reportingUnits` returns an empty
+// Set; non-array `applicable_activity_types` on a unit is treated as
+// the empty list (no contribution).
+export function getSelectedActivityTypeIds(reportingUnits) {
+  const out = new Set();
+  if (!Array.isArray(reportingUnits)) return out;
+  for (const ru of reportingUnits) {
+    const list = ru?.applicable_activity_types;
+    if (!Array.isArray(list) || list.length === 0) continue;
+    for (const id of list) {
+      if (id) out.add(id);
+    }
+  }
+  return out;
+}
+
 // Filter a list of reporting units down to those to which the given
 // activity_type_id applies. Used by the By Activity view to hide empty
 // cells when an RU's explicit list excludes the current activity type.

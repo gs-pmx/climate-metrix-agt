@@ -7,7 +7,9 @@ import {
   Button,
   Chip,
   Collapse,
+  FormControlLabel,
   Stack,
+  Switch,
   Typography,
   alpha,
 } from "@mui/material";
@@ -32,9 +34,14 @@ import {
   makeGridKeyHandler,
   pairKey,
 } from "./gridEditingHelpers";
-import { filterApplicableReportingUnits } from "./applicability";
+import { filterApplicableReportingUnits, getSelectedActivityTypeIds } from "./applicability";
 import { formatNumericDisplay } from "./numericFormat";
 import { groupByTOC, sectionAnchorId } from "./categorizeForTOC";
+
+// localStorage key for the "Show all activities" toggle. Defaulting to
+// OFF means a returning user with no localStorage entry lands on the
+// hide-unused view, which is the intended noise-reduced default.
+const SHOW_ALL_STORAGE_KEY = "ghg-by-activity-show-all";
 
 const SCROLLABLE_TABLE_SX = {
   width: "100%",
@@ -82,6 +89,7 @@ function ActivityAccordion({
   calcErrors,
   onOpenAddReportingUnit,
   show,
+  dimmed = false,
 }) {
   const repeatable = isRepeatableActivity(activityType);
   const unitOptions = getAllowedUnits(activityType);
@@ -271,11 +279,23 @@ function ActivityAccordion({
 
   return (
     <Accordion
-      defaultExpanded={totalActivities <= 8}
+      // In "Show all" mode an unselected activity should not be expanded
+      // by default — the user is browsing the catalog, not entering data.
+      // Selected (non-dimmed) activities keep the original auto-expand
+      // behavior for small catalogs.
+      defaultExpanded={!dimmed && totalActivities <= 8}
       disableGutters
       sx={{
         overflow: "hidden",
         "& .MuiAccordionDetails-root": { overflow: "hidden" },
+        // Dim the whole accordion for catalog activities not yet selected
+        // by any Reporting Unit. The "+ Add Reporting Unit" button below
+        // is undimmed so the discovery affordance still reads bright.
+        ...(dimmed && {
+          opacity: 0.55,
+          transition: "opacity 120ms ease",
+          "&:hover, &:focus-within": { opacity: 1 },
+        }),
       }}
     >
       <AccordionSummary expandIcon={<ExpandMoreIcon />}>
@@ -301,7 +321,7 @@ function ActivityAccordion({
           <Box sx={{ flexGrow: 1 }} />
           <Button
             size="small"
-            variant="text"
+            variant={dimmed ? "outlined" : "text"}
             startIcon={<AddIcon />}
             // Stop propagation so clicking the button does not also toggle
             // the surrounding accordion — MUI forwards clicks to the
@@ -310,6 +330,10 @@ function ActivityAccordion({
               event.stopPropagation();
               onOpenAddReportingUnit(activityType);
             }}
+            // When the surrounding accordion is dimmed (Show-all mode,
+            // unselected activity) keep the discovery button at full
+            // opacity so it draws the eye as the call to action.
+            sx={dimmed ? { opacity: 1 } : undefined}
           >
             Add Reporting Unit
           </Button>
@@ -357,9 +381,74 @@ export default function ByActivityTable({
   const [activeSubcategoryId, setActiveSubcategoryId] = React.useState("");
   const [addDialogActivity, setAddDialogActivity] = React.useState(null);
 
+  // "Show all activities" toggle. Default OFF (hide unused) on first
+  // visit so users land in the noise-reduced view; localStorage carries
+  // the choice across sessions.
+  const [showAll, setShowAll] = React.useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage?.getItem(SHOW_ALL_STORAGE_KEY) === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(SHOW_ALL_STORAGE_KEY, showAll ? "true" : "false");
+    } catch (_) {
+      // localStorage may be disabled (private mode, quota) — silent
+      // fallback keeps in-memory toggle state working for the session.
+    }
+  }, [showAll]);
+
+  // Selected set: activity_type_ids that any RU has explicitly listed.
+  // Drives the "hide unused" filter and the dimming in "show all" mode.
+  const selectedActivityIds = React.useMemo(
+    () => getSelectedActivityTypeIds(reportingUnits),
+    [reportingUnits],
+  );
+
   // Build the TOC tree from the catalog. Falls back to an empty tree
   // when the catalog is still loading.
-  const tree = React.useMemo(() => groupByTOC(selectableActivities), [selectableActivities]);
+  const fullTree = React.useMemo(() => groupByTOC(selectableActivities), [selectableActivities]);
+
+  // When the toggle is OFF we hide subcategories that contain no
+  // selected activities and drop unselected activities from each
+  // remaining subcategory. When ON we show the full tree as-is — the
+  // dimming happens at the ActivityAccordion level.
+  const tree = React.useMemo(() => {
+    if (showAll) return fullTree;
+    return fullTree
+      .map((scope) => ({
+        ...scope,
+        subcategories: scope.subcategories
+          .map((sub) => ({
+            ...sub,
+            activities: sub.activities.filter((at) =>
+              selectedActivityIds.has(at.activity_type_id),
+            ),
+          }))
+          .filter((sub) => sub.activities.length > 0),
+      }))
+      .filter((scope) => scope.subcategories.length > 0);
+  }, [fullTree, showAll, selectedActivityIds]);
+
+  // Visibility counts for the "Showing X of Y" status chip.
+  const totalActivityCount = React.useMemo(
+    () => fullTree.reduce(
+      (n, scope) => n + scope.subcategories.reduce((m, sub) => m + sub.activities.length, 0),
+      0,
+    ),
+    [fullTree],
+  );
+  const visibleActivityCount = React.useMemo(
+    () => tree.reduce(
+      (n, scope) => n + scope.subcategories.reduce((m, sub) => m + sub.activities.length, 0),
+      0,
+    ),
+    [tree],
+  );
 
   // Refs for every rendered subcategory section so we can both scroll on
   // click and observe visibility for the scroll-spy.
@@ -455,6 +544,48 @@ export default function ByActivityTable({
       />
 
       <Box sx={{ flexGrow: 1, minWidth: 0, width: "100%" }}>
+        {/*
+          "Show all activities" toggle. Sits at the top of the right-hand
+          content column rather than alongside the view-mode toggles in
+          ActivityInputsPanel — it's specific to the By Activity view
+          and keyed off the data showing in this column. The status chip
+          updates live so users always see how many activities are
+          rendered vs how many exist in the catalog.
+        */}
+        <Stack
+          direction="row"
+          spacing={1.5}
+          alignItems="center"
+          sx={{ mb: 2, flexWrap: "wrap", rowGap: 1 }}
+          data-testid="by-activity-toggle-bar"
+        >
+          <FormControlLabel
+            control={(
+              <Switch
+                size="small"
+                checked={showAll}
+                onChange={(event) => setShowAll(event.target.checked)}
+                inputProps={{ "aria-label": "Show all activities" }}
+              />
+            )}
+            label={(
+              <Typography variant="body2">
+                {showAll ? "Show all activities" : "Hide unused activities"}
+              </Typography>
+            )}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`Showing ${visibleActivityCount} of ${totalActivityCount}`}
+            data-testid="by-activity-visible-count"
+          />
+          {showAll ? (
+            <Typography variant="caption" color="text.secondary">
+              Dimmed rows are catalog activities no Reporting Unit has selected yet.
+            </Typography>
+          ) : null}
+        </Stack>
         <Stack spacing={3}>
           {tree.map((scope, scopeIndex) => {
             const collapsed = Boolean(scopeCollapsed[scope.id]);
@@ -601,6 +732,11 @@ export default function ByActivityTable({
                                 calcErrors={calcErrors}
                                 onOpenAddReportingUnit={(at) => setAddDialogActivity(at)}
                                 show={show}
+                                // In "show all" mode, dim activities the user
+                                // hasn't selected anywhere yet so the selected
+                                // set still pops while the rest reads as
+                                // browseable catalog.
+                                dimmed={showAll && !selectedActivityIds.has(activityType.activity_type_id)}
                               />
                             ))}
                           </Stack>
@@ -612,10 +748,33 @@ export default function ByActivityTable({
               </Box>
             );
           })}
-          {tree.length === 0 ? (
+          {tree.length === 0 && fullTree.length === 0 ? (
             <Typography variant="body2" color="text.secondary">
               No selectable activities in the catalog yet.
             </Typography>
+          ) : null}
+          {tree.length === 0 && fullTree.length > 0 && !showAll ? (
+            // "Hide unused" but no Reporting Unit has selected anything yet.
+            // Friendly nudge rather than an apparently-empty page.
+            <Box
+              sx={{
+                p: 3,
+                borderRadius: 1,
+                border: (t) => `1px dashed ${t.palette.divider}`,
+                backgroundColor: (t) => alpha(t.palette.text.primary, 0.02),
+              }}
+              data-testid="by-activity-empty-hidden"
+            >
+              <Stack spacing={1} alignItems="flex-start">
+                <Typography variant="subtitle2">No sources configured yet.</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Toggle "Show all" to browse the catalog and add sources to a Reporting Unit.
+                </Typography>
+                <Button size="small" variant="outlined" onClick={() => setShowAll(true)}>
+                  Show all activities
+                </Button>
+              </Stack>
+            </Box>
           ) : null}
         </Stack>
       </Box>
