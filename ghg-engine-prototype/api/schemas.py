@@ -62,6 +62,18 @@ class ProjectSnapshotSaveRequest(BaseModel):
     note: str | None = None
 
 
+class ProjectDraftSaveRequest(BaseModel):
+    """Body of ``POST /projects/{id}/draft`` — the autosave UPSERT.
+
+    No ``note``: drafts are not annotated checkpoints.
+    """
+
+    inventory_year: int
+    gwp_set: str
+    include_trace: bool
+    snapshot: ProjectSnapshot
+
+
 class SchemaMigrationItem(BaseModel):
     version: int
     description: str
@@ -106,6 +118,7 @@ __all__ = [
     "ProjectCreateRequest",
     "ProjectRenameRequest",
     "ProjectSnapshotSaveRequest",
+    "ProjectDraftSaveRequest",
     "SchemaMigrationItem",
     "SchemaInfoResponse",
     "ActivityCalculationError",

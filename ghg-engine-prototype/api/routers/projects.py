@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies import get_project_store
 from api.dto import (
+    ProjectDraftResponseDTO,
+    ProjectDraftSaveResponseDTO,
     ProjectResponseDTO,
     ProjectSnapshotResponseDTO,
     ProjectSnapshotSaveResponseDTO,
@@ -14,6 +16,7 @@ from api.dto import (
 )
 from api.schemas import (
     ProjectCreateRequest,
+    ProjectDraftSaveRequest,
     ProjectRenameRequest,
     ProjectSnapshotSaveRequest,
     SchemaInfoResponse,
@@ -140,3 +143,62 @@ def schema_migrations(store: ProjectStore = Depends(get_project_store)):
         current_version=info["current_version"],
         migrations=[SchemaMigrationItem(**r) for r in info["migrations"]],
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase D1 — autosave draft endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get("/projects/{project_id}/draft", response_model=ProjectDraftResponseDTO)
+def get_project_draft(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_store),
+):
+    draft = store.load_project_draft(project_id)
+    if draft is None:
+        raise HTTPException(status_code=404, detail="No draft found for project.")
+    snapshot_dto = project_snapshot_to_dto(draft["snapshot"])
+    return ProjectDraftResponseDTO(
+        project_id=draft["project_id"],
+        updated_at=draft["updated_at"],
+        inventory_year=draft["inventory_year"],
+        gwp_set=draft["gwp_set"],
+        include_trace=bool(draft["include_trace"]),
+        snapshot=snapshot_dto,
+    )
+
+
+@router.post("/projects/{project_id}/draft", response_model=ProjectDraftSaveResponseDTO)
+def save_project_draft(
+    project_id: str,
+    payload: ProjectDraftSaveRequest,
+    store: ProjectStore = Depends(get_project_store),
+):
+    if payload.inventory_year < 1900 or payload.inventory_year > 3000:
+        raise HTTPException(status_code=400, detail="Inventory year must be between 1900 and 3000.")
+    try:
+        saved = store.save_project_draft(
+            project_id=project_id,
+            inventory_year=payload.inventory_year,
+            gwp_set=payload.gwp_set,
+            include_trace=payload.include_trace,
+            snapshot=payload.snapshot,
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save draft: {e}") from e
+    return ProjectDraftSaveResponseDTO(**saved)
+
+
+@router.delete("/projects/{project_id}/draft")
+def delete_project_draft(
+    project_id: str,
+    store: ProjectStore = Depends(get_project_store),
+):
+    # Idempotent: a missing draft is still a "deleted" outcome from the
+    # caller's perspective (matches the user-discard intent on the
+    # restore banner).
+    store.delete_project_draft(project_id)
+    return {"status": "deleted", "project_id": project_id}
