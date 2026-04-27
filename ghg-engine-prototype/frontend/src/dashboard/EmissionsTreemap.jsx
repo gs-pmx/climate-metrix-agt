@@ -1,7 +1,8 @@
 import * as React from "react";
 import { Box, Typography, useTheme } from "@mui/material";
+import { alpha } from "@mui/material/styles";
 import { ResponsiveContainer, Tooltip, Treemap } from "recharts";
-import { buildTreemapData } from "./analyticsState.js";
+import { buildTreemapData, matchesSelection } from "./analyticsState.js";
 import { colorForActivity } from "../categoryColors.js";
 
 // Stable per-category colors so a "Stationary Energy" cell looks
@@ -40,6 +41,22 @@ function colorForCategory(category) {
   });
 }
 
+// Convert a hex color (#rrggbb) into the YIQ luminance used by W3C
+// contrast heuristics. Colors > ~125 read as "light" (use dark text);
+// below that as "dark" (use light text). ``categoryColors`` ships hex
+// triples so this lightweight helper avoids pulling in chroma.js.
+function isLight(hex) {
+  if (typeof hex !== "string") return true;
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!m) return true;
+  const int = parseInt(m[1], 16);
+  const r = (int >> 16) & 0xff;
+  const g = (int >> 8) & 0xff;
+  const b = int & 0xff;
+  // Standard YIQ luminance.
+  return (r * 299 + g * 587 + b * 114) / 1000 > 140;
+}
+
 // recharts gives the content renderer a flat node descriptor; depth=0
 // is the root, depth=1 is per-RU, depth=2 is per-category. We render
 // labels for both layers when the cell is large enough.
@@ -59,6 +76,7 @@ function TreemapCell(props) {
     onParentClick,
     palette,
     theme,
+    selection,
   } = props;
 
   if (width <= 0 || height <= 0) return null;
@@ -97,18 +115,36 @@ function TreemapCell(props) {
     );
   }
 
-  // Leaf (category) cell.
+  // Leaf (category) cell. Use the saturated ``border`` color rather
+  // than the pale ``bg`` so the treemap reads as a proper data viz
+  // rather than a wash of pastels.
   const colorTuple = palette[cellCategory] || colorForCategory(cellCategory);
+  // Slight transparency softens the saturation while keeping cells
+  // visually distinct.
+  const baseFill = alpha(colorTuple.border, 0.85);
+  // Selection state: emphasized cells render at full opacity with a
+  // dark border; non-selected cells fade so the eye lands on the
+  // highlighted slice immediately.
+  const cellRow = {
+    facility_id: cellFacilityId,
+    category: cellCategory,
+  };
+  const hasSelection = selection != null && selection.facility_id;
+  const isSelected = hasSelection && matchesSelection(cellRow, selection);
+  const cellOpacity = !hasSelection || isSelected ? 1 : 0.35;
+  const strokeColor = isSelected ? theme.palette.text.primary : "#ffffff";
+  const strokeWidth = isSelected ? 2.5 : 1;
+  const labelFill = isLight(colorTuple.border) ? "#1f1f1f" : "#ffffff";
   return (
-    <g>
+    <g opacity={cellOpacity}>
       <rect
         x={x}
         y={y}
         width={width}
         height={height}
-        fill={colorTuple.bg}
-        stroke="#ffffff"
-        strokeWidth={1}
+        fill={baseFill}
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
         cursor={onLeafClick ? "pointer" : "default"}
         onClick={() => {
           if (onLeafClick) onLeafClick({ facility_id: cellFacilityId, category: cellCategory });
@@ -118,7 +154,7 @@ function TreemapCell(props) {
         <text
           x={x + 6}
           y={y + 16}
-          fill={colorTuple.fg}
+          fill={labelFill}
           fontSize={11}
           fontWeight={600}
           style={{ pointerEvents: "none" }}
@@ -130,7 +166,7 @@ function TreemapCell(props) {
         <text
           x={x + 6}
           y={y + 30}
-          fill={colorTuple.fg}
+          fill={labelFill}
           fontSize={10}
           style={{ pointerEvents: "none" }}
         >
@@ -145,7 +181,12 @@ function TreemapCell(props) {
   );
 }
 
-export default function EmissionsTreemap({ rows = [], onCategoryClick = null, onReportingUnitClick = null }) {
+export default function EmissionsTreemap({
+  rows = [],
+  onCategoryClick = null,
+  onReportingUnitClick = null,
+  selection = null,
+}) {
   const theme = useTheme();
   const data = React.useMemo(() => buildTreemapData(rows), [rows]);
 
@@ -185,6 +226,7 @@ export default function EmissionsTreemap({ rows = [], onCategoryClick = null, on
               onParentClick={onReportingUnitClick}
               palette={palette}
               theme={theme}
+              selection={selection}
             />
           }
         >
