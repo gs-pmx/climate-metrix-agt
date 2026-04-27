@@ -1,0 +1,72 @@
+nace_code,cpa_code,cpa_label,confidence
+0111,01.11,Cereals (except rice) leguminous crops and oil seeds,exact
+0112,01.12,Rice paddy,exact
+0113,01.13,Vegetables and melons roots and tubers,exact
+0121,01.21,Grapes,exact
+0122,01.22,Tropical and subtropical fruits,exact
+0141,01.41,Raw milk from cattle,exact
+0210,02.10,Forestry and logging products,exact
+0510,05.10,Hard coal,exact
+0610,06.10,Crude petroleum,exact
+0620,06.20,Natural gas,exact
+0710,07.10,Iron ores,exact
+1010,10.10,Preserved meat and meat products,exact
+1051,10.51,Dairy products,exact
+1071,10.71,Bread; fresh pastry goods and cakes,exact
+1101,11.01,Distilled alcoholic beverages,exact
+1310,13.10,Textile yarn,exact
+1410,14.10,Wearing apparel except fur apparel,exact
+1610,16.10,Wood sawn and planed,exact
+1710,17.10,Pulp paper and paperboard,exact
+1910,19.10,Coke oven products,exact
+1920,19.20,Refined petroleum products,exact
+2011,20.11,Industrial gases,exact
+2013,20.13,Other inorganic basic chemicals,exact
+2014,20.14,Other organic basic chemicals,exact
+2410,24.10,Basic iron and steel and ferro-alloys,exact
+2451,24.51,Casting services of iron,exact
+2611,26.11,Electronic components,exact
+2620,26.20,Computers and peripheral equipment,exact
+2630,26.30,Communication equipment,exact
+2710,27.10,Electric motors generators transformers and electricity distribution and control apparatus,exact
+2910,29.10,Motor vehicles,exact
+3030,30.30,Air and spacecraft and related machinery,exact
+3511,35.11,Electricity,exact
+3521,35.21,Manufactured gas; distribution services of gaseous fuels through mains,exact
+3600,36.00,Natural water; water treatment and supply services,exact
+3700,37.00,Sewerage services,exact
+4110,41.10,Buildings and the construction work of buildings,exact
+4221,42.21,Constructions and construction works for fluids,exact
+4520,45.20,Maintenance and repair services of motor vehicles,exact
+4610,46.10,Wholesale trade services on a fee or contract basis,exact
+4711,47.11,Retail trade services in non-specialized stores with food beverages or tobacco predominating,exact
+4920,49.20,Rail transport services of freight,exact
+4931,49.31,Urban and suburban passenger land transport services,exact
+4941,49.41,Freight transport services by road,exact
+5110,51.10,Passenger air transport services,exact
+5210,52.10,Warehousing and storage services,exact
+5310,53.10,Postal services under universal service obligation,exact
+5510,55.10,Hotel and similar accommodation services,exact
+5610,56.10,Restaurant and mobile food services,exact
+5811,58.11,Books in print form,exact
+5820,58.20,Software publishing services,exact
+6110,61.10,Wired telecommunications services,exact
+6190,61.90,Other telecommunications services,exact
+6201,62.01,Computer programming services,exact
+6311,63.11,Data processing hosting and related services,exact
+6411,64.11,Central banking services,exact
+6512,65.12,Non-life insurance services,exact
+6810,68.10,Buying and selling services of own real estate,exact
+6920,69.20,Accounting bookkeeping and auditing services; tax consultancy services,exact
+7110,71.10,Architectural and engineering services and related technical consultancy,exact
+7220,72.20,Research and experimental development services on social sciences and humanities,exact
+7311,73.11,Services furnished by advertising agencies,exact
+7820,78.20,Temporary employment agency services,exact
+8110,81.10,Combined facilities support services,exact
+8220,82.20,Activities of call centres,exact
+8511,85.11,Pre-primary education services,exact
+8610,86.10,Hospital services,exact
+9001,90.01,Performing arts services,exact
+9311,93.11,Operation of sports facilities services,exact
+9411,94.11,Services furnished by business and employers organisations,exact
+9602,96.02,Hairdressing and other beauty treatment services,exact

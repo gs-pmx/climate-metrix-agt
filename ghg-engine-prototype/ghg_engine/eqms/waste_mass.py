@@ -67,7 +67,10 @@ class WasteMassMethod(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context
         disposal_method = str(resolved.observation.params.get("disposal_method") or "")
         template = DISPOSAL_TEMPLATE_MAP.get(disposal_method)
         if template is None:

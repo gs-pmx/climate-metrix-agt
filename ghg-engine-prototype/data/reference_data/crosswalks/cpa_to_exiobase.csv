@@ -1,0 +1,68 @@
+cpa_code,exiobase_code,exiobase_label,confidence
+01.11,p01.a,Paddy rice,exact
+01.12,p01.b,Wheat,exact
+01.13,p01.c,Cereal grains nec,exact
+01.21,p01.d,Vegetables fruit nuts,exact
+01.41,p01.h,Raw milk,exact
+02.10,p02,Wood and products of wood and cork (except furniture); articles of straw and plaiting materials,approximate
+05.10,p05,Coal and lignite; peat,approximate
+06.10,p06.a,Crude petroleum and services related to crude oil extraction,exact
+06.20,p06.b,Natural gas and services related to natural gas extraction,exact
+07.10,p07.a,Iron ores,exact
+10.10,p15.a,Products of meat cattle,approximate
+10.51,p15.h,Dairy products,exact
+10.71,p15.k,Other food products,approximate
+11.01,p15.j,Beverages,approximate
+13.10,p17,Textiles,approximate
+14.10,p18,Wearing apparel; furs,approximate
+16.10,p20,Wood and products of wood and cork (except furniture); articles of straw and plaiting materials,approximate
+17.10,p21,Pulp paper and paper products,approximate
+19.10,p23.a,Coke oven products,exact
+19.20,p23.b,Petroleum refinery products,exact
+20.11,p24.a,Chemicals nec,approximate
+20.13,p24.b,Other inorganic chemicals,exact
+20.14,p24.c,Other organic basic chemicals,exact
+24.10,p27.a,Basic iron and steel,approximate
+24.51,p27.b,Castings of iron and steel,exact
+26.11,p32.a,Electronic components,exact
+26.20,p30,Office machinery and computers,approximate
+26.30,p32.b,Communication equipment,exact
+27.10,p31.a,Electric motors generators and transformers,exact
+29.10,p34,Motor vehicles trailers and semi-trailers,approximate
+30.30,p35,Other transport equipment,approximate
+35.11,p40.a,Electricity by coal,approximate
+35.21,p40.b,Distribution and trade of gas,exact
+36.00,p41,Collected and purified water distribution services of water,approximate
+37.00,p90.a,Sewage services,exact
+41.10,p45,Construction work,approximate
+46.10,p51,Wholesale trade and commission trade services,approximate
+47.11,p52,Retail trade services; repair services of personal and household goods,approximate
+49.20,p61,Railway transportation services,approximate
+49.31,p60.b,Other land transportation services,approximate
+49.41,p60.a,Land transport services and transport via pipeline services,approximate
+51.10,p62,Air transport services,exact
+52.10,p63,Supporting and auxiliary transport services; travel agency services,approximate
+53.10,p64,Post and telecommunication services,approximate
+55.10,p55.a,Hotels and restaurants services,approximate
+56.10,p55.b,Restaurant and mobile food services,exact
+58.11,p22,Printed matter and recorded media,approximate
+58.20,p72.a,Computer and related services,exact
+61.10,p64.a,Telecommunication services,exact
+62.01,p72.b,Computer programming services,exact
+63.11,p72.c,Data processing hosting services,exact
+64.11,p65.a,Financial intermediation services,exact
+65.12,p66,Insurance and pension funding services,approximate
+68.10,p70,Real estate services,approximate
+69.20,p74.a,Legal accounting and consulting services,approximate
+71.10,p74.b,Architectural and engineering services,exact
+72.20,p73,Research and development services,approximate
+73.11,p74.c,Advertising services,exact
+78.20,p74.d,Labour recruitment services,exact
+81.10,p74.e,Building cleaning and other business services,approximate
+82.20,p74.f,Call centre services,exact
+85.11,p80,Education services,approximate
+86.10,p85.a,Health and social work services,approximate
+90.01,p92.a,Recreational cultural and sporting services,approximate
+93.11,p92.b,Sporting services,exact
+94.11,p91,Membership organisation services,approximate
+96.02,p93,Other services,approximate

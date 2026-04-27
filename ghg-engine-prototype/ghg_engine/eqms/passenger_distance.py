@@ -27,7 +27,10 @@ class PassengerDistanceMethod(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context
         return self._direct.compute_from_template_groups(
             resolved=resolved,
             activity_def=activity_def,

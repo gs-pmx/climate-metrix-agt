@@ -17,6 +17,7 @@ RUNTIME_METHODS = {
     "freight_ton_mile",
     "passenger_distance",
     "refrigerant_mass_to_gwp",
+    "spend_based",
     "waste_mass",
 }
 
@@ -191,6 +192,15 @@ class ActivityCatalog:
                 param_keys = {field.param_key or field.field_id for field in row.input_schema.fields}
                 if "refrigerant_type" not in param_keys:
                     errors.append("input_schema.params.refrigerant_type")
+            if row.method_id == "spend_based":
+                param_keys = {field.param_key or field.field_id for field in row.input_schema.fields}
+                missing_spend_fields = [
+                    field_id
+                    for field_id in ("gl_code", "transaction_year")
+                    if field_id not in param_keys
+                ]
+                for missing in missing_spend_fields:
+                    errors.append(f"input_schema.params.{missing}")
             if row.implementation_status == "partial" and not row.accounting_metadata.get("partial_reason"):
                 errors.append("accounting_metadata.partial_reason")
             row.primary_field()

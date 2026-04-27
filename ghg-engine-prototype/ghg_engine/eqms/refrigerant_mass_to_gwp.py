@@ -46,7 +46,10 @@ class RefrigerantMassToGwpMethod(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context
         if gwp_set(resolved) != "AR6":
             raise ValueError("refrigerant_mass_to_gwp currently supports AR6 only")
         observation = resolved.observation

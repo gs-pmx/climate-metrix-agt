@@ -53,7 +53,10 @@ class Scope2EnergyMethod(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context
         template_groups = self._group_templates(activity_def)
         requires_dual = bool(activity_def.accounting_metadata.get("requires_dual_scope2_reporting"))
         if requires_dual:

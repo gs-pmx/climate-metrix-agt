@@ -29,8 +29,21 @@ def _classify_exception(exc: Exception, activity: ActivityRecord) -> tuple[str, 
     to validation_error when ambiguous and expose the original exception type
     in details for debuggability.
     """
+    # Phase E1 — spend-based plugin emits typed exceptions for the two
+    # structured failures we want the frontend to surface inline.
+    from ghg_engine.eqms.spend_based import MissingFxRateError, UnmappedGLCodeError
+
     message = str(exc)
     details: dict = {"exception_type": type(exc).__name__}
+
+    if isinstance(exc, UnmappedGLCodeError):
+        details["gl_code"] = exc.gl_code
+        details["reporting_unit_id"] = exc.reporting_unit_id
+        return "unmapped_gl_code", details
+    if isinstance(exc, MissingFxRateError):
+        details["currency"] = exc.currency
+        details["transaction_year"] = exc.year
+        return "missing_fx_rate", details
 
     if isinstance(exc, KeyError):
         if "unknown activity_type_id" in message:

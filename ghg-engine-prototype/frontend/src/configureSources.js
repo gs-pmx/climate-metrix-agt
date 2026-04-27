@@ -193,6 +193,29 @@ export const STARTER_DEFAULT_IDS = [
   "scope3_waste_generated_in_operations",
 ];
 
+// Phase E1 — corporate starter set. The first auto-created Reporting
+// Unit on a new project is named "Corporate" and pre-loads these
+// activity types so the user does not have to hand-pick them. The list
+// covers a typical headquarters' Scope 3 footprint (spend + business
+// travel + employee commute), with no Scope 1 / 2 entries because most
+// corporate offices either lease space (no Scope 1) or buy electricity
+// through their landlord (no separable Scope 2 attribution). Unknown
+// ids are silently skipped — they're a hint, not a hard requirement.
+//
+// IDs use the catalog's real activity_type_id strings (e.g.
+// `scope3_employee_commuting_bus` not `…commute_bus`). Anything that
+// doesn't exist in the active catalog gets dropped by
+// `defaultsPresentInCatalog` rather than surfacing an error.
+export const CORPORATE_STARTER_DEFAULT_IDS = [
+  "scope3_spend_based",
+  "scope3_business_travel_air",
+  "scope3_business_travel_intercity_rail",
+  "scope3_business_travel_rental_vehicle",
+  "scope3_business_travel_employee_owned_vehicle",
+  "scope3_employee_commuting_bus",
+  "scope3_employee_commuting_transit_rail",
+];
+
 // Filter the defaults to only those present in the catalog. This keeps
 // the dialog from trying to add activities the catalog does not ship.
 export function defaultsPresentInCatalog(activityCatalog, defaults = STARTER_DEFAULT_IDS) {
