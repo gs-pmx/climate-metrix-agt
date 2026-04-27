@@ -116,6 +116,15 @@ export const api = {
     request(`/projects/${projectId}/draft`, { method: "POST", body: JSON.stringify(payload) }),
   deleteDraft: (projectId) =>
     request(`/projects/${projectId}/draft`, { method: "DELETE" }),
+  // Phase D3 — analytics endpoint backing the dashboard. ``versionId`` is
+  // optional; the server defaults to the latest inventory version for
+  // the project when omitted.
+  getAnalytics: (projectId, versionId = null) =>
+    request(
+      `/projects/${projectId}/analytics${
+        versionId == null ? "" : `?version_id=${encodeURIComponent(versionId)}`
+      }`,
+    ),
   getSchemaMigrations: () => request("/schema/migrations"),
 };
 

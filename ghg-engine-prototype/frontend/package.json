@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test ./src/activityDrafts.test.js ./src/numericFormat.test.js ./src/useRowStatus.test.js ./src/applicability.test.js ./src/configureSources.test.js ./src/categorizeForTOC.test.js ./src/categoryColors.test.js ./src/reportingUnits.test.js ./src/useAutosave.test.js ./src/coverage.test.js",
+    "test": "node --test ./src/activityDrafts.test.js ./src/numericFormat.test.js ./src/useRowStatus.test.js ./src/applicability.test.js ./src/configureSources.test.js ./src/categorizeForTOC.test.js ./src/categoryColors.test.js ./src/reportingUnits.test.js ./src/useAutosave.test.js ./src/coverage.test.js ./src/dashboard/analyticsState.test.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },
@@ -17,7 +17,8 @@
     "@mui/material": "^7.3.6",
     "@mui/x-data-grid": "^8.22.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "recharts": "^2.15.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

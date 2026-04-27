@@ -1319,9 +1319,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
       {tab === 4 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
+          {/*
+            Phase D3: dashboard now consumes the analytics endpoint
+            directly using ``projectId`` + (optional) ``versionId``.
+            We pass ``null`` for ``versionId`` so the backend resolves
+            to the latest inventory version automatically. Click-
+            through to Audit hops the tab; deep-linking to a specific
+            audit row is parked.
+          */}
           <DashboardTab
-            resultRows={resultRows}
-            onSaveResults={saveCurrentVersion}
+            projectId={activeProjectId}
+            versionId={null}
             coverage={projectCoverage}
             coverageSummaryText={coverageSummaryText}
             activityLabelById={activityLabelById}

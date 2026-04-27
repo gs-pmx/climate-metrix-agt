@@ -169,6 +169,11 @@ class ProjectStore:
                     "autosave draft buffer (project_drafts)",
                     self._migration_7_project_drafts,
                 ),
+                (
+                    8,
+                    "analytics index on calculation_results (inventory_version_id, facility_id)",
+                    self._migration_8_analytics_index,
+                ),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -551,6 +556,15 @@ class ProjectStore:
         # saved through ``ProjectService.save_and_materialize`` so the
         # explicit-version snapshot remains the canonical checkpoint.
         self._workspace.ensure_draft_schema(conn)
+
+    def _migration_8_analytics_index(self, conn: sqlite3.Connection) -> None:
+        # Phase D3 — dashboard analytics endpoint queries
+        # ``calculation_results`` filtered by ``inventory_version_id``
+        # and grouped by ``facility_id``. Existing DBs that completed
+        # migration 6 already have the table; they just need the
+        # composite index. ``ensure_schema`` is idempotent and will
+        # only create the new index for already-migrated databases.
+        self._inventory.ensure_schema(conn)
 
     # ------------------------------------------------------------------
     # Factor-store delegates (public API surface on the facade).

@@ -4,8 +4,10 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from api.dependencies import get_project_store
+from api.dependencies import get_activity_catalog, get_project_store
 from api.dto import (
+    ProjectAnalyticsResponseDTO,
+    ProjectAnalyticsRowDTO,
     ProjectDraftResponseDTO,
     ProjectDraftSaveResponseDTO,
     ProjectResponseDTO,
@@ -22,6 +24,8 @@ from api.schemas import (
     SchemaInfoResponse,
     SchemaMigrationItem,
 )
+from ghg_engine.activity_catalog import ActivityCatalog
+from ghg_engine.services.analytics import compute_project_analytics
 from project_store import ProjectStore
 
 router = APIRouter()
@@ -202,3 +206,70 @@ def delete_project_draft(
     # restore banner).
     store.delete_project_draft(project_id)
     return {"status": "deleted", "project_id": project_id}
+
+
+# ---------------------------------------------------------------------------
+# Phase D3 — analytics endpoint (dashboard)
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/projects/{project_id}/analytics",
+    response_model=ProjectAnalyticsResponseDTO,
+)
+def get_project_analytics(
+    project_id: str,
+    version_id: int | None = Query(default=None),
+    store: ProjectStore = Depends(get_project_store),
+    activity_catalog: ActivityCatalog = Depends(get_activity_catalog),
+):
+    """Aggregated CO2e analytics for the dashboard.
+
+    When ``version_id`` is omitted, the latest inventory version for the
+    project is used. A 404 is returned if the project has no versions or
+    if the supplied ``version_id`` doesn't belong to the project. Both
+    paths fold into the same "version not found for project" error so an
+    unknown-project case (no versions) and an unknown-version case
+    return identically — the frontend only needs to know there's
+    nothing to render.
+
+    The response shape is documented on
+    :class:`ProjectAnalyticsResponseDTO`. Pre-aggregated rows are at
+    ``(facility, activity_type, scope, category)`` grain; the frontend
+    re-filters and re-aggregates client-side under arbitrary scope/RU
+    /category filter combinations.
+    """
+
+    result = compute_project_analytics(
+        db_path=store._db_path,  # noqa: SLF001 - analytics is co-located with the store layer
+        project_id=project_id,
+        version_id=version_id,
+        activity_catalog=activity_catalog,
+    )
+    if result is None:
+        # Both "unknown project" and "version_id not in this project"
+        # collapse here. The frontend only needs a 404 to know there's
+        # nothing to render; the precise message is for debuggability.
+        raise HTTPException(
+            status_code=404,
+            detail="No inventory version found for this project.",
+        )
+    return ProjectAnalyticsResponseDTO(
+        version_id=result.version_id,
+        inventory_year=result.inventory_year,
+        rows=[
+            ProjectAnalyticsRowDTO(
+                facility_id=row.facility_id,
+                facility_name=row.facility_name,
+                activity_type_id=row.activity_type_id,
+                activity_label=row.activity_label,
+                scope=row.scope,
+                category=row.category,
+                subcategory=row.subcategory,
+                co2e_kg=row.co2e_kg,
+            )
+            for row in result.rows
+        ],
+        total_co2e_kg=result.total_co2e_kg,
+        facility_count=result.facility_count,
+    )

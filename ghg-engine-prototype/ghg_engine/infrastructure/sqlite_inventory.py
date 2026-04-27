@@ -148,6 +148,13 @@ class SQLiteInventoryStore:
                 ON calculation_runs(inventory_version_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_calculation_results_run
                 ON calculation_results(run_id);
+            -- Phase D3: dashboard analytics path queries
+            -- ``WHERE inventory_version_id = ? AND gas = 'co2e' GROUP BY facility_id, activity_type_id, scope``.
+            -- The composite index lets SQLite seek directly to the
+            -- per-version + per-facility slice without scanning the
+            -- whole table.
+            CREATE INDEX IF NOT EXISTS idx_calculation_results_inventory_facility
+                ON calculation_results(inventory_version_id, facility_id);
             """
         )
 

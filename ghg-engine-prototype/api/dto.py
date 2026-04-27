@@ -419,6 +419,51 @@ class ProjectDraftSaveResponseDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase D3 — analytics DTOs (dashboard endpoint)
+# ---------------------------------------------------------------------------
+
+
+class ProjectAnalyticsRowDTO(BaseModel):
+    """One pre-aggregated cell powering the dashboard.
+
+    The grain is ``(facility_id, activity_type_id, scope)`` with
+    ``co2e_kg`` summed at the SQL level. ``category`` and
+    ``subcategory`` come from the in-memory activity catalog so the
+    frontend can group/filter without re-walking the catalog itself.
+
+    The frontend re-aggregates a list of these rows under arbitrary
+    filter combinations (scope chips, RU dropdown, category dropdown);
+    keeping the wire grain at this level means a single fetch powers
+    every visualization on the dashboard.
+    """
+
+    facility_id: str
+    facility_name: str
+    activity_type_id: str
+    activity_label: str
+    scope: str
+    category: str
+    subcategory: str | None = None
+    co2e_kg: float
+
+
+class ProjectAnalyticsResponseDTO(BaseModel):
+    """Wire shape returned from ``GET /projects/{id}/analytics``.
+
+    ``total_co2e_kg`` and ``facility_count`` are surfaced at the top
+    level so the headline KPI tile renders without a client-side
+    reduce. The client still sums ``rows`` for filtered views — the
+    precomputed totals are only authoritative for the unfiltered case.
+    """
+
+    version_id: int
+    inventory_year: int
+    rows: list[ProjectAnalyticsRowDTO] = Field(default_factory=list)
+    total_co2e_kg: float
+    facility_count: int
+
+
+# ---------------------------------------------------------------------------
 # Mapper functions (domain / internal -> DTO)
 # ---------------------------------------------------------------------------
 
@@ -630,6 +675,8 @@ __all__ = [
     "ProjectSnapshotSaveResponseDTO",
     "ProjectDraftResponseDTO",
     "ProjectDraftSaveResponseDTO",
+    "ProjectAnalyticsRowDTO",
+    "ProjectAnalyticsResponseDTO",
     "activity_input_field_to_dto",
     "activity_input_schema_to_dto",
     "factor_query_template_to_dto",
