@@ -21,6 +21,7 @@ import TuneIcon from "@mui/icons-material/Tune";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import ConfigureSourcesDialog from "./ConfigureSourcesDialog";
 import { buildExistingPairsSet, computeReportingUnitProgress } from "./applicability";
+import { computeProjectCoverage } from "./coverage";
 import { isEntryVisibleActivity } from "./activityDrafts";
 import { parseTSV } from "./usePasteHandler";
 import { countActivitiesWithDataForUnit } from "./reportingUnits";
@@ -178,6 +179,7 @@ function ReportingUnitCard({
   reportingUnit,
   activityCatalog,
   activities,
+  unitCoverage,
   onConfigureSources,
   onRequestDelete,
   isNewlyCreated,
@@ -190,6 +192,13 @@ function ReportingUnitCard({
     }),
     [activities, activityCatalog, reportingUnit],
   );
+  // Phase D2: surface missing/orphaned counts pulled from the same
+  // project-level coverage helper that drives the Activity Inputs
+  // banner and Dashboard widget. Legacy permissive units (empty
+  // applicable list) get no missing/orphaned chips — there's no
+  // expected set to audit against.
+  const missingCount = unitCoverage && !unitCoverage.legacyPermissive ? unitCoverage.missing : 0;
+  const orphanedCount = unitCoverage && !unitCoverage.legacyPermissive ? unitCoverage.orphaned : 0;
   const needsOnboarding = isNewlyCreated && (reportingUnit.applicable_activity_types || []).length === 0;
   const displayName = reportingUnit.facility_name?.trim() || "Untitled Reporting Unit";
 
@@ -212,7 +221,7 @@ function ReportingUnitCard({
           {reportingUnit.egrid_subregion ? <Chip label={reportingUnit.egrid_subregion} size="small" variant="outlined" /> : null}
         </Stack>
 
-        <Stack direction="row" spacing={0.75} alignItems="center">
+        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
           <Chip
             size="small"
             variant="outlined"
@@ -220,6 +229,28 @@ function ReportingUnitCard({
           />
           <Chip size="small" variant="outlined" label={`${progress.withData} with data`} />
           <Chip size="small" variant="outlined" label={`${progress.complete} complete`} />
+          {missingCount > 0 ? (
+            <Tooltip title="Sources selected on this unit that have no draft data yet.">
+              <Chip
+                size="small"
+                color="warning"
+                variant="filled"
+                label={`${missingCount} missing`}
+                data-testid={`ru-chip-missing-${reportingUnit.id}`}
+              />
+            </Tooltip>
+          ) : null}
+          {orphanedCount > 0 ? (
+            <Tooltip title="Activities with data on this unit that are not in its applicable list. Won't flow to inventory.">
+              <Chip
+                size="small"
+                color="default"
+                variant="outlined"
+                label={`${orphanedCount} orphaned`}
+                data-testid={`ru-chip-orphaned-${reportingUnit.id}`}
+              />
+            </Tooltip>
+          ) : null}
         </Stack>
 
         <Tooltip title={needsOnboarding ? "Configure sources to begin" : "Configure which activity types apply to this Reporting Unit."}>
@@ -363,6 +394,20 @@ export default function ReportingUnitsTab({
   );
 
   const existingPairsSet = React.useMemo(() => buildExistingPairsSet(activities), [activities]);
+
+  // Phase D2: per-unit coverage drives the missing/orphaned chips on
+  // each card. We compute project-level coverage here (no calcErrors —
+  // they're not threaded into this tab in v1; coverage chips reflect
+  // data presence, not calc errors) and read each unit's slice via
+  // `byUnit.get(id)`. Cheap: O(units * applicable + drafts).
+  const projectCoverage = React.useMemo(
+    () => computeProjectCoverage({
+      reportingUnits,
+      activities,
+      calcErrors: [],
+    }),
+    [activities, reportingUnits],
+  );
 
   const handleSaveConfigureSources = React.useCallback(
     (newApplicableList) => {
@@ -558,6 +603,7 @@ export default function ReportingUnitsTab({
               reportingUnit={ru}
               activityCatalog={selectableActivities}
               activities={activities}
+              unitCoverage={projectCoverage.byUnit.get(ru.id) || null}
               onConfigureSources={(id) => setConfigureUnitId(id)}
               onRequestDelete={handleRequestDelete}
               isNewlyCreated={Boolean(newlyCreatedIds && newlyCreatedIds.has(ru.id))}
