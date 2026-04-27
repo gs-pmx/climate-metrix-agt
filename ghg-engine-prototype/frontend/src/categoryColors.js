@@ -36,6 +36,45 @@ const PALETTE = {
 
 const FALLBACK = { bg: "#eeeeee", fg: "#333333", border: "#9e9e9e" };
 
+// Saturated mid-tone fallback palette used by data visualizations (the
+// emissions treemap in particular) when a category lacks an entry in
+// PALETTE. Picked for distinguishability + mid-luminance so they stay
+// readable with white text overlays. Indexed deterministically by
+// category name so a given category lands on the same color across
+// renders. Distinct from FALLBACK (a single neutral gray) which is the
+// chip-library catch-all.
+const SATURATED_FALLBACK_PALETTE = [
+  { bg: "#d6e6ed", fg: "#0d3a4a", border: "#1f6f8b" },
+  { bg: "#efd8c4", fg: "#3d1f08", border: "#9c5421" },
+  { bg: "#dbcfea", fg: "#241341", border: "#5b3a8b" },
+  { bg: "#cee4d5", fg: "#0f3320", border: "#34784a" },
+  { bg: "#ebd1e0", fg: "#3d143a", border: "#a14b8e" },
+  { bg: "#dde0ea", fg: "#152042", border: "#3a4f8a" },
+  { bg: "#ece1c8", fg: "#3a2a08", border: "#a07820" },
+];
+
+// Hash a string to a small non-negative integer. Used to pick a stable
+// fallback color for a category whose id we have not seen before. We
+// avoid using random or insertion-order indices so two renders of the
+// same data set agree on color assignment.
+function hashStringToIndex(value, modulo) {
+  if (typeof value !== "string" || value.length === 0) return 0;
+  let h = 0;
+  for (let i = 0; i < value.length; i++) {
+    h = (h * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(h) % modulo;
+}
+
+// Return a saturated fallback color tuple keyed deterministically off
+// the supplied id string. Useful for analytics surfaces that want a
+// distinct, not-washed-out color even for ids the canonical PALETTE
+// does not cover.
+export function saturatedFallbackColor(id) {
+  const idx = hashStringToIndex(id || "other", SATURATED_FALLBACK_PALETTE.length);
+  return SATURATED_FALLBACK_PALETTE[idx];
+}
+
 // Return the {bg, fg, border} tuple for a subcategory id. Unknown ids
 // fall back to a neutral gray so the UI stays readable even when the
 // catalog grows ahead of this map.
