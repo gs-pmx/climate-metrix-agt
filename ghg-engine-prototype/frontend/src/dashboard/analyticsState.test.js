@@ -5,12 +5,14 @@ import {
   aggregateByReportingUnit,
   aggregateByScope,
   aggregateKpis,
+  applySelectionToRows,
   buildTopContributors,
   buildTreemapData,
   filterRows,
   kgToMetricTons,
   listCategoryOptions,
   listReportingUnitOptions,
+  matchesSelection,
 } from "./analyticsState.js";
 
 // Sample row set covering two RUs, three scopes, and three categories.
@@ -245,4 +247,68 @@ test("listReportingUnitOptions returns sorted distinct {id, label}", () => {
 test("listCategoryOptions returns sorted distinct names", () => {
   const cats = listCategoryOptions(SAMPLE_ROWS);
   assert.deepEqual(cats, ["Stationary Energy", "Transportation"]);
+});
+
+// ---------------------------------------------------------------------------
+// Selection helpers (cross-filter highlight)
+// ---------------------------------------------------------------------------
+
+test("matchesSelection returns false for null selection", () => {
+  assert.equal(matchesSelection(SAMPLE_ROWS[0], null), false);
+  assert.equal(matchesSelection(SAMPLE_ROWS[0], undefined), false);
+});
+
+test("matchesSelection matches by facility_id when no category specified", () => {
+  const sel = { facility_id: "F1" };
+  // Both F1 rows match; both F2 rows don't.
+  assert.equal(matchesSelection(SAMPLE_ROWS[0], sel), true);
+  assert.equal(matchesSelection(SAMPLE_ROWS[1], sel), true);
+  assert.equal(matchesSelection(SAMPLE_ROWS[2], sel), false);
+  assert.equal(matchesSelection(SAMPLE_ROWS[3], sel), false);
+});
+
+test("matchesSelection matches by facility_id AND category when both specified", () => {
+  const sel = { facility_id: "F1", category: "Stationary Energy" };
+  // Only the F1 / Stationary Energy row matches.
+  assert.equal(matchesSelection(SAMPLE_ROWS[0], sel), false); // F1, Transportation
+  assert.equal(matchesSelection(SAMPLE_ROWS[1], sel), true); // F1, Stationary Energy
+  assert.equal(matchesSelection(SAMPLE_ROWS[2], sel), false); // F2, Stationary Energy
+  assert.equal(matchesSelection(SAMPLE_ROWS[3], sel), false);
+});
+
+test("matchesSelection returns false when row is null/undefined", () => {
+  const sel = { facility_id: "F1" };
+  assert.equal(matchesSelection(null, sel), false);
+  assert.equal(matchesSelection(undefined, sel), false);
+});
+
+test("applySelectionToRows partitions rows into selected and rest", () => {
+  const sel = { facility_id: "F1" };
+  const { selected, rest } = applySelectionToRows(SAMPLE_ROWS, sel);
+  assert.equal(selected.length, 2);
+  assert.equal(rest.length, 2);
+  // Order preserved within each partition.
+  assert.equal(selected[0].activity_type_id, "scope1_mobile_gasoline");
+  assert.equal(rest[0].facility_id, "F2");
+});
+
+test("applySelectionToRows puts everything in rest when selection is null", () => {
+  const { selected, rest } = applySelectionToRows(SAMPLE_ROWS, null);
+  assert.equal(selected.length, 0);
+  assert.equal(rest.length, 4);
+});
+
+test("applySelectionToRows handles facility+category selection with single match", () => {
+  const sel = { facility_id: "F1", category: "Stationary Energy" };
+  const { selected, rest } = applySelectionToRows(SAMPLE_ROWS, sel);
+  assert.equal(selected.length, 1);
+  assert.equal(rest.length, 3);
+  assert.equal(selected[0].activity_type_id, "scope2_purchased_electricity_grid_mix");
+});
+
+test("applySelectionToRows returns empty selected when nothing matches", () => {
+  const sel = { facility_id: "F999" };
+  const { selected, rest } = applySelectionToRows(SAMPLE_ROWS, sel);
+  assert.equal(selected.length, 0);
+  assert.equal(rest.length, 4);
 });

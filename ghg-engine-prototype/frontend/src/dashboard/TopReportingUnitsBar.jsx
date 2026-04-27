@@ -3,6 +3,7 @@ import { Box, Typography, useTheme } from "@mui/material";
 import {
   Bar,
   BarChart,
+  Cell,
   CartesianGrid,
   Legend,
   ResponsiveContainer,
@@ -18,12 +19,29 @@ const SCOPE_COLORS = {
   "Scope 3": "#6a1b9a",
 };
 
+const SCOPE_KEYS = ["Scope 1", "Scope 2", "Scope 3"];
+
+const DIM_OPACITY = 0.35;
+
 // Top-N Reporting Units, stacked by Scope. The user can click a bar to
-// pivot the dashboard's RU filter to that unit; the click handler is
-// wired on the parent so the chart stays purely presentational.
-export default function TopReportingUnitsBar({ rows = [], limit = 10, onBarClick = null }) {
+// pivot the dashboard's RU selection (highlight, not filter); the
+// click handler is wired on the parent so the chart stays purely
+// presentational.
+//
+// Selection (post-D3 polish): when a selection is set, every RU bar
+// other than the selected facility renders at reduced opacity. Each
+// stack segment uses a per-bar ``Cell`` so we can dim individual bars
+// while keeping the recharts stacking math intact.
+export default function TopReportingUnitsBar({
+  rows = [],
+  limit = 10,
+  onBarClick = null,
+  selection = null,
+}) {
   const theme = useTheme();
   const data = React.useMemo(() => aggregateByReportingUnit(rows, { limit }), [rows, limit]);
+
+  const selectedFacilityId = selection?.facility_id || null;
 
   if (!data.length) {
     return (
@@ -76,10 +94,29 @@ export default function TopReportingUnitsBar({ rows = [], limit = 10, onBarClick
           <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
           {/* Bars are explicit so we can color each scope independently;
               dataKey strings match the keys produced by
-              ``aggregateByReportingUnit``. */}
-          <Bar dataKey="Scope 1" stackId="scope" fill={SCOPE_COLORS["Scope 1"]} cursor="pointer" />
-          <Bar dataKey="Scope 2" stackId="scope" fill={SCOPE_COLORS["Scope 2"]} cursor="pointer" />
-          <Bar dataKey="Scope 3" stackId="scope" fill={SCOPE_COLORS["Scope 3"]} cursor="pointer" />
+              ``aggregateByReportingUnit``. Per-bar ``Cell`` lets us
+              dim the unselected facilities in cross-filter mode. */}
+          {SCOPE_KEYS.map((scope) => (
+            <Bar
+              key={scope}
+              dataKey={scope}
+              stackId="scope"
+              fill={SCOPE_COLORS[scope]}
+              cursor="pointer"
+            >
+              {data.map((entry) => {
+                const dim =
+                  selectedFacilityId && entry.facility_id !== selectedFacilityId;
+                return (
+                  <Cell
+                    key={`${scope}-${entry.facility_id}`}
+                    fill={SCOPE_COLORS[scope]}
+                    fillOpacity={dim ? DIM_OPACITY : 1}
+                  />
+                );
+              })}
+            </Bar>
+          ))}
         </BarChart>
       </ResponsiveContainer>
     </Box>

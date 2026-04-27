@@ -56,6 +56,51 @@ function normalizeScopeSet(value) {
 }
 
 // ---------------------------------------------------------------------------
+// Selection (Phase D3 polish — PowerBI-style cross-filter highlight)
+// ---------------------------------------------------------------------------
+//
+// "Selection" is a fine-grained visual highlight, distinct from the
+// coarse "filter" chips. A click on a chart cell sets the selection;
+// every other chart re-renders with the selected row(s) emphasized
+// while the rest of the (filtered) data set stays visible but dimmed.
+//
+// Shape: ``{ facility_id: string, category?: string }`` or ``null``.
+// When ``category`` is omitted, the selection covers every category
+// for that facility (e.g. clicking the top-RU bar).
+
+// True when ``row`` matches the selection. The row predicate is the
+// single source of truth for highlight rendering — every chart calls
+// it to decide which cells to dim and which to emphasize. Returns
+// false for a null / empty selection so an absent selection means
+// "nothing matches" (callers should short-circuit before calling).
+export function matchesSelection(row, selection) {
+  if (!selection || !row) return false;
+  if (!selection.facility_id) return false;
+  if (row.facility_id !== selection.facility_id) return false;
+  if (selection.category && row.category !== selection.category) return false;
+  return true;
+}
+
+// Partition a row list into ``{ selected, rest }``. Both arrays are
+// returned in the same order as the input (stable). When ``selection``
+// is null, every row goes into ``rest`` and ``selected`` is empty —
+// charts can therefore branch on ``selected.length === 0`` to render
+// the unhighlighted default.
+export function applySelectionToRows(rows, selection) {
+  const selected = [];
+  const rest = [];
+  if (!Array.isArray(rows)) return { selected, rest };
+  for (const row of rows) {
+    if (selection && matchesSelection(row, selection)) {
+      selected.push(row);
+    } else {
+      rest.push(row);
+    }
+  }
+  return { selected, rest };
+}
+
+// ---------------------------------------------------------------------------
 // KPI tiles
 // ---------------------------------------------------------------------------
 

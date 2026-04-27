@@ -13,6 +13,7 @@ import {
   Stack,
   Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import CoverageWidget from "./CoverageWidget";
 import { api, ApiError } from "./api";
 import {
@@ -34,8 +35,31 @@ import TopContributorsTable from "./dashboard/TopContributorsTable.jsx";
 // Scope chips are multi-select (all selected by default = all rows
 // pass). RU and Category are single-select dropdowns with an "All"
 // option (encoded as "" so the filter helper short-circuits).
+//
+// Selection (post-D3 polish): a click on a treemap cell or RU bar
+// sets a "selection" — a fine-grained highlight that emphasizes the
+// chosen item across every chart while keeping the rest of the
+// (filter-narrowed) data visible but dimmed. This is the PowerBI
+// cross-filter pattern. Filters and selection coexist:
+//
+//   - Filters reduce which rows are visible (coarse).
+//   - Selection highlights a slice within the filtered rows (fine).
+//
+// Filter chips and dropdowns retain their click-to-filter semantics;
+// only chart-click handlers populate the selection.
 
 const SCOPE_OPTIONS = ["Scope 1", "Scope 2", "Scope 3"];
+
+// Are two selection objects equivalent? Used to implement toggle
+// behavior — clicking the same cell twice clears the selection.
+function selectionEquals(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.facility_id === b.facility_id &&
+    (a.category || "") === (b.category || "")
+  );
+}
 
 export default function DashboardTab({
   projectId = "",
@@ -44,7 +68,6 @@ export default function DashboardTab({
   coverageSummaryText = "",
   activityLabelById = {},
   onJumpToActivityInputs = null,
-  onJumpToAudit = null,
 }) {
   const [analytics, setAnalytics] = React.useState(null);
   const [loading, setLoading] = React.useState(false);
@@ -57,6 +80,10 @@ export default function DashboardTab({
   );
   const [selectedRu, setSelectedRu] = React.useState("");
   const [selectedCategory, setSelectedCategory] = React.useState("");
+  // Selection (highlight) state. ``null`` = nothing highlighted.
+  // Populated only by chart-click handlers; filter chips and dropdowns
+  // do NOT touch this so the two states stay independent.
+  const [selection, setSelection] = React.useState(null);
 
   // Reset filters whenever the project / version changes so we don't
   // carry over a stale RU id that doesn't exist in the new payload.
@@ -64,6 +91,7 @@ export default function DashboardTab({
     setSelectedScopes(new Set(SCOPE_OPTIONS));
     setSelectedRu("");
     setSelectedCategory("");
+    setSelection(null);
   }, [projectId, versionId]);
 
   React.useEffect(() => {
@@ -124,6 +152,19 @@ export default function DashboardTab({
     [allRows],
   );
 
+  // Drop a stale selection if its target row is no longer in the
+  // filtered set — e.g. the user filtered by Scope 1 and the selected
+  // facility/category had only Scope 2 data.
+  React.useEffect(() => {
+    if (!selection) return;
+    const stillVisible = filteredRows.some(
+      (r) =>
+        r.facility_id === selection.facility_id &&
+        (!selection.category || r.category === selection.category),
+    );
+    if (!stillVisible) setSelection(null);
+  }, [filteredRows, selection]);
+
   const toggleScope = React.useCallback((scope) => {
     setSelectedScopes((prev) => {
       const next = new Set(prev);
@@ -145,28 +186,63 @@ export default function DashboardTab({
     setSelectedScopes(new Set(SCOPE_OPTIONS));
   }, []);
 
+  // Click handlers now toggle the selection rather than mutating the
+  // filter dropdowns (PowerBI-style cross-filtering). Re-clicking the
+  // same cell clears the highlight.
+  const toggleSelection = React.useCallback((next) => {
+    setSelection((prev) => (selectionEquals(prev, next) ? null : next));
+  }, []);
+
   const handleTreemapCategoryClick = React.useCallback(
     ({ facility_id, category }) => {
-      if (facility_id) setSelectedRu(facility_id);
-      if (category) setSelectedCategory(category);
+      if (!facility_id) return;
+      toggleSelection({ facility_id, category: category || undefined });
     },
-    [],
+    [toggleSelection],
   );
 
-  const handleTreemapRuClick = React.useCallback((facility_id) => {
-    if (facility_id) setSelectedRu(facility_id);
-  }, []);
-
-  const handleRuBarClick = React.useCallback((facility_id) => {
-    if (facility_id) setSelectedRu(facility_id);
-  }, []);
-
-  const handleAuditDrill = React.useCallback(
-    (context) => {
-      if (onJumpToAudit) onJumpToAudit(context);
+  const handleTreemapRuClick = React.useCallback(
+    (facility_id) => {
+      if (!facility_id) return;
+      toggleSelection({ facility_id });
     },
-    [onJumpToAudit],
+    [toggleSelection],
   );
+
+  const handleRuBarClick = React.useCallback(
+    (facility_id) => {
+      if (!facility_id) return;
+      toggleSelection({ facility_id });
+    },
+    [toggleSelection],
+  );
+
+  const clearSelection = React.useCallback(() => {
+    setSelection(null);
+  }, []);
+
+  // Table row click joins the highlight model — clicking toggles the
+  // (facility, category) selection just like clicking a treemap leaf.
+  // Audit is the auditor deliverable, not a dashboard drill-target;
+  // analysis stays self-contained on this surface.
+  const handleTableRowClick = React.useCallback(
+    ({ facility_id, category }) => {
+      toggleSelection({ facility_id, category: category || undefined });
+    },
+    [toggleSelection],
+  );
+
+  // Look up the facility name from the analytics rows so the breadcrumb
+  // shows the human-readable label rather than the id.
+  const selectionLabel = React.useMemo(() => {
+    if (!selection) return "";
+    const row = allRows.find((r) => r.facility_id === selection.facility_id);
+    const facilityName =
+      row?.facility_name || selection.facility_id;
+    return selection.category
+      ? `${facilityName} — ${selection.category}`
+      : facilityName;
+  }, [selection, allRows]);
 
   return (
     <Stack spacing={2}>
@@ -192,6 +268,41 @@ export default function DashboardTab({
 
       {!loading && !error && analytics ? (
         <>
+          {/*
+            Selection breadcrumb — only visible when a chart click has
+            populated the selection. Filter chips and dropdowns sit
+            below; the breadcrumb lets the user clear the highlight
+            without hunting for it.
+          */}
+          {selection ? (
+            <Paper
+              variant="outlined"
+              sx={{
+                px: 1.5,
+                py: 0.75,
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                bgcolor: (theme) => theme.palette.action.hover,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                Highlighted:
+              </Typography>
+              <Typography variant="body2" color="text.primary" sx={{ flexGrow: 1 }}>
+                {selectionLabel}
+              </Typography>
+              <Button
+                size="small"
+                variant="text"
+                startIcon={<CloseIcon fontSize="small" />}
+                onClick={clearSelection}
+              >
+                Clear selection
+              </Button>
+            </Paper>
+          ) : null}
+
           <AnalyticsKpiCards rows={filteredRows} coverage={coverage} />
 
           <Paper sx={{ p: 2 }}>
@@ -281,7 +392,7 @@ export default function DashboardTab({
             <Typography variant="subtitle1" sx={{ mb: 1 }}>
               Emissions by Scope
             </Typography>
-            <ScopeStackBar rows={filteredRows} />
+            <ScopeStackBar rows={filteredRows} selection={selection} />
           </Paper>
 
           <Box
@@ -300,6 +411,7 @@ export default function DashboardTab({
                 rows={filteredRows}
                 onCategoryClick={handleTreemapCategoryClick}
                 onReportingUnitClick={handleTreemapRuClick}
+                selection={selection}
               />
             </Paper>
             <Paper sx={{ p: 2 }}>
@@ -309,6 +421,7 @@ export default function DashboardTab({
               <TopReportingUnitsBar
                 rows={filteredRows}
                 onBarClick={handleRuBarClick}
+                selection={selection}
               />
             </Paper>
           </Box>
@@ -322,12 +435,13 @@ export default function DashboardTab({
             >
               <Typography variant="subtitle1">Top Contributors</Typography>
               <Typography variant="body2" color="text.secondary">
-                Click a row to drill through to the Audit tab.
+                Click a row to highlight it and its share across the other charts.
               </Typography>
             </Stack>
             <TopContributorsTable
               rows={filteredRows}
-              onJumpToAudit={handleAuditDrill}
+              onRowClick={handleTableRowClick}
+              selection={selection}
             />
           </Paper>
         </>

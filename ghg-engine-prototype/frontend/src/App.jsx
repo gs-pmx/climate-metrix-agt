@@ -1334,7 +1334,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             coverageSummaryText={coverageSummaryText}
             activityLabelById={activityLabelById}
             onJumpToActivityInputs={() => setTab(2)}
-            onJumpToAudit={() => setTab(5)}
           />
         </React.Suspense>
       )}
