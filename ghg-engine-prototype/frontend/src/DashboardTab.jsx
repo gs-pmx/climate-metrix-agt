@@ -7,6 +7,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import CoverageWidget from "./CoverageWidget";
 
 const DATA_VIZ_COLORS = {
   categorical: [
@@ -283,7 +284,14 @@ function FacilitySourceTreemap({ rows }) {
   );
 }
 
-export default function DashboardTab({ resultRows, onSaveResults }) {
+export default function DashboardTab({
+  resultRows,
+  onSaveResults,
+  coverage = null,
+  coverageSummaryText = "",
+  activityLabelById = {},
+  onJumpToActivityInputs = null,
+}) {
   const renderWrappedCell = React.useCallback(
     (params) => (
       <Box
@@ -436,6 +444,18 @@ export default function DashboardTab({ resultRows, onSaveResults }) {
 
   return (
     <Stack spacing={2}>
+      {/*
+        Phase D2 — Source Coverage widget. Placed at the top of the
+        Dashboard so completeness lands before the user dives into
+        emissions totals. Renders a friendly placeholder when no
+        applicable lists are configured anywhere in the project.
+      */}
+      <CoverageWidget
+        coverage={coverage}
+        activityLabelById={activityLabelById}
+        summaryText={coverageSummaryText}
+        onViewMissing={onJumpToActivityInputs ? () => onJumpToActivityInputs() : null}
+      />
       <Paper sx={{ p: 2 }}>
         <Typography variant="h6" sx={{ mb: 0.5 }}>
           Dashboard Summary (MTCO2e)

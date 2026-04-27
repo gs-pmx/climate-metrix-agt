@@ -33,6 +33,7 @@ import {
   withActivityTypeDefaults,
 } from "./activityDrafts";
 import { filterRowsApplicable } from "./applicability";
+import { computeProjectCoverage, formatCoverageSummary } from "./coverage";
 import {
   removeActivitiesForReportingUnit,
   removeReportingUnitFromList,
@@ -270,6 +271,23 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const facilityOptions = React.useMemo(
     () => dataEntryFacilities.map((f) => ({ value: f.id, label: f.facility_name })),
     [dataEntryFacilities],
+  );
+
+  // Phase D2 — single source of truth for project-level source coverage.
+  // Computed once at the App level so the Reporting Units tab chips,
+  // Activity Inputs banner, and Dashboard widget all read the same
+  // numbers. Cheap pure helper (see coverage.js).
+  const projectCoverage = React.useMemo(
+    () => computeProjectCoverage({
+      reportingUnits: facilities,
+      activities,
+      calcErrors,
+    }),
+    [activities, calcErrors, facilities],
+  );
+  const coverageSummaryText = React.useMemo(
+    () => formatCoverageSummary(projectCoverage),
+    [projectCoverage],
   );
 
   const refreshProjects = React.useCallback(async () => {
@@ -1266,6 +1284,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             setReportingUnits={setFacilities}
             activityCatalog={activityCatalog}
             activityTypesById={activityTypesById}
+            activityLabelById={activityLabelById}
             facilityOptions={facilityOptions}
             inventoryYear={inventoryYear}
             setInventoryYear={setInventoryYear}
@@ -1278,6 +1297,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             saveCurrentVersion={saveCurrentVersion}
             catalogError={catalogError}
             calcErrors={calcErrors}
+            coverage={projectCoverage}
             show={show}
           />
         </React.Suspense>
@@ -1299,6 +1319,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           <DashboardTab
             resultRows={resultRows}
             onSaveResults={saveCurrentVersion}
+            coverage={projectCoverage}
+            coverageSummaryText={coverageSummaryText}
+            activityLabelById={activityLabelById}
+            onJumpToActivityInputs={() => setTab(2)}
           />
         </React.Suspense>
       )}

@@ -17,6 +17,7 @@ import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
 import ByReportingUnitTable from "./ByReportingUnitTable";
 import RowByRowView from "./RowByRowView";
+import CoverageBanner from "./CoverageBanner";
 import {
   EMPTY_ACTIVITY,
   createEmptyDraft,
@@ -43,6 +44,7 @@ export default function ActivityInputsPanel({
   setReportingUnits,
   activityCatalog,
   activityTypesById,
+  activityLabelById = {},
   facilityOptions,
   inventoryYear,
   setInventoryYear,
@@ -55,6 +57,7 @@ export default function ActivityInputsPanel({
   saveCurrentVersion,
   catalogError,
   calcErrors = [],
+  coverage = null,
   show = () => {},
 }) {
   const [viewMode, setViewMode] = React.useState("byActivity");
@@ -370,6 +373,14 @@ export default function ActivityInputsPanel({
 
   return (
     <Stack spacing={2}>
+      {/*
+        Phase D2 — coverage banner. Sits at the top of the Activity
+        Inputs surface (above the inventory-year row) so completeness
+        is visible the moment a user opens the data-entry tab. Hidden
+        when no applicable lists are configured anywhere — see the
+        component for the gate.
+      */}
+      <CoverageBanner coverage={coverage} activityLabelById={activityLabelById} />
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
           <TextField
