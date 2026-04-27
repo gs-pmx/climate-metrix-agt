@@ -415,6 +415,63 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     [show],
   );
 
+  // Phase D1 — autosave wiring. Must come BEFORE saveCurrentVersion and
+  // selectProject because both useCallback their deps on
+  // autosaveMarkBaseline; declaring it later puts these closures into a
+  // temporal dead zone and the app blanks on first render.
+  //
+  // Build the live snapshot every render so the autosave hook can
+  // dirty-check it. ``null`` whenever there's no active project so the
+  // hook short-circuits.
+  const liveSnapshot = React.useMemo(() => {
+    if (!activeProjectId) return null;
+    return buildSnapshot({
+      facilities,
+      activities,
+      resultRows,
+      summaryRows,
+      traceRows,
+      auditRows,
+    });
+  }, [activeProjectId, facilities, activities, resultRows, summaryRows, traceRows, auditRows]);
+
+  const autosaveSave = React.useCallback(
+    async (snapshot) => {
+      if (!activeProjectId) return;
+      await api.saveDraft(activeProjectId, {
+        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
+        gwp_set: gwpSet,
+        include_trace: includeTrace,
+        snapshot,
+      });
+    },
+    [activeProjectId, inventoryYear, gwpSet, includeTrace],
+  );
+
+  const autosaveBeacon = React.useCallback(
+    (snapshot) => {
+      if (!activeProjectId) return false;
+      return saveDraftViaBeacon(activeProjectId, {
+        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
+        gwp_set: gwpSet,
+        include_trace: includeTrace,
+        snapshot,
+      });
+    },
+    [activeProjectId, inventoryYear, gwpSet, includeTrace],
+  );
+
+  const autosave = useAutosave({
+    snapshot: liveSnapshot,
+    saveFn: autosaveSave,
+    beaconFn: autosaveBeacon,
+    // Don't fire autosaves while a restore banner is up — the user is
+    // about to choose between the draft and the latest version, and an
+    // autosave during that window would race with whichever they pick.
+    enabled: hasActiveProject && !pendingDraft,
+  });
+  const autosaveMarkBaseline = autosave.markBaseline;
+
   const saveCurrentVersion = React.useCallback(
     async (note) => {
       if (!activeProjectId) {
@@ -480,60 +537,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [hasActiveProject, saveCurrentVersion]);
-
-  // Phase D1 — autosave wiring.
-  //
-  // Build the live snapshot every render so the autosave hook can
-  // dirty-check it. ``null`` whenever there's no active project so the
-  // hook short-circuits.
-  const liveSnapshot = React.useMemo(() => {
-    if (!activeProjectId) return null;
-    return buildSnapshot({
-      facilities,
-      activities,
-      resultRows,
-      summaryRows,
-      traceRows,
-      auditRows,
-    });
-  }, [activeProjectId, facilities, activities, resultRows, summaryRows, traceRows, auditRows]);
-
-  const autosaveSave = React.useCallback(
-    async (snapshot) => {
-      if (!activeProjectId) return;
-      await api.saveDraft(activeProjectId, {
-        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
-        gwp_set: gwpSet,
-        include_trace: includeTrace,
-        snapshot,
-      });
-    },
-    [activeProjectId, inventoryYear, gwpSet, includeTrace],
-  );
-
-  const autosaveBeacon = React.useCallback(
-    (snapshot) => {
-      if (!activeProjectId) return false;
-      return saveDraftViaBeacon(activeProjectId, {
-        inventory_year: Number(inventoryYear) || new Date().getFullYear(),
-        gwp_set: gwpSet,
-        include_trace: includeTrace,
-        snapshot,
-      });
-    },
-    [activeProjectId, inventoryYear, gwpSet, includeTrace],
-  );
-
-  const autosave = useAutosave({
-    snapshot: liveSnapshot,
-    saveFn: autosaveSave,
-    beaconFn: autosaveBeacon,
-    // Don't fire autosaves while a restore banner is up — the user is
-    // about to choose between the draft and the latest version, and an
-    // autosave during that window would race with whichever they pick.
-    enabled: hasActiveProject && !pendingDraft,
-  });
-  const autosaveMarkBaseline = autosave.markBaseline;
 
   const selectProject = React.useCallback(
     async (projectId) => {
