@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Callable
 
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
-from api.dependencies import get_engine, get_factors
+from api.dependencies import get_engine, get_factors, get_project_store
 from api.dto import (
     ActivityCalculationErrorDTO,
     CalculationAuditResponseDTO,
@@ -15,11 +16,40 @@ from api.dto import (
 )
 from api.schemas import CalculationRequest
 from ghg_engine.audit import build_audit_rows
+from ghg_engine.domain import ResolvedActivity
 from ghg_engine.engine import GHGEngine
+from ghg_engine.eqms.base import EQMContext
+from ghg_engine.eqms.spend_based import SpendBasedContext, StaticGLMappingResolver
 from ghg_engine.factors import FactorRepository
 from ghg_engine.models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
+from project_store import ProjectStore
 
 router = APIRouter()
+
+
+def _build_spend_eqm_context_builder(
+    project_id: str | None,
+    store: ProjectStore,
+    factors,
+) -> Callable[[ResolvedActivity], EQMContext | None] | None:
+    """Compose an EQMContext builder for the spend-based plugin.
+
+    Returns ``None`` when ``project_id`` is missing — the orchestrator
+    treats that as "no spend context" and the spend plugin will surface
+    its own structured error if a spend row is encountered.
+    """
+    if not project_id:
+        return None
+    mappings = store.list_gl_mappings(project_id)
+    resolver = StaticGLMappingResolver.from_rows(mappings)
+    spend_ctx = SpendBasedContext(
+        gl_resolver=resolver,
+        factor_provider=lambda fid: factors.get_by_factor_id(fid),
+        fx_provider=lambda currency, year: store.fx_rate(currency, year),
+        inflation_provider=lambda index_name, year: store.inflation_index(index_name, year),
+    )
+    eqm_context = EQMContext(spend_based=spend_ctx)
+    return lambda _resolved: eqm_context
 
 
 def _classify_exception(exc: Exception, activity: ActivityRecord) -> tuple[str, dict]:
@@ -130,14 +160,22 @@ def _total_failure_response(
 def calculate(
     payload: CalculationRequest,
     engine: GHGEngine = Depends(get_engine),
+    factors: FactorRepository = Depends(get_factors),
+    store: ProjectStore = Depends(get_project_store),
 ):
     results: list[ResultRecord] = []
     traces: list[TraceRecord] = []
     errors: list[ActivityCalculationErrorDTO] = []
 
+    eqm_context_builder = _build_spend_eqm_context_builder(
+        payload.project_id, store, factors
+    )
+
     for index, activity in enumerate(payload.activities):
         try:
-            rows, trace = engine.calculate_one(activity, payload.context)
+            rows, trace = engine.calculate_one(
+                activity, payload.context, eqm_context_builder=eqm_context_builder
+            )
         except Exception as exc:  # noqa: BLE001 - we classify and surface
             errors.append(_build_activity_error(index, activity, None, exc))
             continue
@@ -167,6 +205,7 @@ def calculate_with_audit(
     payload: CalculationRequest,
     engine: GHGEngine = Depends(get_engine),
     factors: FactorRepository = Depends(get_factors),
+    store: ProjectStore = Depends(get_project_store),
 ):
     all_rows: list[ResultRecord] = []
     traces: list[TraceRecord] = []
@@ -174,9 +213,15 @@ def calculate_with_audit(
     errors: list[ActivityCalculationErrorDTO] = []
     summary: dict[str, float] = defaultdict(float)
 
+    eqm_context_builder = _build_spend_eqm_context_builder(
+        payload.project_id, store, factors
+    )
+
     for index, activity in enumerate(payload.activities):
         try:
-            rows, trace = engine.calculate_one(activity, payload.context)
+            rows, trace = engine.calculate_one(
+                activity, payload.context, eqm_context_builder=eqm_context_builder
+            )
             activity_def = engine.activity_catalog.get_required(activity.activity_type_id)
             activity_audit_rows = [
                 AuditRecord(**r)

@@ -43,6 +43,7 @@ from ghg_engine.models import (
 class CalculationRequest(BaseModel):
     context: CalculationContext
     activities: list[ActivityRecord]
+    project_id: str | None = None
 
 
 class ProjectCreateRequest(BaseModel):

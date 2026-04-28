@@ -38,13 +38,17 @@ class CalculationOrchestrator:
         self,
         activity: ActivityRecord,
         ctx: CalculationContext,
+        *,
+        eqm_context_builder: Callable[[ResolvedActivity], "EQMContext | None"] | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         resolved = self.legacy_adapter.resolve(activity, ctx)
-        return self.calculate_resolved(resolved)
+        return self.calculate_resolved(resolved, eqm_context_builder=eqm_context_builder)
 
     def calculate_resolved(
         self,
         resolved: ResolvedActivity,
+        *,
+        eqm_context_builder: Callable[[ResolvedActivity], "EQMContext | None"] | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
         observation = resolved.observation
         activity_def = self.activity_catalog.get_required(observation.activity_type_id)
@@ -56,5 +60,6 @@ class CalculationOrchestrator:
             raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
         if not plugin.applicability(resolved, activity_def):
             raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
-        eqm_context = self.eqm_context_builder(resolved) if self.eqm_context_builder else None
+        builder = eqm_context_builder or self.eqm_context_builder
+        eqm_context = builder(resolved) if builder else None
         return plugin.compute(resolved, activity_def, self.factors, eqm_context=eqm_context)
