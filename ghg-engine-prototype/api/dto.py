@@ -464,6 +464,69 @@ class ProjectAnalyticsResponseDTO(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Phase E1 — spend-based emissions DTOs
+# ---------------------------------------------------------------------------
+
+
+class GLMappingDTO(BaseModel):
+    """A single GL-code -> factor_id mapping for a project.
+
+    ``reporting_unit_id`` is ``None`` for the project-wide default
+    fallback. When a per-RU mapping exists for the same gl_code, the
+    per-RU mapping wins at calculation time.
+    """
+
+    mapping_id: int | None = None
+    project_id: str
+    reporting_unit_id: str | None = None
+    gl_code: str
+    factor_id: str
+    created_at: str | None = None
+    updated_at: str | None = None
+
+
+class GLMappingInputDTO(BaseModel):
+    """Body shape used inside ``GLMappingsRequestDTO``.
+
+    Identifier fields (``mapping_id``, timestamps) are server-managed and
+    omitted from the input — the PUT endpoint replaces the whole list
+    atomically and re-issues primary keys.
+    """
+
+    reporting_unit_id: str | None = None
+    gl_code: str
+    factor_id: str
+
+
+class GLMappingsRequestDTO(BaseModel):
+    """Body of ``PUT /projects/{id}/gl-mappings``.
+
+    The list is the project's full GL-mapping table after the request
+    completes — server replaces atomically, no incremental upsert.
+    """
+
+    mappings: list[GLMappingInputDTO] = Field(default_factory=list)
+
+
+class SpendFactorDTO(BaseModel):
+    """Wire shape of a spend-based factor row from ``GET /catalog/spend-factors``."""
+
+    factor_version_id: str
+    source_record_key: str
+    dataset_id: str
+    factor_kind: str
+    factor_type: str | None = None
+    description: str | None = None
+    attribute: str | None = None
+    value: float
+    unit_label: str
+    region: str | None = None
+    country: str | None = None
+    data_year: int | None = None
+    source_id: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Mapper functions (domain / internal -> DTO)
 # ---------------------------------------------------------------------------
 
@@ -651,6 +714,40 @@ def method_schema_to_dto(ms: MethodSchema) -> MethodSchemaDTO:
     )
 
 
+def gl_mapping_to_dto(row: dict[str, Any]) -> GLMappingDTO:
+    """Coerce a ``ProjectStore.list_gl_mappings`` row into a DTO."""
+
+    return GLMappingDTO(
+        mapping_id=row.get("mapping_id"),
+        project_id=str(row.get("project_id") or ""),
+        reporting_unit_id=row.get("reporting_unit_id") or None,
+        gl_code=str(row.get("gl_code") or ""),
+        factor_id=str(row.get("factor_id") or ""),
+        created_at=row.get("created_at"),
+        updated_at=row.get("updated_at"),
+    )
+
+
+def spend_factor_to_dto(row: dict[str, Any]) -> SpendFactorDTO:
+    """Coerce a ``ProjectStore.list_spend_factors`` row into a DTO."""
+
+    return SpendFactorDTO(
+        factor_version_id=str(row.get("factor_version_id") or ""),
+        source_record_key=str(row.get("source_record_key") or ""),
+        dataset_id=str(row.get("dataset_id") or ""),
+        factor_kind=str(row.get("factor_kind") or "spend"),
+        factor_type=row.get("factor_type"),
+        description=row.get("subtype_or_description") or row.get("description"),
+        attribute=row.get("attribute"),
+        value=float(row.get("value") or 0.0),
+        unit_label=str(row.get("unit_label") or ""),
+        region=row.get("region"),
+        country=row.get("country"),
+        data_year=int(row["data_year"]) if row.get("data_year") is not None else None,
+        source_id=row.get("source_id"),
+    )
+
+
 __all__ = [
     "ActivityInputFieldDTO",
     "ActivityInputSchemaDTO",
@@ -677,6 +774,10 @@ __all__ = [
     "ProjectDraftSaveResponseDTO",
     "ProjectAnalyticsRowDTO",
     "ProjectAnalyticsResponseDTO",
+    "GLMappingDTO",
+    "GLMappingInputDTO",
+    "GLMappingsRequestDTO",
+    "SpendFactorDTO",
     "activity_input_field_to_dto",
     "activity_input_schema_to_dto",
     "factor_query_template_to_dto",
@@ -694,4 +795,6 @@ __all__ = [
     "calculation_audit_response_to_dto",
     "factor_preview_to_dto",
     "method_schema_to_dto",
+    "gl_mapping_to_dto",
+    "spend_factor_to_dto",
 ]

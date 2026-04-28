@@ -174,6 +174,12 @@ class ProjectStore:
                     "analytics index on calculation_results (inventory_version_id, facility_id)",
                     self._migration_8_analytics_index,
                 ),
+                (
+                    9,
+                    "spend-based emissions: gl_mappings, fx_rates, inflation_indices, "
+                    "factor_kind on factor_versions, seed reference data",
+                    self._migration_9_spend_based_foundation,
+                ),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -566,6 +572,150 @@ class ProjectStore:
         # only create the new index for already-migrated databases.
         self._inventory.ensure_schema(conn)
 
+    def _migration_9_spend_based_foundation(self, conn: sqlite3.Connection) -> None:
+        # Phase E1 — spend-based emissions backend foundation. Three new
+        # tables (gl_mappings, fx_rates, inflation_indices), a new
+        # ``factor_kind`` discriminator column on ``factor_versions``, and
+        # the bundled FX + CPI seed data. The legacy migration_3 stub
+        # ``factors`` table also gets the discriminator column so any
+        # caller that still touches it sees the same shape.
+        #
+        # The column is named ``factor_kind`` rather than ``factor_type``
+        # because ``factor_versions.factor_type`` is already in use as a
+        # subtype/classification field (e.g. ``gasoline``, ``diesel``).
+        # The new column carries the orthogonal physical/spend bit.
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS gl_mappings (
+                mapping_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id TEXT NOT NULL,
+                reporting_unit_id TEXT,
+                gl_code TEXT NOT NULL,
+                factor_id TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+                UNIQUE(project_id, reporting_unit_id, gl_code)
+            );
+            CREATE INDEX IF NOT EXISTS idx_gl_mappings_project
+                ON gl_mappings(project_id, reporting_unit_id);
+
+            CREATE TABLE IF NOT EXISTS fx_rates (
+                currency TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                rate_to_usd REAL NOT NULL,
+                source TEXT NOT NULL,
+                PRIMARY KEY(currency, year)
+            );
+
+            CREATE TABLE IF NOT EXISTS inflation_indices (
+                index_name TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                index_value REAL NOT NULL,
+                source TEXT NOT NULL,
+                PRIMARY KEY(index_name, year)
+            );
+            """
+        )
+
+        # Add the kind discriminator to factor_versions (canonical store)
+        # and to the migration_3 stub factors table. SQLite has no ADD
+        # COLUMN IF NOT EXISTS, so we introspect first.
+        for table_name in ("factor_versions", "factors"):
+            cols = {
+                row["name"]
+                for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+            }
+            if not cols:
+                # Table doesn't exist (legacy install where migration_3
+                # was skipped or factor_versions hasn't been created
+                # yet). ensure_schema below will create factor_versions.
+                continue
+            if "factor_kind" not in cols:
+                conn.execute(
+                    f"ALTER TABLE {table_name} ADD COLUMN factor_kind TEXT NOT NULL DEFAULT 'physical'"
+                )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_factor_versions_kind "
+            "ON factor_versions(factor_kind, dataset_id)"
+        )
+
+        # Seed reference data (FX rates and CPI) from the bundled CSVs
+        # if present. Idempotent via INSERT OR REPLACE.
+        self._seed_reference_data(conn)
+
+    def _seed_reference_data(self, conn: sqlite3.Connection) -> None:
+        """Populate fx_rates and inflation_indices from bundled CSVs.
+
+        The CSVs ship at ``data/reference_data/{fx_rates,us_cpi_u}.csv``
+        relative to the package root. Missing files are tolerated so the
+        migration runs cleanly in test fixtures that don't ship the
+        bundled data — tests seed their own rows directly.
+        """
+
+        ref_dir = Path(__file__).parent / "data" / "reference_data"
+
+        fx_csv = ref_dir / "fx_rates.csv"
+        if fx_csv.is_file():
+            self._seed_fx_rates_csv(conn, fx_csv)
+
+        cpi_csv = ref_dir / "us_cpi_u.csv"
+        if cpi_csv.is_file():
+            self._seed_inflation_csv(conn, cpi_csv, index_name="us_cpi_u")
+
+    @staticmethod
+    def _seed_fx_rates_csv(conn: sqlite3.Connection, csv_path: Path) -> None:
+        import csv
+
+        with csv_path.open(encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                currency = (row.get("currency") or "").strip().upper()
+                year_raw = row.get("year")
+                rate_raw = row.get("rate_to_usd")
+                source = (row.get("source") or "").strip()
+                if not currency or year_raw is None or rate_raw is None:
+                    continue
+                try:
+                    year = int(year_raw)
+                    rate = float(rate_raw)
+                except (TypeError, ValueError):
+                    continue
+                conn.execute(
+                    "INSERT OR REPLACE INTO fx_rates (currency, year, rate_to_usd, source) "
+                    "VALUES (?, ?, ?, ?)",
+                    (currency, year, rate, source or "unknown"),
+                )
+
+    @staticmethod
+    def _seed_inflation_csv(
+        conn: sqlite3.Connection,
+        csv_path: Path,
+        *,
+        index_name: str,
+    ) -> None:
+        import csv
+
+        with csv_path.open(encoding="utf-8") as handle:
+            reader = csv.DictReader(handle)
+            for row in reader:
+                year_raw = row.get("year")
+                value_raw = row.get("index_value")
+                source = (row.get("source") or "").strip()
+                if year_raw is None or value_raw is None:
+                    continue
+                try:
+                    year = int(year_raw)
+                    value = float(value_raw)
+                except (TypeError, ValueError):
+                    continue
+                conn.execute(
+                    "INSERT OR REPLACE INTO inflation_indices "
+                    "(index_name, year, index_value, source) VALUES (?, ?, ?, ?)",
+                    (index_name, year, value, source or "unknown"),
+                )
+
     # ------------------------------------------------------------------
     # Factor-store delegates (public API surface on the facade).
     # ------------------------------------------------------------------
@@ -702,3 +852,164 @@ class ProjectStore:
                 snapshot=snapshot,
                 note=note,
             )
+
+    # ------------------------------------------------------------------
+    # Phase E1 — spend-based emissions: GL mappings, FX, inflation
+    # ------------------------------------------------------------------
+    def list_gl_mappings(
+        self,
+        project_id: str,
+        *,
+        reporting_unit_id: str | None = "__any__",
+    ) -> list[dict[str, Any]]:
+        """List GL mappings for a project.
+
+        ``reporting_unit_id="__any__"`` (default) returns every row;
+        ``None`` returns only the project-wide defaults; passing a string
+        returns only rows scoped to that RU.
+        """
+
+        with self._connect() as conn:
+            if reporting_unit_id == "__any__":
+                rows = conn.execute(
+                    """
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
+                           created_at, updated_at
+                    FROM gl_mappings
+                    WHERE project_id = ?
+                    ORDER BY COALESCE(reporting_unit_id, ''), gl_code
+                    """,
+                    (project_id,),
+                ).fetchall()
+            elif reporting_unit_id is None:
+                rows = conn.execute(
+                    """
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
+                           created_at, updated_at
+                    FROM gl_mappings
+                    WHERE project_id = ? AND reporting_unit_id IS NULL
+                    ORDER BY gl_code
+                    """,
+                    (project_id,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
+                           created_at, updated_at
+                    FROM gl_mappings
+                    WHERE project_id = ? AND reporting_unit_id = ?
+                    ORDER BY gl_code
+                    """,
+                    (project_id, reporting_unit_id),
+                ).fetchall()
+        return [dict(row) for row in rows]
+
+    def replace_gl_mappings(
+        self,
+        project_id: str,
+        mappings: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Atomically replace the project's GL mappings with the given list.
+
+        Each entry must carry ``gl_code`` and ``factor_id``;
+        ``reporting_unit_id`` is optional and ``None`` denotes the
+        project-wide default.
+        """
+
+        project_row = None
+        with self._connect() as conn:
+            project_row = conn.execute(
+                "SELECT project_id FROM projects WHERE project_id = ?",
+                (project_id,),
+            ).fetchone()
+            if project_row is None:
+                raise KeyError(f"unknown project_id {project_id}")
+
+            now = utc_now_iso()
+            conn.execute("DELETE FROM gl_mappings WHERE project_id = ?", (project_id,))
+            for entry in mappings:
+                gl_code = str(entry.get("gl_code") or "").strip()
+                factor_id = str(entry.get("factor_id") or "").strip()
+                if not gl_code or not factor_id:
+                    raise ValueError("each gl mapping requires gl_code and factor_id")
+                ru = entry.get("reporting_unit_id")
+                ru_value = ru if (ru is None or str(ru).strip() == "") else str(ru).strip()
+                if ru_value == "":
+                    ru_value = None
+                conn.execute(
+                    """
+                    INSERT INTO gl_mappings
+                        (project_id, reporting_unit_id, gl_code, factor_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (project_id, ru_value, gl_code, factor_id, now, now),
+                )
+        return self.list_gl_mappings(project_id)
+
+    def fx_rate(self, currency: str, year: int) -> dict[str, Any] | None:
+        """Return the FX rate row for (currency, year) or None.
+
+        ``rate_to_usd`` semantics: ``usd_amount = local_amount *
+        rate_to_usd``. USD is always 1.0.
+        """
+
+        normalized = (currency or "").strip().upper()
+        if not normalized:
+            return None
+        if normalized == "USD":
+            return {"currency": "USD", "year": int(year), "rate_to_usd": 1.0, "source": "identity"}
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT currency, year, rate_to_usd, source FROM fx_rates "
+                "WHERE currency = ? AND year = ?",
+                (normalized, int(year)),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def inflation_index(self, index_name: str, year: int) -> dict[str, Any] | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT index_name, year, index_value, source FROM inflation_indices "
+                "WHERE index_name = ? AND year = ?",
+                (index_name, int(year)),
+            ).fetchone()
+        return dict(row) if row is not None else None
+
+    def list_spend_factors(
+        self,
+        *,
+        dataset_id: str | None = None,
+        query: str | None = None,
+        limit: int = 200,
+    ) -> list[dict[str, Any]]:
+        """Browse spend-based factors filtered by optional dataset + free-text query."""
+
+        sql_parts = [
+            "SELECT factor_version_id, source_record_key, dataset_id, factor_kind, factor_type,",
+            "       subtype_or_description, attribute, value, unit_label, region, country,",
+            "       data_year, source_id",
+            "FROM factor_versions",
+            "WHERE factor_kind = 'spend'",
+        ]
+        params: list[Any] = []
+        if dataset_id:
+            sql_parts.append("AND dataset_id = ?")
+            params.append(dataset_id)
+        if query:
+            sql_parts.append(
+                "AND LOWER("
+                "COALESCE(source_record_key, '') || ' ' || "
+                "COALESCE(subtype_or_description, '') || ' ' || "
+                "COALESCE(source_id, '') || ' ' || "
+                "COALESCE(region, '') || ' ' || "
+                "COALESCE(country, '')"
+                ") LIKE ?"
+            )
+            params.append(f"%{query.lower()}%")
+        sql_parts.append("ORDER BY factor_type, source_record_key")
+        sql_parts.append(f"LIMIT {int(limit)}")
+        sql = "\n".join(sql_parts)
+        with self._connect() as conn:
+            rows = conn.execute(sql, params).fetchall()
+        return [dict(row) for row in rows]

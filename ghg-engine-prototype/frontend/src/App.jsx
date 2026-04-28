@@ -34,6 +34,7 @@ import {
 } from "./activityDrafts";
 import { filterRowsApplicable } from "./applicability";
 import { computeProjectCoverage, formatCoverageSummary } from "./coverage";
+import { CORPORATE_STARTER_DEFAULT_IDS } from "./configureSources";
 import {
   removeActivitiesForReportingUnit,
   removeReportingUnitFromList,
@@ -218,7 +219,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [projectRenameDraft, setProjectRenameDraft] = React.useState("");
   const [versionNote, setVersionNote] = React.useState("");
   const [projectBusy, setProjectBusy] = React.useState(false);
-  const [facilities, setFacilities] = React.useState([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }]);
+  const [facilities, setFacilities] = React.useState([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Corporate", applicable_activity_types: [...CORPORATE_STARTER_DEFAULT_IDS] }]);
   // Session-only Set of Reporting Unit IDs that were created in this
   // browser session AND have never been configured (applicable list is
   // still empty). Used by ReportingUnitsTab to highlight the Configure
@@ -620,7 +621,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     try {
       const project = await api.createProject({ name: cleanName, inventory_year: year });
       setProjectNameDraft("");
-      const initialFacilities = [{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }];
+      const initialFacilities = [{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Corporate", applicable_activity_types: [...CORPORATE_STARTER_DEFAULT_IDS] }];
       const initialActivities = [createEmptyDraft()];
       setFacilities(initialFacilities);
       setActivities(initialActivities);
@@ -688,7 +689,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       setActiveProjectId("");
       setProjectRenameDraft("");
       setProjectVersions([]);
-      setFacilities([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Reporting Unit 1" }]);
+      setFacilities([{ ...EMPTY_REPORTING_UNIT, id: uid(), facility_name: "Corporate", applicable_activity_types: [...CORPORATE_STARTER_DEFAULT_IDS] }]);
       setActivities([createEmptyDraft()]);
       setResultRows([]);
       setSummaryRows([]);

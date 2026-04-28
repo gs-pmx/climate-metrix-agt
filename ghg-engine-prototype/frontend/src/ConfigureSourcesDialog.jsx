@@ -18,6 +18,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import AddIcon from "@mui/icons-material/Add";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
+  CORPORATE_STARTER_DEFAULT_IDS,
   STARTER_DEFAULT_IDS,
   addDefaultsToChecked,
   collectChecked,
@@ -159,12 +160,15 @@ export default function ConfigureSourcesDialog({
     });
   };
 
-  const handleDefaults = () => {
+  const handleDefaults = (defaults) => {
     setChecked((prev) => {
-      if (!prev || prev.size === 0) return setDefaultsAsChecked(catalog);
-      return addDefaultsToChecked(prev, catalog);
+      if (!prev || prev.size === 0) return setDefaultsAsChecked(catalog, defaults);
+      return addDefaultsToChecked(prev, catalog, defaults);
     });
   };
+
+  const handleFacilityDefaults = () => handleDefaults(STARTER_DEFAULT_IDS);
+  const handleCorporateDefaults = () => handleDefaults(CORPORATE_STARTER_DEFAULT_IDS);
 
   const handleSave = () => {
     const next = collectChecked(checked, catalog);
@@ -177,7 +181,12 @@ export default function ConfigureSourcesDialog({
     { id: "scope_3", label: "Scope 3 - Value chain" },
   ];
 
-  const defaultsLabel = (!checked || checked.size === 0) ? "Use starter defaults" : "Add starter defaults";
+  const facilityDefaultsLabel = (!checked || checked.size === 0)
+    ? "Use facility starters"
+    : "Add facility starters";
+  const corporateDefaultsLabel = (!checked || checked.size === 0)
+    ? "Use corporate starters"
+    : "Add corporate starters";
 
   const hasOther = (libraryByScope.other.length + selectedByScope.other.length) > 0;
 
@@ -243,8 +252,21 @@ export default function ConfigureSourcesDialog({
               label={`${checked.size} selected`}
               data-testid="selected-count-chip"
             />
-            <Button size="small" variant="outlined" onClick={handleDefaults}>
-              {defaultsLabel}
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleFacilityDefaults}
+              data-testid="facility-starter-button"
+            >
+              {facilityDefaultsLabel}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={handleCorporateDefaults}
+              data-testid="corporate-starter-button"
+            >
+              {corporateDefaultsLabel}
             </Button>
           </Stack>
           <Stack spacing={1.25}>

@@ -2156,5 +2156,120 @@
     "audit_metadata": {
       "audit_group": "scope3_category5"
     }
+  },
+  {
+    "activity_type_id": "scope3_spend_based",
+    "source_id": "spend_based_s3",
+    "legacy_source_ids": [],
+    "workbook_aliases": [],
+    "label": "Spend-Based Emissions",
+    "description": "Scope 3 Category 1 emissions estimated from purchased goods and services spend, mapped to environmentally-extended input-output (EEIO) emission factors. One repeatable row per spend transaction; emissions are computed by FX/inflation-correcting the spend to the EF reference year and multiplying by the EF.",
+    "category": "Purchased Goods & Services",
+    "scope": "Scope 3",
+    "protocol_category_code": "1",
+    "protocol_category_label": "Purchased goods and services",
+    "source_type": "spend",
+    "metric_group": "upstream",
+    "metric_subgroup": "3.1_purchased_goods_and_services",
+    "is_biogenic_default": false,
+    "default_unit": "USD",
+    "allowed_units": ["USD"],
+    "method_id": "spend_based",
+    "emission_category": "spend-based",
+    "factor_description": null,
+    "implementation_status": "implemented",
+    "input_schema": {
+      "fields": [
+        {
+          "field_id": "spend",
+          "label": "Spend Amount",
+          "kind": "quantity",
+          "required": true,
+          "is_primary": true,
+          "default_unit": "USD",
+          "allowed_units": ["USD"],
+          "options": [],
+          "param_key": null,
+          "help_text": "Total spend on this GL line for the transaction year. v1 only accepts USD; non-USD currencies become available in a later phase."
+        },
+        {
+          "field_id": "gl_code",
+          "label": "GL Code",
+          "kind": "string",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "gl_code",
+          "help_text": "General-ledger code from the project's chart of accounts. The project's GL-mapping table resolves this to a spend-based emission factor."
+        },
+        {
+          "field_id": "transaction_year",
+          "label": "Transaction Year",
+          "kind": "number",
+          "required": true,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "transaction_year",
+          "help_text": "Calendar year the transaction was booked. Used to apply FX and inflation correction relative to the EF reference year."
+        },
+        {
+          "field_id": "supplier",
+          "label": "Supplier",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "supplier",
+          "help_text": "Optional supplier name, for traceability. Does not affect calculation in v1."
+        },
+        {
+          "field_id": "supplier_country",
+          "label": "Supplier Country",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "supplier_country",
+          "help_text": "Optional supplier country (ISO 3166 alpha-2 preferred). Does not affect calculation in v1."
+        },
+        {
+          "field_id": "description",
+          "label": "Description",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "description",
+          "help_text": "Optional free-text description of the spend line for the audit trail."
+        }
+      ],
+      "notes": [
+        "One row per spend transaction. The repeatable flag in ui_metadata signals the data-entry surface to render this as a multi-row dialog like fugitive refrigerants."
+      ]
+    },
+    "factor_query_templates": [],
+    "accounting_metadata": {
+      "standards_basis": ["scope3-standard"],
+      "data_source_choices": ["useeio_v1_4_0", "exiobase_3_8_2_pxp_2022"]
+    },
+    "ui_metadata": {
+      "group": "Purchased Goods & Services",
+      "detail_mode": "quantity_plus_details",
+      "repeatable": true,
+      "bulk_entry_mode": "repeatable_summary"
+    },
+    "audit_metadata": {
+      "audit_group": "scope3_category1"
+    }
   }
 ]

@@ -56,7 +56,10 @@ class DirectFactorMethod(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context  # direct-factor calculation is project-context-free
         template_groups = self._group_templates(activity_def)
         return self.compute_from_template_groups(
             resolved=resolved,

@@ -14,6 +14,10 @@ dependencies = [
   "pint>=0.23",
   "pandas>=2.0",
   "python-dateutil>=2.9",
+  # Phase E1 — spend-based emissions ingestion. ``openpyxl`` lets pandas
+  # parse the USEEIO ``SupplyChainGHGEmissionFactors`` xlsx and is also
+  # used by the test fixtures.
+  "openpyxl>=3.1.5",
 ]
 
 [dependency-groups]
@@ -24,6 +28,14 @@ dev = [
   "pytest-cov>=5.0",
   "ruff>=0.6.0",
 ]
+# pymrio parses EXIOBASE IOT zip bundles for the EXIOBASE branch of
+# the EEIO ingestion script. Its current release pins
+# ``openpyxl<3.1.1`` which conflicts with pandas's ``>=3.1.5``, so
+# pymrio is intentionally omitted from this project's resolved
+# dependency graph. The EXIOBASE branch of ``tools/ingest_eeio_factors.py``
+# imports pymrio lazily; install it into a parallel environment
+# (``pip install pymrio``) before invoking the EXIOBASE ingestion
+# path. The USEEIO branch needs only the default deps.
 
 [tool.pytest.ini_options]
 addopts = "-q --cov=ghg_engine --cov-report=term-missing"
@@ -49,4 +61,7 @@ ignore_missing_imports = true
 py-modules = ["api_main", "project_store", "config"]
 
 [tool.setuptools.packages.find]
-include = ["ghg_engine*", "api*"]
+# tools/ is on setuptools' default auto-discovery exclude list (it's
+# a convention name for dev-only scripts); we include it explicitly
+# so the EEIO ingestion module is importable from tests and CLI.
+include = ["ghg_engine*", "api*", "tools*"]

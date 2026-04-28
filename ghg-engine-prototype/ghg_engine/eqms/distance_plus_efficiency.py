@@ -40,7 +40,10 @@ class DistancePlusEfficiencyEQM(EQMPlugin):
         resolved: ResolvedActivity,
         activity_def: ActivityTypeDefinition,
         factors: FactorRepository,
+        *,
+        eqm_context=None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
+        del eqm_context
         observation = resolved.observation
         mpg = float(observation.params.get("mpg") or 0)
         if mpg <= 0:

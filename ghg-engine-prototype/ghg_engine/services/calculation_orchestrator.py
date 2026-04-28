@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any, Callable
+
 from ghg_engine.activity_catalog import ActivityCatalog
 from ghg_engine.adapters import LegacyCalculationAdapter
 from ghg_engine.domain import ResolvedActivity
 from ghg_engine.models import ActivityRecord, CalculationContext, ResultRecord, TraceRecord
 from ghg_engine.services.locus_resolver import LocusResolver
+
+if TYPE_CHECKING:
+    from ghg_engine.eqms.base import EQMContext
 
 
 class CalculationOrchestrator:
@@ -16,12 +21,18 @@ class CalculationOrchestrator:
         *,
         legacy_adapter: LegacyCalculationAdapter | None = None,
         locus_resolver: LocusResolver | None = None,
+        eqm_context_builder: Callable[[ResolvedActivity], "EQMContext | None"] | None = None,
     ):
         self.activity_catalog = activity_catalog
         self.factors = factors
         self.plugins = plugins
         self.legacy_adapter = legacy_adapter or LegacyCalculationAdapter()
         self.locus_resolver = locus_resolver or LocusResolver()
+        # Hook for callers (e.g. the API surface) that need to compose a
+        # per-activity EQMContext — most plugins ignore the argument; the
+        # spend-based plugin uses it to thread GL mappings + FX/inflation
+        # providers through.
+        self.eqm_context_builder = eqm_context_builder
 
     def calculate_legacy(
         self,
@@ -45,4 +56,5 @@ class CalculationOrchestrator:
             raise KeyError(f"No plugin registered for method_id={activity_def.method_id}")
         if not plugin.applicability(resolved, activity_def):
             raise ValueError(f"method {activity_def.method_id} is not applicable to provided activity")
-        return plugin.compute(resolved, activity_def, self.factors)
+        eqm_context = self.eqm_context_builder(resolved) if self.eqm_context_builder else None
+        return plugin.compute(resolved, activity_def, self.factors, eqm_context=eqm_context)

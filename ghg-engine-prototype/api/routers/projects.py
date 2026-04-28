@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.dependencies import get_activity_catalog, get_project_store
 from api.dto import (
+    GLMappingDTO,
+    GLMappingsRequestDTO,
     ProjectAnalyticsResponseDTO,
     ProjectAnalyticsRowDTO,
     ProjectDraftResponseDTO,
@@ -14,6 +16,7 @@ from api.dto import (
     ProjectSnapshotResponseDTO,
     ProjectSnapshotSaveResponseDTO,
     ProjectVersionSummaryDTO,
+    gl_mapping_to_dto,
     project_snapshot_to_dto,
 )
 from api.schemas import (
@@ -273,3 +276,64 @@ def get_project_analytics(
         total_co2e_kg=result.total_co2e_kg,
         facility_count=result.facility_count,
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase E1 — GL mapping endpoints
+# ---------------------------------------------------------------------------
+
+
+@router.get(
+    "/projects/{project_id}/gl-mappings",
+    response_model=list[GLMappingDTO],
+)
+def list_project_gl_mappings(
+    project_id: str,
+    reporting_unit_id: str | None = Query(default=None),
+    store: ProjectStore = Depends(get_project_store),
+):
+    """List GL mappings for a project, optionally filtered by reporting unit.
+
+    When ``reporting_unit_id`` is omitted, every mapping is returned
+    (project-wide defaults plus any per-RU overrides). When supplied,
+    only the matching RU's overrides are returned. Use the special
+    sentinel ``""`` to retrieve only the project-wide defaults.
+    """
+
+    # Existence check via the projects table; the mappings table itself
+    # has no row for "no mappings yet" so we can't infer 404 from emptiness.
+    if not store.list_projects() or all(
+        row["project_id"] != project_id for row in store.list_projects()
+    ):
+        raise HTTPException(status_code=404, detail=f"unknown project {project_id}")
+
+    if reporting_unit_id is None:
+        rows = store.list_gl_mappings(project_id)
+    elif reporting_unit_id == "":
+        rows = store.list_gl_mappings(project_id, reporting_unit_id=None)
+    else:
+        rows = store.list_gl_mappings(project_id, reporting_unit_id=reporting_unit_id)
+    return [gl_mapping_to_dto(row) for row in rows]
+
+
+@router.put(
+    "/projects/{project_id}/gl-mappings",
+    response_model=list[GLMappingDTO],
+)
+def replace_project_gl_mappings(
+    project_id: str,
+    payload: GLMappingsRequestDTO,
+    store: ProjectStore = Depends(get_project_store),
+):
+    """Replace the project's GL mappings with the supplied list (atomic)."""
+
+    try:
+        rows = store.replace_gl_mappings(
+            project_id,
+            [m.model_dump() for m in payload.mappings],
+        )
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return [gl_mapping_to_dto(row) for row in rows]

@@ -7,6 +7,7 @@ from .freight_ton_mile import FreightTonMileMethod
 from .passenger_distance import PassengerDistanceMethod
 from .refrigerant_mass_to_gwp import RefrigerantMassToGwpMethod
 from .scope2_energy import Scope2EnergyMethod
+from .spend_based import SpendBasedMethod
 from .waste_mass import WasteMassMethod
 
 
@@ -18,6 +19,7 @@ def default_plugin_registry() -> dict[str, EQMPlugin]:
         FreightTonMileMethod(),
         PassengerDistanceMethod(),
         RefrigerantMassToGwpMethod(),
+        SpendBasedMethod(),
         WasteMassMethod(),
     ]
     return {plugin.id: plugin for plugin in plugins}

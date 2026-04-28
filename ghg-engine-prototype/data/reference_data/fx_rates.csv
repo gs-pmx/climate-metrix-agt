@@ -1,0 +1,113 @@
+currency,year,rate_to_usd,source
+USD,2010,1.0,identity
+USD,2011,1.0,identity
+USD,2012,1.0,identity
+USD,2013,1.0,identity
+USD,2014,1.0,identity
+USD,2015,1.0,identity
+USD,2016,1.0,identity
+USD,2017,1.0,identity
+USD,2018,1.0,identity
+USD,2019,1.0,identity
+USD,2020,1.0,identity
+USD,2021,1.0,identity
+USD,2022,1.0,identity
+USD,2023,1.0,identity
+USD,2024,1.0,identity
+USD,2025,1.0,identity
+EUR,2010,1.3261,World Bank PA.NUS.FCRF (inverted)
+EUR,2011,1.3920,World Bank PA.NUS.FCRF (inverted)
+EUR,2012,1.2860,World Bank PA.NUS.FCRF (inverted)
+EUR,2013,1.3281,World Bank PA.NUS.FCRF (inverted)
+EUR,2014,1.3285,World Bank PA.NUS.FCRF (inverted)
+EUR,2015,1.1095,World Bank PA.NUS.FCRF (inverted)
+EUR,2016,1.1069,World Bank PA.NUS.FCRF (inverted)
+EUR,2017,1.1297,World Bank PA.NUS.FCRF (inverted)
+EUR,2018,1.1810,World Bank PA.NUS.FCRF (inverted)
+EUR,2019,1.1195,World Bank PA.NUS.FCRF (inverted)
+EUR,2020,1.1422,World Bank PA.NUS.FCRF (inverted)
+EUR,2021,1.1827,World Bank PA.NUS.FCRF (inverted)
+EUR,2022,1.0537,World Bank PA.NUS.FCRF (inverted)
+EUR,2023,1.0813,World Bank PA.NUS.FCRF (inverted)
+EUR,2024,1.0824,World Bank PA.NUS.FCRF (inverted)
+EUR,2025,1.0900,IMF projection
+GBP,2010,1.5453,World Bank PA.NUS.FCRF (inverted)
+GBP,2011,1.6041,World Bank PA.NUS.FCRF (inverted)
+GBP,2012,1.5851,World Bank PA.NUS.FCRF (inverted)
+GBP,2013,1.5642,World Bank PA.NUS.FCRF (inverted)
+GBP,2014,1.6478,World Bank PA.NUS.FCRF (inverted)
+GBP,2015,1.5285,World Bank PA.NUS.FCRF (inverted)
+GBP,2016,1.3548,World Bank PA.NUS.FCRF (inverted)
+GBP,2017,1.2884,World Bank PA.NUS.FCRF (inverted)
+GBP,2018,1.3346,World Bank PA.NUS.FCRF (inverted)
+GBP,2019,1.2767,World Bank PA.NUS.FCRF (inverted)
+GBP,2020,1.2841,World Bank PA.NUS.FCRF (inverted)
+GBP,2021,1.3760,World Bank PA.NUS.FCRF (inverted)
+GBP,2022,1.2374,World Bank PA.NUS.FCRF (inverted)
+GBP,2023,1.2436,World Bank PA.NUS.FCRF (inverted)
+GBP,2024,1.2782,World Bank PA.NUS.FCRF (inverted)
+GBP,2025,1.2900,IMF projection
+CAD,2010,0.9711,World Bank PA.NUS.FCRF (inverted)
+CAD,2011,1.0111,World Bank PA.NUS.FCRF (inverted)
+CAD,2012,1.0006,World Bank PA.NUS.FCRF (inverted)
+CAD,2013,0.9712,World Bank PA.NUS.FCRF (inverted)
+CAD,2014,0.9054,World Bank PA.NUS.FCRF (inverted)
+CAD,2015,0.7822,World Bank PA.NUS.FCRF (inverted)
+CAD,2016,0.7547,World Bank PA.NUS.FCRF (inverted)
+CAD,2017,0.7707,World Bank PA.NUS.FCRF (inverted)
+CAD,2018,0.7720,World Bank PA.NUS.FCRF (inverted)
+CAD,2019,0.7536,World Bank PA.NUS.FCRF (inverted)
+CAD,2020,0.7456,World Bank PA.NUS.FCRF (inverted)
+CAD,2021,0.7980,World Bank PA.NUS.FCRF (inverted)
+CAD,2022,0.7693,World Bank PA.NUS.FCRF (inverted)
+CAD,2023,0.7411,World Bank PA.NUS.FCRF (inverted)
+CAD,2024,0.7305,World Bank PA.NUS.FCRF (inverted)
+CAD,2025,0.7300,IMF projection
+AUD,2010,0.9189,World Bank PA.NUS.FCRF (inverted)
+AUD,2011,1.0322,World Bank PA.NUS.FCRF (inverted)
+AUD,2012,1.0359,World Bank PA.NUS.FCRF (inverted)
+AUD,2013,0.9669,World Bank PA.NUS.FCRF (inverted)
+AUD,2014,0.9024,World Bank PA.NUS.FCRF (inverted)
+AUD,2015,0.7522,World Bank PA.NUS.FCRF (inverted)
+AUD,2016,0.7434,World Bank PA.NUS.FCRF (inverted)
+AUD,2017,0.7670,World Bank PA.NUS.FCRF (inverted)
+AUD,2018,0.7472,World Bank PA.NUS.FCRF (inverted)
+AUD,2019,0.6953,World Bank PA.NUS.FCRF (inverted)
+AUD,2020,0.6900,World Bank PA.NUS.FCRF (inverted)
+AUD,2021,0.7517,World Bank PA.NUS.FCRF (inverted)
+AUD,2022,0.6951,World Bank PA.NUS.FCRF (inverted)
+AUD,2023,0.6646,World Bank PA.NUS.FCRF (inverted)
+AUD,2024,0.6601,World Bank PA.NUS.FCRF (inverted)
+AUD,2025,0.6600,IMF projection
+JPY,2010,0.011425,World Bank PA.NUS.FCRF (inverted)
+JPY,2011,0.012541,World Bank PA.NUS.FCRF (inverted)
+JPY,2012,0.012536,World Bank PA.NUS.FCRF (inverted)
+JPY,2013,0.010255,World Bank PA.NUS.FCRF (inverted)
+JPY,2014,0.009464,World Bank PA.NUS.FCRF (inverted)
+JPY,2015,0.008264,World Bank PA.NUS.FCRF (inverted)
+JPY,2016,0.009212,World Bank PA.NUS.FCRF (inverted)
+JPY,2017,0.008917,World Bank PA.NUS.FCRF (inverted)
+JPY,2018,0.009059,World Bank PA.NUS.FCRF (inverted)
+JPY,2019,0.009172,World Bank PA.NUS.FCRF (inverted)
+JPY,2020,0.009363,World Bank PA.NUS.FCRF (inverted)
+JPY,2021,0.009110,World Bank PA.NUS.FCRF (inverted)
+JPY,2022,0.007631,World Bank PA.NUS.FCRF (inverted)
+JPY,2023,0.007124,World Bank PA.NUS.FCRF (inverted)
+JPY,2024,0.006612,World Bank PA.NUS.FCRF (inverted)
+JPY,2025,0.006600,IMF projection
+CNY,2010,0.1478,World Bank PA.NUS.FCRF (inverted)
+CNY,2011,0.1549,World Bank PA.NUS.FCRF (inverted)
+CNY,2012,0.1585,World Bank PA.NUS.FCRF (inverted)
+CNY,2013,0.1625,World Bank PA.NUS.FCRF (inverted)
+CNY,2014,0.1626,World Bank PA.NUS.FCRF (inverted)
+CNY,2015,0.1606,World Bank PA.NUS.FCRF (inverted)
+CNY,2016,0.1505,World Bank PA.NUS.FCRF (inverted)
+CNY,2017,0.1481,World Bank PA.NUS.FCRF (inverted)
+CNY,2018,0.1512,World Bank PA.NUS.FCRF (inverted)
+CNY,2019,0.1450,World Bank PA.NUS.FCRF (inverted)
+CNY,2020,0.1450,World Bank PA.NUS.FCRF (inverted)
+CNY,2021,0.1550,World Bank PA.NUS.FCRF (inverted)
+CNY,2022,0.1487,World Bank PA.NUS.FCRF (inverted)
+CNY,2023,0.1411,World Bank PA.NUS.FCRF (inverted)
+CNY,2024,0.1395,World Bank PA.NUS.FCRF (inverted)
+CNY,2025,0.1390,IMF projection

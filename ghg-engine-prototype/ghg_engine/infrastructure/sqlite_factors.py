@@ -344,6 +344,7 @@ class SQLiteFactorStore:
                 emission_category TEXT NOT NULL,
                 classification_class TEXT,
                 factor_type TEXT NOT NULL,
+                factor_kind TEXT NOT NULL DEFAULT 'physical',
                 subtype_or_description TEXT,
                 attribute TEXT NOT NULL,
                 greenhouse_gas TEXT,
@@ -399,6 +400,8 @@ class SQLiteFactorStore:
                 ON factor_versions(lineage_id, dataset_id);
             CREATE INDEX IF NOT EXISTS idx_factor_versions_source_key
                 ON factor_versions(source_record_key, dataset_id);
+            CREATE INDEX IF NOT EXISTS idx_factor_versions_kind
+                ON factor_versions(factor_kind, dataset_id);
             CREATE INDEX IF NOT EXISTS idx_factor_source_docs_dataset
                 ON factor_source_docs(dataset_id);
             """
@@ -677,6 +680,293 @@ class SQLiteFactorStore:
                 "json",
                 raw_payload,
                 raw_hash,
+                imported_at,
+            ),
+        )
+        return 1
+
+    def import_spend_factors(
+        self,
+        *,
+        dataset_key: str,
+        source_name: str,
+        version_label: str,
+        factors: list[dict[str, Any]],
+        publish: bool = True,
+        notes: str | None = None,
+        conn: sqlite3.Connection | None = None,
+    ) -> dict[str, Any]:
+        """Import spend-based factors (USEEIO / EXIOBASE).
+
+        Each factor dict must carry: ``source_record_key`` (e.g. BEA code or
+        EXIOBASE product code), ``factor_type`` (free-text type label),
+        ``description``, ``unit_label`` (e.g. ``kg CO2e/USD``), ``value``,
+        ``data_year``. Optional fields: ``region``, ``country``,
+        ``source_id``, ``attribute`` (defaults to ``co2e_ef``),
+        ``emission_category`` (defaults to ``spend-based``).
+
+        Idempotent — re-running the script does not duplicate factors.
+        Re-imports against an existing dataset (matched on dataset_key)
+        replace the dataset's factors atomically. Use this for spend-only
+        loads; the JSON-doc path (``import_factor_documents``) remains the
+        canonical path for physical factor seeds.
+        """
+
+        if conn is None:
+            with connect_sqlite(self._db_path) as own_conn:
+                return self.import_spend_factors(
+                    dataset_key=dataset_key,
+                    source_name=source_name,
+                    version_label=version_label,
+                    factors=factors,
+                    publish=publish,
+                    notes=notes,
+                    conn=own_conn,
+                )
+
+        now = utc_now_iso()
+        existing = conn.execute(
+            "SELECT dataset_id, status FROM factor_datasets WHERE dataset_key = ?",
+            (dataset_key,),
+        ).fetchone()
+        if existing is not None:
+            dataset_id = existing["dataset_id"]
+            # Idempotent re-run: clear and re-insert the dataset's
+            # factors. Lineages are deduped by lineage_key so we don't
+            # touch them.
+            conn.execute(
+                "DELETE FROM factor_versions WHERE dataset_id = ?",
+                (dataset_id,),
+            )
+            conn.execute(
+                "DELETE FROM factor_source_docs WHERE dataset_id = ?",
+                (dataset_id,),
+            )
+            if publish and existing["status"] != "published":
+                conn.execute(
+                    "UPDATE factor_datasets SET status = 'published', published_at = ? "
+                    "WHERE dataset_id = ?",
+                    (now, dataset_id),
+                )
+        else:
+            dataset_id = f"fds_{uuid4().hex[:12]}"
+            data_years = [
+                int(f["data_year"])
+                for f in factors
+                if f.get("data_year") is not None
+            ]
+            source_year = max(data_years) if data_years else None
+            parent = self.current_factor_dataset(conn=conn) if publish else None
+            conn.execute(
+                """
+                INSERT INTO factor_datasets (
+                    dataset_id, dataset_key, source_name, source_year, version_label, status,
+                    imported_at, published_at, parent_dataset_id, notes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    dataset_id,
+                    dataset_key,
+                    source_name,
+                    source_year,
+                    version_label,
+                    "published" if publish else "staging",
+                    now,
+                    now if publish else None,
+                    parent["dataset_id"] if parent is not None else None,
+                    notes,
+                ),
+            )
+
+        inserted = 0
+        for index, factor in enumerate(factors):
+            inserted += self._insert_spend_factor(
+                conn,
+                dataset_id=dataset_id,
+                factor=factor,
+                index=index,
+                imported_at=now,
+            )
+        return {
+            "dataset_id": dataset_id,
+            "dataset_key": dataset_key,
+            "version_label": version_label,
+            "status": "published" if publish else "staging",
+            "imported_docs": len(factors),
+            "factor_versions": inserted,
+        }
+
+    def _insert_spend_factor(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        dataset_id: str,
+        factor: dict[str, Any],
+        index: int,
+        imported_at: str,
+    ) -> int:
+        source_record_key = str(
+            factor.get("source_record_key")
+            or factor.get("factor_id")
+            or f"spend_factor_{index + 1}"
+        )
+        emission_category = str(factor.get("emission_category") or "spend-based")
+        factor_type = str(factor.get("factor_type") or "spend")
+        attribute = str(factor.get("attribute") or "co2e_ef")
+        description = factor.get("description")
+        unit_label = factor.get("unit_label") or factor.get("unit")
+        value = factor.get("value")
+        if unit_label is None or value is None:
+            raise ValueError(
+                f"spend factor at index {index} missing required value/unit_label"
+            )
+        unit_numerator = factor.get("unit_numerator")
+        unit_denominator = factor.get("unit_denominator")
+        if (unit_numerator is None or unit_denominator is None) and "/" in str(unit_label):
+            num, denom = str(unit_label).split("/", 1)
+            unit_numerator = unit_numerator or num.strip()
+            unit_denominator = unit_denominator or denom.strip()
+        data_year = factor.get("data_year")
+        region = factor.get("region")
+        country = factor.get("country")
+        source_id = factor.get("source_id") or factor.get("source")
+        source_detail = factor.get("source_detail")
+
+        lineage_seed = "|".join(
+            str(part or "")
+            for part in [
+                emission_category,
+                factor_type,
+                description,
+                attribute,
+                source_record_key,
+            ]
+        )
+        lineage_id = f"lin_{sha1(lineage_seed.encode('utf-8')).hexdigest()[:16]}"
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO factor_lineages (
+                lineage_id, lineage_key, canonical_name, emission_category, factor_type,
+                attribute, greenhouse_gas, factor_role, substance_code, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                lineage_id,
+                lineage_id,
+                description,
+                emission_category,
+                factor_type,
+                attribute,
+                "co2e",
+                "emission_factor",
+                None,
+                imported_at,
+            ),
+        )
+
+        factor_version_id = (
+            f"fv_{sha1(f'{dataset_id}|{source_record_key}'.encode()).hexdigest()[:16]}"
+        )
+        extra_payload = {
+            k: v
+            for k, v in factor.items()
+            if k
+            not in {
+                "source_record_key",
+                "factor_id",
+                "emission_category",
+                "factor_type",
+                "attribute",
+                "description",
+                "unit_label",
+                "unit",
+                "unit_numerator",
+                "unit_denominator",
+                "value",
+                "data_year",
+                "region",
+                "country",
+                "source_id",
+                "source",
+                "source_detail",
+            }
+        }
+        extra_json = json.dumps(extra_payload, sort_keys=True, default=str)
+        row_json = json.dumps(
+            {
+                "factor_id": source_record_key,
+                "emission_category": emission_category,
+                "factor_type": factor_type,
+                "factor_kind": "spend",
+                "description": description,
+                "attribute": attribute,
+                "value": float(value),
+                "unit_label": unit_label,
+                "data_year": int(data_year) if data_year is not None else None,
+                "region": region,
+                "country": country,
+                "source_id": source_id,
+            },
+            sort_keys=True,
+            default=str,
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO factor_versions (
+                factor_version_id, dataset_id, lineage_id, source_record_key,
+                emission_category, classification_class, factor_type, factor_kind,
+                subtype_or_description, attribute, greenhouse_gas, factor_role,
+                accounting_method, life_cycle_stage, value, unit_label, unit_numerator,
+                unit_denominator, geography_global, geographic_specificity, region, country,
+                state, egrid_subregion, data_year, valid_from, valid_to, priority, confidence,
+                confidence_level, source_id, source_detail, updated_at, last_updated,
+                substance_code, extra_json, row_json, created_at
+            )
+            VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                factor_version_id,
+                dataset_id,
+                lineage_id,
+                source_record_key,
+                emission_category,
+                None,
+                factor_type,
+                "spend",
+                description,
+                attribute,
+                "co2e",
+                "emission_factor",
+                "none",
+                None,
+                float(value),
+                unit_label,
+                unit_numerator,
+                unit_denominator,
+                0,
+                None,
+                region,
+                country,
+                None,
+                None,
+                int(data_year) if data_year is not None else None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                source_id,
+                source_detail,
+                imported_at,
+                imported_at,
+                None,
+                extra_json,
+                row_json,
                 imported_at,
             ),
         )

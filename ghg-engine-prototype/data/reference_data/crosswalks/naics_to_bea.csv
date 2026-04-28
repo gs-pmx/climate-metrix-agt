@@ -1,0 +1,73 @@
+naics_code,bea_code,bea_label,confidence
+111100,1111A0,Oilseed farming,exact
+111200,1111B0,Vegetable and melon farming,exact
+111300,1113A0,Fruit farming,exact
+111400,111400,Greenhouse and nursery production,exact
+111900,1119A0,Other crop farming,exact
+112100,112120,Beef cattle ranching and farming,exact
+112120,112120,Dairy cattle and milk production,exact
+112300,112300,Poultry and egg production,exact
+113310,113A00,Logging,approximate
+115000,115000,Support activities for agriculture and forestry,exact
+211100,211000,Oil and gas extraction,exact
+212100,212100,Coal mining,exact
+221100,221100,Electric power generation transmission distribution,exact
+221200,221200,Natural gas distribution,exact
+236100,2362A0,Nonresidential building construction,exact
+237100,237100,Utility system construction,exact
+311000,311000,Food manufacturing,approximate
+311920,311920,Coffee and tea manufacturing,exact
+312100,312100,Beverage manufacturing,exact
+324100,324110,Petroleum refineries,exact
+325100,325100,Basic chemical manufacturing,approximate
+325200,325200,Resin synthetic rubber and artificial synthetic fibers manufacturing,exact
+331100,331100,Iron and steel mills and ferroalloy manufacturing,exact
+332700,332700,Machine shops; turned product; and screw nut and bolt manufacturing,exact
+333120,333120,Construction machinery manufacturing,exact
+334111,334111,Electronic computer manufacturing,exact
+334413,334413,Semiconductor and related device manufacturing,exact
+336111,336111,Automobile manufacturing,exact
+336412,336412,Aircraft engine and engine parts manufacturing,exact
+423000,4200ID,Wholesale trade,approximate
+441000,4400ID,Motor vehicle and parts dealers,approximate
+445110,4500ID,Supermarkets and other grocery (except convenience) stores,approximate
+481000,481000,Air transportation,exact
+482000,482000,Rail transportation,exact
+484000,484000,Truck transportation,exact
+493000,493000,Warehousing and storage,exact
+511200,511200,Software publishers,exact
+517000,517A00,Telecommunications,exact
+518000,518200,Data processing hosting and related services,exact
+519000,519130,Internet publishing and broadcasting and web search portals,exact
+521000,521CI,Monetary authorities-central bank; credit intermediation and related activities,approximate
+522100,522A00,Depository credit intermediation,exact
+524100,524100,Insurance carriers,exact
+531100,531HSO,Lessors of real estate,approximate
+531300,5310ID,Activities related to real estate,approximate
+541100,541100,Legal services,exact
+541200,541200,Accounting tax preparation bookkeeping and payroll services,exact
+541300,541300,Architectural engineering and related services,exact
+541400,541400,Specialized design services,exact
+541500,541511,Custom computer programming services,exact
+541610,541610,Management scientific and technical consulting services,exact
+541700,541700,Scientific research and development services,exact
+541800,541800,Advertising public relations and related services,exact
+541900,5419A0,Other professional scientific and technical services,exact
+551100,551114,Management of companies and enterprises,exact
+561100,561100,Office administrative services,exact
+561300,561300,Employment services,exact
+561400,561400,Business support services,exact
+561500,561500,Travel arrangement and reservation services,exact
+561700,561700,Services to buildings and dwellings,exact
+562000,562111,Waste management and remediation services,exact
+611100,611100,Elementary and secondary schools,exact
+611310,611A00,Junior colleges colleges universities and professional schools,approximate
+621000,621A00,Offices of physicians dentists and other health practitioners,approximate
+622000,622000,Hospitals,exact
+712000,712000,Museums historical sites and similar institutions,exact
+713200,713940,Gambling industries (except casino hotels),approximate
+721100,721000,Traveler accommodation,exact
+722300,722110,Limited-service restaurants,exact
+722500,722211,Full-service restaurants,exact
+811100,811100,Automotive repair and maintenance,exact
+812100,812100,Personal and laundry services,exact
