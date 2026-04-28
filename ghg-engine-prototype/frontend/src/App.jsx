@@ -325,9 +325,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
   const applySnapshot = React.useCallback((payload) => {
     const snap = payload?.snapshot || {};
-    setFacilities(
-      ensureRowsWithIds(snap.facilities, () => ({ ...EMPTY_REPORTING_UNIT }))
-        .map(normalizeReportingUnit),
+    const normalizedFacilities = ensureRowsWithIds(
+      snap.facilities,
+      () => ({ ...EMPTY_REPORTING_UNIT }),
+    ).map(normalizeReportingUnit);
+    setFacilities(normalizedFacilities);
+    // Build the (id -> display name) lookup from the snapshot's own
+    // facilities so result/audit rows render the Reporting Unit name
+    // correctly on load. The backend ``ResultRecordDTO`` carries only
+    // ``facility_id`` (no name field), so without this lookup the
+    // Results / Audit grids fall back to the raw uid and the column
+    // appears blank or unreadable.
+    const snapFacilityNameById = Object.fromEntries(
+      normalizedFacilities.map((unit) => [unit.id, unit.facility_name || unit.id]),
     );
     setActivities(
       Array.isArray(snap.activities) && snap.activities.length > 0
@@ -340,6 +350,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         ...row,
         value: toMetricTons(row.value, row.unit),
         unit: "metric ton",
+        facility_name: snapFacilityNameById[row.facility_id] || row.facility_id,
+        activity_label:
+          row.activity_label
+          || activityTypesById[row.activity_type_id]?.label
+          || row.activity_type_id,
       })),
     );
     setSummaryRows(
@@ -357,7 +372,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       }),
     );
     setTraceRows((snap.trace_rows || []).map((row, i) => ({ id: row.id || `${i}`, ...row })));
-    setAuditRows((snap.audit_rows || []).map((row, i) => ({ id: row.id || `a_${i}`, ...row })));
+    setAuditRows(
+      (snap.audit_rows || []).map((row, i) => ({
+        id: row.id || `a_${i}`,
+        ...row,
+        facility_name: snapFacilityNameById[row.facility_id] || row.facility_id,
+        activity_label:
+          row.activity_label
+          || activityTypesById[row.activity_type_id]?.label
+          || row.activity_type_id,
+      })),
+    );
     setInventoryYear(String(payload?.inventory_year || new Date().getFullYear()));
     setGwpSet(String(payload?.gwp_set || "AR6"));
     setIncludeTrace(Boolean(payload?.include_trace ?? true));
