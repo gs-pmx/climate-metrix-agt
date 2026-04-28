@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "test": "node --test ./src/activityDrafts.test.js ./src/numericFormat.test.js ./src/useRowStatus.test.js ./src/applicability.test.js ./src/configureSources.test.js ./src/categorizeForTOC.test.js ./src/categoryColors.test.js ./src/reportingUnits.test.js ./src/useAutosave.test.js ./src/coverage.test.js ./src/dashboard/analyticsState.test.js",
+    "test": "node --test ./src/activityDrafts.test.js ./src/numericFormat.test.js ./src/useRowStatus.test.js ./src/applicability.test.js ./src/configureSources.test.js ./src/categorizeForTOC.test.js ./src/categoryColors.test.js ./src/reportingUnits.test.js ./src/useAutosave.test.js ./src/coverage.test.js ./src/dashboard/analyticsState.test.js ./src/spendMappings.test.js",
     "lint": "eslint .",
     "preview": "vite preview"
   },

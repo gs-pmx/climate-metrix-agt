@@ -124,3 +124,53 @@ def test_get_gl_mappings_filtered_by_reporting_unit(client: TestClient):
     rows = project_default_only.json()
     assert len(rows) == 1
     assert rows[0]["reporting_unit_id"] is None
+
+
+def test_put_gl_mappings_round_trips_gl_account_name(client: TestClient):
+    """Phase E2: gl_account_name is persisted alongside gl_code and read back."""
+    project_id = _create_project(client)
+    resp = client.put(
+        f"/projects/{project_id}/gl-mappings",
+        json={
+            "mappings": [
+                {
+                    "reporting_unit_id": "ru1",
+                    "gl_code": "5100",
+                    "gl_account_name": "Office Supplies",
+                    "factor_id": "useeio:541110",
+                },
+                {
+                    "reporting_unit_id": "ru1",
+                    "gl_code": "5200",
+                    # gl_account_name omitted entirely — should land as None
+                    "factor_id": "useeio:541900",
+                },
+            ]
+        },
+    )
+    assert resp.status_code == 200, resp.text
+    rows = resp.json()
+    by_code = {r["gl_code"]: r for r in rows}
+    assert by_code["5100"]["gl_account_name"] == "Office Supplies"
+    assert by_code["5200"]["gl_account_name"] is None
+
+    listing = client.get(f"/projects/{project_id}/gl-mappings").json()
+    assert {r["gl_code"]: r["gl_account_name"] for r in listing} == {
+        "5100": "Office Supplies",
+        "5200": None,
+    }
+
+
+def test_put_gl_mappings_blank_account_name_normalizes_to_none(client: TestClient):
+    """Empty/whitespace gl_account_name persists as NULL, not as ''."""
+    project_id = _create_project(client)
+    resp = client.put(
+        f"/projects/{project_id}/gl-mappings",
+        json={
+            "mappings": [
+                {"gl_code": "G1", "gl_account_name": "   ", "factor_id": "useeio:541110"},
+            ]
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()[0]["gl_account_name"] is None
