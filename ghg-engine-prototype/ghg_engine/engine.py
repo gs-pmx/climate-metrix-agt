@@ -1,12 +1,18 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Callable
+
 from .activity_catalog import ActivityCatalog
 from .application import CalculateInventoryUseCase
+from .domain import ResolvedActivity
 from .eqms.registry import default_plugin_registry
 from .factors import FactorRepository
 from .models import ActivityRecord, CalculationContext, MethodSchema, ResultRecord, TraceRecord
 from .ports import FactorQueryRepository
 from .services import CalculationOrchestrator
+
+if TYPE_CHECKING:
+    from .eqms.base import EQMContext
 
 
 class GHGEngine:
@@ -35,12 +41,20 @@ class GHGEngine:
         self,
         activity: ActivityRecord,
         ctx: CalculationContext,
+        *,
+        eqm_context_builder: Callable[[ResolvedActivity], "EQMContext | None"] | None = None,
     ) -> tuple[list[ResultRecord], TraceRecord]:
-        return self._calculate_inventory.calculate_one(activity, ctx)
+        return self._calculate_inventory.calculate_one(
+            activity, ctx, eqm_context_builder=eqm_context_builder
+        )
 
     def calculate(
         self,
         activities: list[ActivityRecord],
         ctx: CalculationContext,
+        *,
+        eqm_context_builder: Callable[[ResolvedActivity], "EQMContext | None"] | None = None,
     ) -> tuple[list[ResultRecord], dict[str, float], list[TraceRecord]]:
-        return self._calculate_inventory.calculate(activities, ctx)
+        return self._calculate_inventory.calculate(
+            activities, ctx, eqm_context_builder=eqm_context_builder
+        )

@@ -38,9 +38,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-import zipfile
 from pathlib import Path
-from tempfile import TemporaryDirectory
 from typing import Any, Iterable
 
 from project_store import ProjectStore
@@ -189,7 +187,12 @@ def _useeio_rows_to_factors(df) -> Iterable[dict[str, Any]]:
         return None
 
     code_col = _match("code") or _match("bea") or _match("naics")
-    label_col = _match("name") or _match("commodity") or _match("description")
+    label_col = (
+        _match("title")
+        or _match("name")
+        or _match("commodity")
+        or _match("description")
+    )
     factor_col = (
         _match("supply chain", "with margins")
         or _match("supply chain emission", "with")
@@ -272,24 +275,20 @@ def ingest_exiobase(
         )
         return {"status": "skipped", "reason": "pymrio_missing"}
 
-    with TemporaryDirectory(prefix="exio_") as tmp:
-        # pymrio.parse_exiobase3 is happy with either the raw zip path
-        # or an extracted directory; we extract to the tmp dir to keep
-        # behaviour identical across pymrio releases that have changed
-        # their zip-handling story.
-        extract_dir = Path(tmp) / "exiobase"
-        extract_dir.mkdir()
-        with zipfile.ZipFile(zip_path) as zf:
-            zf.extractall(extract_dir)
-        logger.info("EXIOBASE: extracted bundle to %s.", extract_dir)
-        exio = pymrio.parse_exiobase3(path=str(extract_dir))
-        logger.info("EXIOBASE: parsed system; calculating intensities.")
-        ghg_accounts = _exiobase_ghg_satellite(exio)
-        if ghg_accounts is None:
-            return {"status": "skipped", "reason": "no_ghg_satellite"}
-        ghg_emissions, output = ghg_accounts
-        factors = list(_exiobase_rows_to_factors(ghg_emissions, output, region=region))
-        logger.info("EXIOBASE: prepared %d factor rows for ingestion.", len(factors))
+    # pymrio.parse_exiobase3 accepts the zip path directly (per its
+    # docstring) and handles the inner folder layout for us. Pre-extracting
+    # broke on this dataset because IOT_2022_pxp.zip preserves an internal
+    # ``IOT_2022_pxp/`` folder, which pymrio then treats as a saved IOSystem
+    # rather than raw EXIOBASE files.
+    logger.info("EXIOBASE: parsing %s.", zip_path)
+    exio = pymrio.parse_exiobase3(path=str(zip_path))
+    logger.info("EXIOBASE: parsed system; calculating intensities.")
+    ghg_accounts = _exiobase_ghg_satellite(exio)
+    if ghg_accounts is None:
+        return {"status": "skipped", "reason": "no_ghg_satellite"}
+    ghg_emissions, output = ghg_accounts
+    factors = list(_exiobase_rows_to_factors(ghg_emissions, output, region=region))
+    logger.info("EXIOBASE: prepared %d factor rows for ingestion.", len(factors))
 
     result = store.factors.import_spend_factors(
         dataset_key=EXIOBASE_DATASET_KEY,
