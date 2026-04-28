@@ -125,6 +125,23 @@ export const api = {
         versionId == null ? "" : `?version_id=${encodeURIComponent(versionId)}`
       }`,
     ),
+  // Phase E1/E2 — spend-based emissions: GL mapping CRUD + spend factor
+  // catalog browsing. The Spend Inputs tab uses these to render the
+  // per-RU mapping editor.
+  getGlMappings: (projectId) => request(`/projects/${projectId}/gl-mappings`),
+  replaceGlMappings: (projectId, mappings) =>
+    request(`/projects/${projectId}/gl-mappings`, {
+      method: "PUT",
+      body: JSON.stringify({ mappings }),
+    }),
+  listSpendFactors: ({ query = "", datasetId = null, limit = 200 } = {}) => {
+    const params = new URLSearchParams();
+    if (query) params.set("query", query);
+    if (datasetId) params.set("dataset_id", datasetId);
+    if (limit) params.set("limit", String(limit));
+    const qs = params.toString();
+    return request(`/catalog/spend-factors${qs ? `?${qs}` : ""}`);
+  },
   getSchemaMigrations: () => request("/schema/migrations"),
 };
 

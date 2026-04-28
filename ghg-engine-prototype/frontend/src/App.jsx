@@ -44,6 +44,7 @@ import AutosaveStatusChip from "./AutosaveStatusChip";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
+const SpendInputsTab = React.lazy(() => import("./SpendInputsTab"));
 const ResultsTab = React.lazy(() => import("./ResultsTab"));
 const DashboardTab = React.lazy(() => import("./DashboardTab"));
 const AuditTab = React.lazy(() => import("./AuditTab"));
@@ -978,7 +979,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           "warning",
         );
       } else {
-        setTab(3);
+        setTab(4);
         if (skippedRows.length) {
           show(
             `Calculation complete. Skipped ${skippedRows.length} unsupported activity row${skippedRows.length === 1 ? "" : "s"} that are not calculable yet.`,
@@ -1073,6 +1074,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             <Tab label="Projects" />
             <Tab label="Reporting Units" disabled={!hasActiveProject} />
             <Tab label="Activity Inputs" disabled={!hasActiveProject} />
+            <Tab label="Spend Inputs" disabled={!hasActiveProject} />
             <Tab label="Results" disabled={!hasActiveProject} />
             <Tab label="Dashboard" disabled={!hasActiveProject} />
             <Tab label="Audit" disabled={!hasActiveProject} />
@@ -1309,6 +1311,16 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
       {tab === 3 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
+          <SpendInputsTab
+            projectId={activeProjectId}
+            reportingUnits={dataEntryFacilities}
+            show={show}
+          />
+        </React.Suspense>
+      )}
+
+      {tab === 4 && hasActiveProject && (
+        <React.Suspense fallback={<LazyTabFallback />}>
           <ResultsTab
             resultRows={resultRows}
             summaryRows={summaryRows}
@@ -1318,7 +1330,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 4 && hasActiveProject && (
+      {tab === 5 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           {/*
             Phase D3: dashboard now consumes the analytics endpoint
@@ -1339,7 +1351,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 5 && hasActiveProject && (
+      {tab === 6 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <AuditTab
             auditRows={auditRows}
@@ -1348,13 +1360,13 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 6 && (
+      {tab === 7 && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <CatalogTab activityCatalog={activityCatalog} />
         </React.Suspense>
       )}
 
-      {!hasActiveProject && tab !== 0 && tab !== 6 ? (
+      {!hasActiveProject && tab !== 0 && tab !== 7 ? (
         <Alert severity="info" sx={{ mt: 2 }}>
           Create or select a project in the Projects tab to unlock data entry and calculation tabs.
         </Alert>

@@ -180,6 +180,11 @@ class ProjectStore:
                     "factor_kind on factor_versions, seed reference data",
                     self._migration_9_spend_based_foundation,
                 ),
+                (
+                    10,
+                    "gl_mappings.gl_account_name: human-readable label alongside gl_code",
+                    self._migration_10_gl_account_name,
+                ),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -645,6 +650,18 @@ class ProjectStore:
         # if present. Idempotent via INSERT OR REPLACE.
         self._seed_reference_data(conn)
 
+    def _migration_10_gl_account_name(self, conn: sqlite3.Connection) -> None:
+        # Phase E2 — extend gl_mappings with a human-readable account
+        # label. The column is descriptive only (not part of the lookup
+        # key) and nullable for backward compatibility with rows created
+        # under E1.
+        cols = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(gl_mappings)").fetchall()
+        }
+        if "gl_account_name" not in cols:
+            conn.execute("ALTER TABLE gl_mappings ADD COLUMN gl_account_name TEXT")
+
     def _seed_reference_data(self, conn: sqlite3.Connection) -> None:
         """Populate fx_rates and inflation_indices from bundled CSVs.
 
@@ -873,8 +890,8 @@ class ProjectStore:
             if reporting_unit_id == "__any__":
                 rows = conn.execute(
                     """
-                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
-                           created_at, updated_at
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code,
+                           gl_account_name, factor_id, created_at, updated_at
                     FROM gl_mappings
                     WHERE project_id = ?
                     ORDER BY COALESCE(reporting_unit_id, ''), gl_code
@@ -884,8 +901,8 @@ class ProjectStore:
             elif reporting_unit_id is None:
                 rows = conn.execute(
                     """
-                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
-                           created_at, updated_at
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code,
+                           gl_account_name, factor_id, created_at, updated_at
                     FROM gl_mappings
                     WHERE project_id = ? AND reporting_unit_id IS NULL
                     ORDER BY gl_code
@@ -895,8 +912,8 @@ class ProjectStore:
             else:
                 rows = conn.execute(
                     """
-                    SELECT mapping_id, project_id, reporting_unit_id, gl_code, factor_id,
-                           created_at, updated_at
+                    SELECT mapping_id, project_id, reporting_unit_id, gl_code,
+                           gl_account_name, factor_id, created_at, updated_at
                     FROM gl_mappings
                     WHERE project_id = ? AND reporting_unit_id = ?
                     ORDER BY gl_code
@@ -937,13 +954,20 @@ class ProjectStore:
                 ru_value = ru if (ru is None or str(ru).strip() == "") else str(ru).strip()
                 if ru_value == "":
                     ru_value = None
+                account_name_raw = entry.get("gl_account_name")
+                account_name = (
+                    str(account_name_raw).strip()
+                    if account_name_raw is not None and str(account_name_raw).strip()
+                    else None
+                )
                 conn.execute(
                     """
                     INSERT INTO gl_mappings
-                        (project_id, reporting_unit_id, gl_code, factor_id, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                        (project_id, reporting_unit_id, gl_code, gl_account_name,
+                         factor_id, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (project_id, ru_value, gl_code, factor_id, now, now),
+                    (project_id, ru_value, gl_code, account_name, factor_id, now, now),
                 )
         return self.list_gl_mappings(project_id)
 

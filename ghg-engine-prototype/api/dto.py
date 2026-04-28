@@ -474,12 +474,17 @@ class GLMappingDTO(BaseModel):
     ``reporting_unit_id`` is ``None`` for the project-wide default
     fallback. When a per-RU mapping exists for the same gl_code, the
     per-RU mapping wins at calculation time.
+
+    ``gl_account_name`` is a human-readable label paired with the GL
+    code in the customer's chart of accounts. It is descriptive only
+    (gl_code is the lookup key) and may be ``None``.
     """
 
     mapping_id: int | None = None
     project_id: str
     reporting_unit_id: str | None = None
     gl_code: str
+    gl_account_name: str | None = None
     factor_id: str
     created_at: str | None = None
     updated_at: str | None = None
@@ -495,6 +500,7 @@ class GLMappingInputDTO(BaseModel):
 
     reporting_unit_id: str | None = None
     gl_code: str
+    gl_account_name: str | None = None
     factor_id: str
 
 
@@ -722,6 +728,7 @@ def gl_mapping_to_dto(row: dict[str, Any]) -> GLMappingDTO:
         project_id=str(row.get("project_id") or ""),
         reporting_unit_id=row.get("reporting_unit_id") or None,
         gl_code=str(row.get("gl_code") or ""),
+        gl_account_name=row.get("gl_account_name") or None,
         factor_id=str(row.get("factor_id") or ""),
         created_at=row.get("created_at"),
         updated_at=row.get("updated_at"),
