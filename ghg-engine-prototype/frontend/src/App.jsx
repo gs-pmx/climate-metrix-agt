@@ -40,6 +40,7 @@ import {
   removeReportingUnitFromList,
 } from "./reportingUnits";
 import { useAutosave } from "./useAutosave";
+import { flushActiveEdit } from "./flushActiveEdit";
 import AutosaveStatusChip from "./AutosaveStatusChip";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
@@ -227,6 +228,15 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   // Sources button with an onboarding accent. Not persisted.
   const [newlyCreatedReportingUnitIds, setNewlyCreatedReportingUnitIds] = React.useState(() => new Set());
   const [activities, setActivities] = React.useState([createEmptyDraft()]);
+  // Mirror activities/facilities into refs so async handlers (run
+  // calculation, save version) can read the latest state after a
+  // ``flushActiveEdit`` yield, instead of the closure-captured value
+  // from the render that registered the click handler. The assignment
+  // runs on every render and is synchronously consistent with state.
+  const activitiesRef = React.useRef(activities);
+  activitiesRef.current = activities;
+  const facilitiesRef = React.useRef(facilities);
+  facilitiesRef.current = facilities;
   const [inventoryYear, setInventoryYear] = React.useState(String(new Date().getFullYear()));
   const [gwpSet, setGwpSet] = React.useState("AR6");
   const [includeTrace, setIncludeTrace] = React.useState(true);
@@ -480,11 +490,15 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         show("Create or select a project first.", "warning");
         return;
       }
+      // Commit any in-edit DataGrid cell or TextField before snapshotting,
+      // otherwise the saved version misses the in-flight edit and a later
+      // reload would silently revert the user's typing to the prior value.
+      await flushActiveEdit();
       setProjectBusy(true);
       try {
         const snapshotPayload = buildSnapshot({
-          facilities,
-          activities,
+          facilities: facilitiesRef.current,
+          activities: activitiesRef.current,
           resultRows,
           summaryRows,
           traceRows,
@@ -818,19 +832,38 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   }, []);
 
   const runCalculation = async () => {
+    // Commit any in-edit DataGrid cell so the latest typed value lands
+    // in React state before we read it. Without this, a cursor still
+    // parked in a cell loses its in-flight value and the calc runs on
+    // the previously-committed (stale) data — which is the bug Stephen
+    // reported as "data reverts to a previous state on calculate".
+    await flushActiveEdit();
+    // After the yield, refs hold the post-commit state. Re-derive the
+    // gating checks (RU presence, applicable rows) from the refs rather
+    // than the closure-captured values that ran when the click handler
+    // was bound.
+    const facilitiesNow = facilitiesRef.current;
+    const activitiesNow = activitiesRef.current;
+    const dataEntryFacilitiesNow = facilitiesNow.filter(
+      (facility) => String(facility.facility_name || "").trim(),
+    );
+    const dataEntryFacilityIdsNow = new Set(
+      dataEntryFacilitiesNow.map((facility) => facility.id),
+    );
+
     if (!hasActiveProject) {
       show("Create or select a project first.", "warning");
       setTab(0);
       return;
     }
-    if (!dataEntryFacilities.length) {
+    if (!dataEntryFacilitiesNow.length) {
       show("Add at least one named Reporting Unit before entering activity data.", "warning");
       setTab(1);
       return;
     }
-    const allPopulatedRows = activities.filter(
+    const allPopulatedRows = activitiesNow.filter(
       (draft) =>
-        dataEntryFacilityIds.has(draft.facility_id)
+        dataEntryFacilityIdsNow.has(draft.facility_id)
         && draft.activity_type_id
         && draft.activity?.value !== "",
     );
@@ -845,7 +878,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     // otherwise the engine trips on missing params (e.g., fuel efficiency
     // MPG) for sources the user has explicitly excluded. The underlying
     // draft data is preserved in the snapshot (soft-hide).
-    const rows = filterRowsApplicable(allPopulatedRows, facilities);
+    const rows = filterRowsApplicable(allPopulatedRows, facilitiesNow);
     const deselectedCount = allPopulatedRows.length - rows.length;
     if (!rows.length) {
       show(
@@ -890,7 +923,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     let totalFailureMessage = "";
     try {
       for (const [facilityId, facilityRows] of Object.entries(grouped)) {
-        const fac = facilities.find((f) => f.id === facilityId);
+        const fac = facilitiesNow.find((f) => f.id === facilityId);
         const payload = {
           context: {
             inventory_year: Number(inventoryYear),
