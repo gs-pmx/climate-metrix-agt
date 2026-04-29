@@ -16,7 +16,7 @@ Run::
     uv run python tools/ingest_eeio_factors.py \
         --useeio ../eeio/USEEIO/SupplyChainGHGEmissionFactorsv1.4.0.xlsx \
         --exiobase ../eeio/EXIOBASE/3.8.2/IOT_2022_pxp.zip \
-        --db state/projects.sqlite
+        --db state/ghg_projects.sqlite
 
 Pass ``--useeio-only`` or ``--exiobase-only`` to limit the run.
 ``--exiobase-region GLOBAL`` collapses the multi-region table to a
@@ -72,8 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--db",
         type=Path,
-        default=Path("state/projects.sqlite"),
-        help="Path to the SQLite project store DB. Defaults to state/projects.sqlite.",
+        default=Path("state/ghg_projects.sqlite"),
+        help=(
+            "Path to the SQLite project store DB. Defaults to "
+            "state/ghg_projects.sqlite, which matches ``config.Settings.db_path`` "
+            "so the live app reads the imported factors without an override."
+        ),
     )
     parser.add_argument(
         "--useeio-only",
