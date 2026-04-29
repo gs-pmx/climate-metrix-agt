@@ -21134,13 +21134,13 @@
   },
   {
     "_id": "7d20cc4f14b86f642b6dc860",
-    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1132a a",
-    "factor_key": "hfo_gwp-100_hfo-1132a a_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1132a",
+    "factor_key": "hfo_gwp-100_hfo-1132a_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "hfo",
-      "subtype": "HFO-1132a a",
+      "subtype": "HFO-1132a",
       "life_cycle_stage": null
     },
     "geography": {
@@ -21190,13 +21190,13 @@
   },
   {
     "_id": "24f5f9b3a00fc796c7f6be6a",
-    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1141 a",
-    "factor_key": "hfo_gwp-100_hfo-1141 a_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1141",
+    "factor_key": "hfo_gwp-100_hfo-1141_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "hfo",
-      "subtype": "HFO-1141 a",
+      "subtype": "HFO-1141",
       "life_cycle_stage": null
     },
     "geography": {
@@ -21414,13 +21414,13 @@
   },
   {
     "_id": "41b0fd137567cdc4d528132e",
-    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1234ze(E) a",
-    "factor_key": "hfo_gwp-100_hfo-1234ze(e) a_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1234ze(E)",
+    "factor_key": "hfo_gwp-100_hfo-1234ze(e)_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "hfo",
-      "subtype": "HFO-1234ze(E) a",
+      "subtype": "HFO-1234ze(E)",
       "life_cycle_stage": null
     },
     "geography": {
@@ -21470,13 +21470,13 @@
   },
   {
     "_id": "62923db40ea49dd99dd9915a",
-    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1234yf a",
-    "factor_key": "hfo_gwp-100_hfo-1234yf a_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1234yf",
+    "factor_key": "hfo_gwp-100_hfo-1234yf_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "hfo",
-      "subtype": "HFO-1234yf a",
+      "subtype": "HFO-1234yf",
       "life_cycle_stage": null
     },
     "geography": {
@@ -21694,13 +21694,13 @@
   },
   {
     "_id": "ce9772da5bd5d1aa519e9530",
-    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1345zfc a",
-    "factor_key": "hfo_gwp-100_hfo-1345zfc a_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::hfo::gwp-100-ar6::HFO-1345zfc",
+    "factor_key": "hfo_gwp-100_hfo-1345zfc_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "hfo",
-      "subtype": "HFO-1345zfc a",
+      "subtype": "HFO-1345zfc",
       "life_cycle_stage": null
     },
     "geography": {
@@ -22086,13 +22086,13 @@
   },
   {
     "_id": "d2790ef81242880f078975f6",
-    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-31-10 c",
-    "factor_key": "pfc_gwp-100_pfc-31-10 c_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-31-10",
+    "factor_key": "pfc_gwp-100_pfc-31-10_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "pfc",
-      "subtype": "PFC-31-10 c",
+      "subtype": "PFC-31-10",
       "life_cycle_stage": null
     },
     "geography": {
@@ -22142,13 +22142,13 @@
   },
   {
     "_id": "e50e8f78b435f7a8ad342173",
-    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-41-12 c",
-    "factor_key": "pfc_gwp-100_pfc-41-12 c_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-41-12",
+    "factor_key": "pfc_gwp-100_pfc-41-12_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "pfc",
-      "subtype": "PFC-41-12 c",
+      "subtype": "PFC-41-12",
       "life_cycle_stage": null
     },
     "geography": {
@@ -22198,13 +22198,13 @@
   },
   {
     "_id": "3f3af75598a74d889ea3f743",
-    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-51-14 c",
-    "factor_key": "pfc_gwp-100_pfc-51-14 c_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-51-14",
+    "factor_key": "pfc_gwp-100_pfc-51-14_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "pfc",
-      "subtype": "PFC-51-14 c",
+      "subtype": "PFC-51-14",
       "life_cycle_stage": null
     },
     "geography": {
@@ -22366,13 +22366,13 @@
   },
   {
     "_id": "b25ec6d7c81698af15ad8633",
-    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-91-18 c",
-    "factor_key": "pfc_gwp-100_pfc-91-18 c_gwp-100-ar6_ipcc_d2021_rall",
+    "lineage_id": "ipcc::pfc::gwp-100-ar6::PFC-91-18",
+    "factor_key": "pfc_gwp-100_pfc-91-18_gwp-100-ar6_ipcc_d2021_rall",
     "classification": {
       "domain": "refrigerant-release",
       "class": "refrigerant|fugitive",
       "type": "pfc",
-      "subtype": "PFC-91-18 c",
+      "subtype": "PFC-91-18",
       "life_cycle_stage": null
     },
     "geography": {

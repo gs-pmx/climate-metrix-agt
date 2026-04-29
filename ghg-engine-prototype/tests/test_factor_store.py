@@ -176,3 +176,133 @@ def test_physical_factor_lookup_still_works_when_a_spend_dataset_is_published_la
     preview = repo.preview()
     assert len(preview) == 1
     assert preview[0]["type"] == "electricity"
+
+
+def test_migration_strips_ar6_footnote_markers_from_refrigerant_subtypes(
+    tmp_path: Path,
+):
+    """Regression: the seed JSON imported refrigerant rows whose subtypes
+    incorporate AR6 Annex VII footnote markers (``"HFO-1234yf a"`` instead
+    of ``"HFO-1234yf"``). The matcher queries by the clean catalog label
+    so any such refrigerant becomes unresolvable. Migration 11 strips the
+    trailing single-letter marker and idempotently leaves clean subtypes
+    alone.
+    """
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    # Seed a published dataset so the rows have a valid dataset_id to
+    # attach to. Any electricity doc works; we'll mutate it post-import.
+    store.import_factor_documents(
+        dataset_key="seed",
+        source_name="seed",
+        version_label="seed",
+        docs=[_electricity_doc(factor_key="dummy_2024", data_year=2024, value=1.0)],
+        publish=True,
+    )
+
+    affected_rows = [
+        ("fv_hfo_1234yf", "hfo", "HFO-1234yf a"),
+        ("fv_hfo_1234ze", "hfo", "HFO-1234ze(E) a"),
+        ("fv_pfc_31_10", "pfc", "PFC-31-10 c"),
+        ("fv_pfc_51_14", "pfc", "PFC-51-14 c"),
+    ]
+    untouched_row = ("fv_hfc_134a", "hfc", "HFC-134a")
+
+    with store._connect() as conn:  # noqa: SLF001
+        dataset_id = conn.execute(
+            "SELECT dataset_id FROM factor_datasets WHERE dataset_key='seed'"
+        ).fetchone()["dataset_id"]
+        for fv_id, factor_type, subtype in [*affected_rows, untouched_row]:
+            conn.execute(
+                """
+                INSERT INTO factor_lineages (
+                    lineage_id, lineage_key, emission_category, factor_type,
+                    attribute, factor_role, created_at
+                )
+                VALUES (?, ?, 'refrigerant-release', ?,
+                        'gwp_100_ar6', 'emission_factor', '2026-04-29T00:00:00Z')
+                """,
+                (fv_id, fv_id, factor_type),
+            )
+            conn.execute(
+                """
+                INSERT INTO factor_versions (
+                    factor_version_id, dataset_id, lineage_id, source_record_key,
+                    emission_category, factor_type, factor_kind, subtype_or_description,
+                    attribute, factor_role, accounting_method, value, unit_label,
+                    geography_global, created_at, row_json
+                )
+                VALUES (?, ?, ?, ?, 'refrigerant-release', ?, 'physical', ?,
+                        'gwp_100_ar6', 'emission_factor', 'none', 1.0, 'gwp-100',
+                        1, '2026-04-29T00:00:00Z', '{}')
+                """,
+                (fv_id, dataset_id, fv_id, fv_id, factor_type, subtype),
+            )
+
+        # Run the migration directly (it has already run as part of
+        # ``ensure_schema``, but we want to exercise it on the rows we
+        # just inserted).
+        store._migration_11_strip_refrigerant_footnote_markers(conn)  # noqa: SLF001
+
+        cleaned = {
+            row["factor_version_id"]: row["subtype_or_description"]
+            for row in conn.execute(
+                "SELECT factor_version_id, subtype_or_description FROM factor_versions "
+                "WHERE factor_version_id IN ('fv_hfo_1234yf','fv_hfo_1234ze',"
+                "'fv_pfc_31_10','fv_pfc_51_14','fv_hfc_134a')"
+            ).fetchall()
+        }
+    assert cleaned["fv_hfo_1234yf"] == "HFO-1234yf"
+    assert cleaned["fv_hfo_1234ze"] == "HFO-1234ze(E)"
+    assert cleaned["fv_pfc_31_10"] == "PFC-31-10"
+    assert cleaned["fv_pfc_51_14"] == "PFC-51-14"
+    # Untouched: HFC-134a never had a marker, must not be modified.
+    assert cleaned["fv_hfc_134a"] == "HFC-134a"
+
+
+def test_migration_strip_refrigerant_footnotes_is_idempotent(tmp_path: Path):
+    """Re-running the migration on already-clean rows is a no-op."""
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    store.import_factor_documents(
+        dataset_key="seed",
+        source_name="seed",
+        version_label="seed",
+        docs=[_electricity_doc(factor_key="dummy_2024", data_year=2024, value=1.0)],
+        publish=True,
+    )
+    with store._connect() as conn:  # noqa: SLF001
+        dataset_id = conn.execute(
+            "SELECT dataset_id FROM factor_datasets WHERE dataset_key='seed'"
+        ).fetchone()["dataset_id"]
+        conn.execute(
+            """
+            INSERT INTO factor_lineages (
+                lineage_id, lineage_key, emission_category, factor_type,
+                attribute, factor_role, created_at
+            )
+            VALUES ('fv_clean', 'fv_clean', 'refrigerant-release', 'hfc',
+                    'gwp_100_ar6', 'emission_factor', '2026-04-29T00:00:00Z')
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO factor_versions (
+                factor_version_id, dataset_id, lineage_id, source_record_key,
+                emission_category, factor_type, factor_kind, subtype_or_description,
+                attribute, factor_role, accounting_method, value, unit_label,
+                geography_global, created_at, row_json
+            )
+            VALUES ('fv_clean', ?, 'fv_clean', 'fv_clean',
+                    'refrigerant-release', 'hfc', 'physical', 'HFC-134a',
+                    'gwp_100_ar6', 'emission_factor', 'none', 1530.0, 'gwp-100',
+                    1, '2026-04-29T00:00:00Z', '{}')
+            """,
+            (dataset_id,),
+        )
+        # Two calls; second must not corrupt the value.
+        store._migration_11_strip_refrigerant_footnote_markers(conn)  # noqa: SLF001
+        store._migration_11_strip_refrigerant_footnote_markers(conn)  # noqa: SLF001
+        row = conn.execute(
+            "SELECT subtype_or_description FROM factor_versions "
+            "WHERE factor_version_id='fv_clean'"
+        ).fetchone()
+    assert row["subtype_or_description"] == "HFC-134a"
