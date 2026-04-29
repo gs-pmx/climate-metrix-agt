@@ -43,6 +43,8 @@ import { useAutosave } from "./useAutosave";
 import { flushActiveEdit } from "./flushActiveEdit";
 import AutosaveStatusChip from "./AutosaveStatusChip";
 import Sidebar from "./Sidebar";
+import NotificationsPanel from "./NotificationsPanel";
+import { buildNotifications } from "./notices";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
@@ -1112,6 +1114,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     }
   };
 
+  // Phase F1.2 — Notifications panel state. The badge count + items
+  // come from the unified notices builder; the open-flag is local to
+  // App so the sidebar's notifications icon can drive it.
+  const [notificationsOpen, setNotificationsOpen] = React.useState(false);
+  const notifications = React.useMemo(
+    () => buildNotifications({
+      coverage: projectCoverage,
+      activities,
+      activityTypesById,
+    }),
+    [projectCoverage, activities, activityTypesById],
+  );
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
       <Sidebar
@@ -1121,7 +1136,16 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           // Returning to project mode lands on whatever tab the user
           // last had open within project mode (existing ``tab`` state).
         }}
-        notificationCount={0}
+        notificationCount={notifications.badge}
+        onOpenNotifications={() => setNotificationsOpen(true)}
+      />
+      <NotificationsPanel
+        open={notificationsOpen}
+        onClose={() => setNotificationsOpen(false)}
+        coverage={projectCoverage}
+        activities={activities}
+        activityTypesById={activityTypesById}
+        activityLabelById={activityLabelById}
       />
       <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 }, flexGrow: 1 }}>
       {/*
