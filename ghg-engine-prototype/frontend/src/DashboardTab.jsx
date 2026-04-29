@@ -64,6 +64,14 @@ function selectionEquals(a, b) {
 export default function DashboardTab({
   projectId = "",
   versionId = null,
+  // ``refreshKey`` is an opaque scalar that the parent bumps whenever
+  // the canonical analytics surface might have changed — e.g. after
+  // ``saveProjectVersion`` materializes a new ``inventory_version``
+  // and ``calculation_results`` row. Without this, the fetch's
+  // useEffect deps ``[projectId, versionId]`` are stable across saves
+  // (versionId stays ``null`` to mean "latest"), and the dashboard
+  // shows pre-save data forever.
+  refreshKey = 0,
   coverage = null,
   coverageSummaryText = "",
   activityLabelById = {},
@@ -124,7 +132,7 @@ export default function DashboardTab({
     return () => {
       cancelled = true;
     };
-  }, [projectId, versionId]);
+  }, [projectId, versionId, refreshKey]);
 
   const allRows = analytics?.rows || [];
   const filters = React.useMemo(

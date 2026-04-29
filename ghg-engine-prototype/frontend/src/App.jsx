@@ -1401,6 +1401,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           <DashboardTab
             projectId={activeProjectId}
             versionId={null}
+            refreshKey={projectVersions.length}
             coverage={projectCoverage}
             coverageSummaryText={coverageSummaryText}
             activityLabelById={activityLabelById}
