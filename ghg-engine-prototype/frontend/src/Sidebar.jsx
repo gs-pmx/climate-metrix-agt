@@ -30,8 +30,8 @@ import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
 // bottom toggles). Expanded state is local to the sidebar; it does
 // not change the parent's view selection.
 
-const RAIL_WIDTH = 56;
-const RAIL_EXPANDED_WIDTH = 220;
+const RAIL_WIDTH = 44;
+const RAIL_EXPANDED_WIDTH = 200;
 
 const VIEW_ITEMS = [
   {
@@ -84,8 +84,8 @@ export default function Sidebar({
       }}
     >
       <Stack
-        spacing={0.5}
-        sx={{ pt: 1.5, px: expanded ? 1 : 0.75, alignItems: "stretch" }}
+        spacing={0.25}
+        sx={{ pt: 1, px: expanded ? 0.75 : 0.5, alignItems: "stretch" }}
       >
         {VIEW_ITEMS.filter((item) => !item.hidden).map((item) => {
           const Icon = item.icon;
@@ -95,7 +95,7 @@ export default function Sidebar({
               key={item.id}
               expanded={expanded}
               active={isActive}
-              icon={<Icon />}
+              icon={<Icon fontSize="small" />}
               label={item.label}
               onClick={() => onSelectView(item.id)}
             />
@@ -105,7 +105,7 @@ export default function Sidebar({
 
       <Box sx={{ flexGrow: 1 }} />
 
-      <Stack spacing={0.5} sx={{ pb: 1.5, px: expanded ? 1 : 0.75 }}>
+      <Stack spacing={0.25} sx={{ pb: 1, px: expanded ? 0.75 : 0.5 }}>
         <SidebarItem
           expanded={expanded}
           active={false}
@@ -116,7 +116,7 @@ export default function Sidebar({
               invisible={!notificationCount}
               overlap="circular"
             >
-              <NotificationsNoneOutlinedIcon />
+              <NotificationsNoneOutlinedIcon fontSize="small" />
             </Badge>
           }
           label="Notifications"
@@ -127,7 +127,7 @@ export default function Sidebar({
           // until then so the user doesn't see an empty panel.
           disabled={!onOpenNotifications}
         />
-        <Divider sx={{ my: 0.5 }} />
+        <Divider sx={{ my: 0.25 }} />
         <Tooltip
           title={expanded ? "Collapse navigation" : "Expand navigation"}
           placement="right"
@@ -140,6 +140,7 @@ export default function Sidebar({
               alignSelf: expanded ? "flex-end" : "center",
               transform: expanded ? "rotate(0deg)" : "rotate(180deg)",
               transition: "transform 160ms ease",
+              p: 0.5,
             }}
           >
             <KeyboardArrowLeftIcon fontSize="small" />
@@ -168,10 +169,10 @@ function SidebarItem({ expanded, active, icon, label, onClick, disabled }) {
       sx={{
         display: "flex",
         alignItems: "center",
-        gap: 1.25,
-        px: expanded ? 1.25 : 0,
-        py: 1,
-        borderRadius: 1.5,
+        gap: 1,
+        px: expanded ? 1 : 0,
+        py: 0.75,
+        borderRadius: 1,
         cursor: disabled ? "default" : "pointer",
         opacity: disabled ? 0.45 : 1,
         bgcolor: active ? "action.selected" : "transparent",
@@ -190,7 +191,7 @@ function SidebarItem({ expanded, active, icon, label, onClick, disabled }) {
         },
       }}
     >
-      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28 }}>
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: 24 }}>
         {icon}
       </Box>
       {expanded ? (
