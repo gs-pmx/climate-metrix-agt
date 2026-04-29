@@ -6,24 +6,40 @@ import {
   Card,
   CardContent,
   Chip,
+  Divider,
   Stack,
   Typography,
 } from "@mui/material";
 import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import { api } from "./api";
 import SpendMappingDialog from "./SpendMappingDialog";
+import SpendRowsTable from "./SpendRowsTable";
 import { filterRusWithSpendSelected, groupMappingsByRu } from "./spendMappings";
+import {
+  appendSpendRow,
+  deleteSpendRow,
+  getSpendRowsForRu,
+  patchSpendRow,
+} from "./spendRows";
 
-// Phase E2 — Spend Inputs tab.
+// Phase E2 + E3 — Spend Inputs tab.
 //
 // Surfaces one card per Reporting Unit that has the
 // ``scope3_spend_based`` activity type selected in its
-// ``applicable_activity_types`` checklist. Each card opens a per-RU
-// mapping editor (SpendMappingDialog). The data-entry table for
-// individual spend transactions lands in E3 — for now the tab is the
-// mapping configuration surface only.
+// ``applicable_activity_types`` checklist. Each card hosts the per-RU
+// GL mapping editor (E2) and, once a mapping is configured, the
+// per-RU spend transaction table (E3). Rows in the table map 1:1
+// onto ``scope3_spend_based`` activity drafts in the project's
+// ``activities`` array, so the existing calc / autosave / snapshot
+// machinery picks them up without additional wiring.
 
-export default function SpendInputsTab({ projectId, reportingUnits, show }) {
+export default function SpendInputsTab({
+  projectId,
+  reportingUnits,
+  activities,
+  setActivities,
+  show,
+}) {
   const [allMappings, setAllMappings] = React.useState([]);
   const [spendFactors, setSpendFactors] = React.useState([]);
   const [loadingMappings, setLoadingMappings] = React.useState(false);
@@ -162,10 +178,11 @@ export default function SpendInputsTab({ projectId, reportingUnits, show }) {
       <Stack spacing={1} sx={{ mb: 2 }}>
         <Typography variant="h6">Spend Inputs</Typography>
         <Typography variant="body2" color="text.secondary">
-          Configure GL-code-to-factor mappings for each Reporting Unit that
-          has Scope 3 spend-based emissions enabled. Spend transaction entry
-          lands in a follow-up phase — for now this surface manages the
-          mapping table that drives the calculation.
+          Configure GL-code-to-factor mappings for each Reporting Unit
+          that has Scope 3 spend-based emissions enabled, then enter
+          the underlying spend transactions below the mapping summary.
+          Transactions map 1:1 to activity drafts and flow through the
+          standard calculation path.
         </Typography>
       </Stack>
 
@@ -187,6 +204,7 @@ export default function SpendInputsTab({ projectId, reportingUnits, show }) {
           {spendRus.map((ru) => {
             const ruMappings = mappingsByRu[ru.id] || [];
             const hasMappings = ruMappings.length > 0;
+            const spendRowsForRu = getSpendRowsForRu(activities, ru.id);
             return (
               <Card key={ru.id} variant="outlined">
                 <CardContent>
@@ -217,6 +235,15 @@ export default function SpendInputsTab({ projectId, reportingUnits, show }) {
                             variant="outlined"
                           />
                         )}
+                        {hasMappings ? (
+                          <Chip
+                            size="small"
+                            label={`${spendRowsForRu.length} spend row${
+                              spendRowsForRu.length === 1 ? "" : "s"
+                            }`}
+                            variant="outlined"
+                          />
+                        ) : null}
                         {loadingMappings ? (
                           <Typography variant="caption" color="text.secondary">
                             loading…
@@ -235,6 +262,24 @@ export default function SpendInputsTab({ projectId, reportingUnits, show }) {
                       </Button>
                     </Box>
                   </Stack>
+                  {hasMappings ? (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <SpendRowsTable
+                        rows={spendRowsForRu}
+                        mappingsForRu={ruMappings}
+                        onAddRow={() =>
+                          setActivities((prev) => appendSpendRow(prev, ru.id).activities)
+                        }
+                        onPatchRow={(id, patch) =>
+                          setActivities((prev) => patchSpendRow(prev, id, patch))
+                        }
+                        onDeleteRow={(id) =>
+                          setActivities((prev) => deleteSpendRow(prev, id))
+                        }
+                      />
+                    </>
+                  ) : null}
                 </CardContent>
               </Card>
             );

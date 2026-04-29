@@ -2205,16 +2205,28 @@
           "help_text": "General-ledger code from the project's chart of accounts. The project's GL-mapping table resolves this to a spend-based emission factor."
         },
         {
+          "field_id": "gl_account_name",
+          "label": "GL Account Name",
+          "kind": "string",
+          "required": false,
+          "is_primary": false,
+          "default_unit": null,
+          "allowed_units": [],
+          "options": [],
+          "param_key": "gl_account_name",
+          "help_text": "Human-readable account name from the customer's chart of accounts. Carried through for traceability; the calculation keys on gl_code, not on the name."
+        },
+        {
           "field_id": "transaction_year",
           "label": "Transaction Year",
           "kind": "number",
-          "required": true,
+          "required": false,
           "is_primary": false,
           "default_unit": null,
           "allowed_units": [],
           "options": [],
           "param_key": "transaction_year",
-          "help_text": "Calendar year the transaction was booked. Used to apply FX and inflation correction relative to the EF reference year."
+          "help_text": "Calendar year the transaction was booked. Defaults to the project's inventory year when omitted; per the GHG protocol a transaction is scoped to the inventory year it falls under, so per-row override is rarely needed."
         },
         {
           "field_id": "supplier",

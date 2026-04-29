@@ -1372,6 +1372,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           <SpendInputsTab
             projectId={activeProjectId}
             reportingUnits={dataEntryFacilities}
+            activities={activities}
+            setActivities={setActivities}
             show={show}
           />
         </React.Suspense>

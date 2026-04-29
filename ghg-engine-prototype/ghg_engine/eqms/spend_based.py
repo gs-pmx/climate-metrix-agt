@@ -125,12 +125,13 @@ class SpendBasedMethod(EQMPlugin):
             "type": "object",
             "properties": {
                 "gl_code": {"type": "string"},
+                "gl_account_name": {"type": "string"},
                 "transaction_year": {"type": "integer"},
                 "supplier": {"type": "string"},
                 "supplier_country": {"type": "string"},
                 "description": {"type": "string"},
             },
-            "required": ["gl_code", "transaction_year"],
+            "required": ["gl_code"],
         }
 
     def applicability(
@@ -160,13 +161,26 @@ class SpendBasedMethod(EQMPlugin):
         gl_code = str(params.get("gl_code") or "").strip()
         if not gl_code:
             raise ValueError("spend_based requires params.gl_code")
-        transaction_year = self._require_int(
-            params.get("transaction_year"), key="transaction_year"
-        )
+        # Phase E3 — transaction_year defaults to the inventory year so
+        # bulk spend imports don't have to repeat the year on every row.
+        # Per the GHG protocol a transaction is scoped to the inventory
+        # year it falls under; per-row override remains supported for
+        # the rare cases where the underlying spend straddles years.
+        raw_year = params.get("transaction_year")
+        if raw_year is None or raw_year == "":
+            inv_year = inventory_year(resolved)
+            if inv_year is None:
+                raise ValueError(
+                    "spend_based requires params.transaction_year or an inventory year on the policy"
+                )
+            transaction_year = int(inv_year)
+        else:
+            transaction_year = self._require_int(raw_year, key="transaction_year")
         currency = str(observation.quantity.unit or "").strip().upper() or "USD"
+        # Phase E3 — accept zero or negative spend so accounting
+        # corrections (refunds, returns, reversals) flow through. The
+        # math is signed; emissions for negative spend are negative.
         spend_amount = float(observation.quantity.value or 0.0)
-        if spend_amount <= 0:
-            raise ValueError("spend_based requires a positive spend amount")
         reporting_unit_id = observation.locus_id or None
 
         factor_id = spend_ctx.gl_resolver.resolve(

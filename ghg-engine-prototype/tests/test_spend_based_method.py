@@ -309,3 +309,83 @@ def test_factor_provider_returning_none_is_treated_as_unmapped():
     ctx.spend_based.factor_provider = lambda fid: None
     with pytest.raises(UnmappedGLCodeError):
         plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+
+
+# ---------------------------------------------------------------------------
+# Phase E3 — zero / negative spend, transaction_year defaulting
+# ---------------------------------------------------------------------------
+
+
+def _resolved_without_year(
+    *,
+    facility_id: str = "ru_corp",
+    spend: float,
+    currency: str,
+    gl_code: str,
+    inventory_year: int,
+):
+    """Build a resolved activity whose ``params`` omits ``transaction_year``.
+
+    The plugin must default it to the policy's ``inventory_year``.
+    """
+    record = ActivityRecord(
+        facility_id=facility_id,
+        activity_type_id="scope3_spend_based",
+        activity={"value": spend, "unit": currency},
+        params={"gl_code": gl_code},
+        timestamp=datetime(inventory_year, 6, 30),
+    )
+    ctx = CalculationContext(inventory_year=inventory_year)
+    return LegacyCalculationAdapter().resolve(record, ctx)
+
+
+def test_zero_spend_yields_zero_emissions():
+    """Phase E3: zero spend is a valid value (e.g. a fully-refunded line)."""
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=0.0, currency="USD", gl_code="G123", transaction_year=2022)
+    ctx = _build_context(factor_value=0.5, factor_year=2022)
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    assert len(rows) == 1
+    assert rows[0].value == pytest.approx(0.0)
+
+
+def test_negative_spend_yields_negative_emissions():
+    """Phase E3: negative spend (refunds, accounting reversals) signs through."""
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=-1000.0, currency="USD", gl_code="G123", transaction_year=2022)
+    ctx = _build_context(factor_value=0.5, factor_year=2022)
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    assert rows[0].value == pytest.approx(-500.0)
+
+
+def test_transaction_year_defaults_to_inventory_year():
+    """Phase E3: with ``transaction_year`` omitted, the plugin uses the policy's
+    ``inventory_year`` so bulk imports don't have to repeat the year on every
+    row."""
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved_without_year(
+        spend=1000.0, currency="USD", gl_code="G123", inventory_year=2022
+    )
+    ctx = _build_context(factor_value=0.5, factor_year=2022)
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    # Same as the happy path (1000 USD * 0.5) — the year defaulted, no
+    # inflation correction needed (inventory_year == factor_year).
+    assert rows[0].value == pytest.approx(500.0)
+
+
+def test_transaction_year_defaulted_then_inflation_correction_runs():
+    """Phase E3: the defaulted year still drives FX/inflation correctly when
+    it differs from the EF reference year."""
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    # inventory_year=2020, factor_year=2022 -> inflation should run.
+    resolved = _resolved_without_year(
+        spend=100.0, currency="USD", gl_code="G123", inventory_year=2020
+    )
+    ctx = _build_context(factor_value=2.0, factor_year=2022)
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    expected = 100.0 * (292.655 / 258.811) * 2.0
+    assert rows[0].value == pytest.approx(expected, rel=1e-6)
