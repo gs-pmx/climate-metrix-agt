@@ -510,7 +510,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const autosaveMarkBaseline = autosave.markBaseline;
 
   const saveCurrentVersion = React.useCallback(
-    async (note) => {
+    async (note, overrides = null) => {
       if (!activeProjectId) {
         show("Create or select a project first.", "warning");
         return;
@@ -519,15 +519,23 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       // otherwise the saved version misses the in-flight edit and a later
       // reload would silently revert the user's typing to the prior value.
       await flushActiveEdit();
+      // ``overrides`` lets callers inject just-computed result rows that
+      // haven't yet flushed through React state into closure (the auto-save
+      // path at the end of ``runCalculation``). Closure-captured fields
+      // are still used for the no-overrides case.
+      const resolvedResultRows = overrides?.resultRows ?? resultRows;
+      const resolvedSummaryRows = overrides?.summaryRows ?? summaryRows;
+      const resolvedTraceRows = overrides?.traceRows ?? traceRows;
+      const resolvedAuditRows = overrides?.auditRows ?? auditRows;
       setProjectBusy(true);
       try {
         const snapshotPayload = buildSnapshot({
           facilities: facilitiesRef.current,
           activities: activitiesRef.current,
-          resultRows,
-          summaryRows,
-          traceRows,
-          auditRows,
+          resultRows: resolvedResultRows,
+          summaryRows: resolvedSummaryRows,
+          traceRows: resolvedTraceRows,
+          auditRows: resolvedAuditRows,
         });
         const saved = await api.saveProjectVersion(activeProjectId, {
           inventory_year: Number(inventoryYear),
@@ -544,8 +552,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         // chip flips back to "All changes saved".
         autosaveMarkBaseline(snapshotPayload);
         show(`Saved version v${saved.version_number}.`, "success");
+        return saved;
       } catch (e) {
         show(`Save failed: ${e.message || e}`, "error");
+        throw e;
       } finally {
         setProjectBusy(false);
       }
@@ -987,25 +997,30 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           summaryMap[k] = (summaryMap[k] || 0) + Number(v);
         }
       }
-      setResultRows(
-        mergedResults.map((r, i) => ({
-          id: `${i}`,
-          ...r,
-          value: toMetricTons(r.value, r.unit),
-          unit: "metric ton",
-          facility_name: facilityNameById[r.facility_id] || r.facility_id,
-          activity_label: r.activity_label || activityLabelById[r.activity_type_id] || r.activity_type_id,
-        })),
-      );
-      setTraceRows(mergedTrace.map((r, i) => ({ id: `${i}`, ...r })));
-      setAuditRows(
-        mergedAudit.map((r, i) => ({
-          id: `a_${i}`,
-          ...r,
-          facility_name: facilityNameById[r.facility_id] || r.facility_id,
-          activity_label: r.activity_label || activityLabelById[r.activity_type_id] || r.activity_type_id,
-        })),
-      );
+      const transformedResultRows = mergedResults.map((r, i) => ({
+        id: `${i}`,
+        ...r,
+        value: toMetricTons(r.value, r.unit),
+        unit: "metric ton",
+        facility_name: facilityNameById[r.facility_id] || r.facility_id,
+        activity_label:
+          r.activity_label
+          || activityLabelById[r.activity_type_id]
+          || r.activity_type_id,
+      }));
+      const transformedTraceRows = mergedTrace.map((r, i) => ({ id: `${i}`, ...r }));
+      const transformedAuditRows = mergedAudit.map((r, i) => ({
+        id: `a_${i}`,
+        ...r,
+        facility_name: facilityNameById[r.facility_id] || r.facility_id,
+        activity_label:
+          r.activity_label
+          || activityLabelById[r.activity_type_id]
+          || r.activity_type_id,
+      }));
+      setResultRows(transformedResultRows);
+      setTraceRows(transformedTraceRows);
+      setAuditRows(transformedAuditRows);
       const metricTonSummary = {};
       for (const [key, value] of Object.entries(summaryMap)) {
         const parts = key.split("|");
@@ -1014,10 +1029,32 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         const nextKey = parts.length >= 5 ? parts.join("|") : key;
         metricTonSummary[nextKey] = (metricTonSummary[nextKey] || 0) + toMetricTons(value, unit);
       }
-      setSummaryRows(Object.entries(metricTonSummary).map(([key, value], i) => ({ id: `${i}`, key, value })));
+      const transformedSummaryRows = Object.entries(metricTonSummary).map(
+        ([key, value], i) => ({ id: `${i}`, key, value }),
+      );
+      setSummaryRows(transformedSummaryRows);
       setCalcErrors(mergedErrors);
       const partialSuccess = mergedErrors.length > 0 && mergedResults.length > 0;
       const totalFailureNoResults = totalFailure && mergedResults.length === 0;
+      // Auto-save the post-calc state for audit. The dashboard updates
+      // via in-memory state (Option B) and does NOT depend on this
+      // save firing — display is decoupled from persistence. We pass
+      // the freshly-computed rows as overrides so the snapshot reflects
+      // this calc even though the React state setters above haven't
+      // flushed through closure yet.
+      if (mergedResults.length > 0) {
+        try {
+          await saveCurrentVersion("Auto-saved after calculation.", {
+            resultRows: transformedResultRows,
+            summaryRows: transformedSummaryRows,
+            traceRows: transformedTraceRows,
+            auditRows: transformedAuditRows,
+          });
+        } catch (saveErr) {
+          // ``saveCurrentVersion`` already toasts; the dashboard works
+          // regardless. No further action needed here.
+        }
+      }
       if (totalFailureNoResults) {
         // All activities failed. Keep the user on the data-entry tab so
         // they can see the per-row chips flip to "Calc error". Snackbar
@@ -1393,17 +1430,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       {tab === 5 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           {/*
-            Phase D3: dashboard now consumes the analytics endpoint
-            directly using ``projectId`` + (optional) ``versionId``.
-            We pass ``null`` for ``versionId`` so the backend resolves
-            to the latest inventory version automatically. Click-
-            through to Audit hops the tab; deep-linking to a specific
-            audit row is parked.
+            Option-B refactor: the dashboard now derives its analytics
+            rows from the in-memory ``resultRows`` React state instead
+            of round-tripping to ``GET /projects/{id}/analytics``. The
+            endpoint is still wired and available for future cross-
+            version queries (compare v3 to v5, PDF export); the live
+            tab just doesn't depend on it.
           */}
           <DashboardTab
             projectId={activeProjectId}
-            versionId={null}
-            refreshKey={projectVersions.length}
+            resultRows={resultRows}
+            activityTypesById={activityTypesById}
             coverage={projectCoverage}
             coverageSummaryText={coverageSummaryText}
             activityLabelById={activityLabelById}

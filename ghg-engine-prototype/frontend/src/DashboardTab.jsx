@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   Chip,
-  CircularProgress,
   FormControl,
   InputLabel,
   MenuItem,
@@ -15,21 +14,33 @@ import {
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import CoverageWidget from "./CoverageWidget";
-import { api, ApiError } from "./api";
 import {
   filterRows,
   listCategoryOptions,
   listReportingUnitOptions,
 } from "./dashboard/analyticsState.js";
+import { buildAnalyticsEnvelope } from "./dashboard/dashboardAnalytics.js";
 import AnalyticsKpiCards from "./dashboard/AnalyticsKpiCards.jsx";
 import ScopeStackBar from "./dashboard/ScopeStackBar.jsx";
 import EmissionsTreemap from "./dashboard/EmissionsTreemap.jsx";
 import TopReportingUnitsBar from "./dashboard/TopReportingUnitsBar.jsx";
 import TopContributorsTable from "./dashboard/TopContributorsTable.jsx";
 
-// Phase D3 dashboard. Loads analytics from the backend on mount + when
-// the active version changes; computes filter views client-side from
-// the pre-aggregated rows so flipping a chip / dropdown is instant.
+// Dashboard tab — Option-B refactor.
+//
+// Phase D3 originally fetched analytics from
+// ``GET /projects/{id}/analytics``, which reads from the canonical
+// ``calculation_results`` table populated only on snapshot save.
+// That made saving the implicit trigger for "the dashboard reflects
+// my latest calc", which was a UX trap (calc + save ≠ calc, but the
+// user expectation was just calc).
+//
+// We now derive the analytics rows from the in-memory ``resultRows``
+// React state — the same source the Results tab renders from — so
+// the dashboard updates whenever the calc state in App.jsx updates,
+// independent of any persistence event. The ``/analytics`` endpoint
+// stays around for future cross-version queries (compare v3 to v5,
+// PDF export, etc.) but isn't on the live-display hot path.
 //
 // Filter state is local to this tab. Default = no filters (all data).
 // Scope chips are multi-select (all selected by default = all rows
@@ -39,14 +50,10 @@ import TopContributorsTable from "./dashboard/TopContributorsTable.jsx";
 // Selection (post-D3 polish): a click on a treemap cell or RU bar
 // sets a "selection" — a fine-grained highlight that emphasizes the
 // chosen item across every chart while keeping the rest of the
-// (filter-narrowed) data visible but dimmed. This is the PowerBI
-// cross-filter pattern. Filters and selection coexist:
-//
+// (filter-narrowed) data visible but dimmed. PowerBI cross-filter
+// pattern; filters and selection coexist.
 //   - Filters reduce which rows are visible (coarse).
 //   - Selection highlights a slice within the filtered rows (fine).
-//
-// Filter chips and dropdowns retain their click-to-filter semantics;
-// only chart-click handlers populate the selection.
 
 const SCOPE_OPTIONS = ["Scope 1", "Scope 2", "Scope 3"];
 
@@ -63,23 +70,17 @@ function selectionEquals(a, b) {
 
 export default function DashboardTab({
   projectId = "",
-  versionId = null,
-  // ``refreshKey`` is an opaque scalar that the parent bumps whenever
-  // the canonical analytics surface might have changed — e.g. after
-  // ``saveProjectVersion`` materializes a new ``inventory_version``
-  // and ``calculation_results`` row. Without this, the fetch's
-  // useEffect deps ``[projectId, versionId]`` are stable across saves
-  // (versionId stays ``null`` to mean "latest"), and the dashboard
-  // shows pre-save data forever.
-  refreshKey = 0,
+  resultRows = [],
+  activityTypesById = {},
   coverage = null,
   coverageSummaryText = "",
   activityLabelById = {},
   onJumpToActivityInputs = null,
 }) {
-  const [analytics, setAnalytics] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const [error, setError] = React.useState("");
+  const analytics = React.useMemo(
+    () => buildAnalyticsEnvelope(resultRows, activityTypesById),
+    [resultRows, activityTypesById],
+  );
 
   // Filter state — default to "All scopes" (Set with all three) and
   // empty single-selects.
@@ -93,48 +94,17 @@ export default function DashboardTab({
   // do NOT touch this so the two states stay independent.
   const [selection, setSelection] = React.useState(null);
 
-  // Reset filters whenever the project / version changes so we don't
-  // carry over a stale RU id that doesn't exist in the new payload.
+  // Reset filters whenever the active project changes so we don't
+  // carry over a stale RU id that doesn't exist in the new project.
   React.useEffect(() => {
     setSelectedScopes(new Set(SCOPE_OPTIONS));
     setSelectedRu("");
     setSelectedCategory("");
     setSelection(null);
-  }, [projectId, versionId]);
-
-  React.useEffect(() => {
-    if (!projectId) {
-      setAnalytics(null);
-      setError("");
-      return;
-    }
-    let cancelled = false;
-    setLoading(true);
-    setError("");
-    (async () => {
-      try {
-        const payload = await api.getAnalytics(projectId, versionId);
-        if (!cancelled) {
-          setAnalytics(payload);
-        }
-      } catch (e) {
-        if (cancelled) return;
-        const msg =
-          e instanceof ApiError && e.status === 404
-            ? "No saved version yet. Save a project version to populate the dashboard."
-            : `Failed to load analytics: ${e?.message || e}`;
-        setError(msg);
-        setAnalytics(null);
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [projectId, versionId, refreshKey]);
+  }, [projectId]);
 
   const allRows = analytics?.rows || [];
+  const hasResults = allRows.length > 0;
   const filters = React.useMemo(
     () => ({
       scopes:
@@ -265,16 +235,7 @@ export default function DashboardTab({
         onViewMissing={onJumpToActivityInputs ? () => onJumpToActivityInputs() : null}
       />
 
-      {error ? <Alert severity="info">{error}</Alert> : null}
-
-      {loading ? (
-        <Paper sx={{ p: 3, display: "flex", alignItems: "center", gap: 1.5 }}>
-          <CircularProgress size={20} />
-          <Typography color="text.secondary">Loading analytics...</Typography>
-        </Paper>
-      ) : null}
-
-      {!loading && !error && analytics ? (
+      {hasResults ? (
         <>
           {/*
             Selection breadcrumb — only visible when a chart click has
@@ -455,9 +416,10 @@ export default function DashboardTab({
         </>
       ) : null}
 
-      {!loading && !error && !analytics ? (
+      {!hasResults ? (
         <Alert severity="info">
-          Save a project version to populate the dashboard.
+          Run a calculation to populate the dashboard. The dashboard
+          reflects the latest in-memory results — no save step required.
         </Alert>
       ) : null}
     </Stack>
