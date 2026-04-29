@@ -12,20 +12,16 @@ import {
   Typography,
 } from "@mui/material";
 import ActivityDetailDialog from "./ActivityDetailDialog";
-import NoticesBanner from "./NoticesBanner";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
 import ByReportingUnitTable from "./ByReportingUnitTable";
 import RowByRowView from "./RowByRowView";
-import CoverageBanner from "./CoverageBanner";
 import {
   EMPTY_ACTIVITY,
   createEmptyDraft,
-  getActivitySupportNotice,
   getDefaultUnit,
   isEntryVisibleActivity,
   isRepeatableActivity,
-  getPartialReason,
   sanitizeParams,
   uid,
   withActivityTypeDefaults,
@@ -108,39 +104,10 @@ export default function ActivityInputsPanel({
     [visibleActivities],
   );
 
-  const activePartialActivities = React.useMemo(() => {
-    const seen = new Set();
-    return visibleActivities
-      .filter((draft) => hasMeaningfulData(draft))
-      .map((draft) => activityTypesById[draft.activity_type_id])
-      .filter((activityType) => activityType?.implementation_status === "partial")
-      .filter((activityType) => {
-        if (!activityType || seen.has(activityType.activity_type_id)) return false;
-        seen.add(activityType.activity_type_id);
-        return true;
-      });
-  }, [activityTypesById, visibleActivities]);
-
-  const activeUnsupportedActivities = React.useMemo(() => {
-    const seen = new Set();
-    return visibleActivities
-      .filter((draft) => hasMeaningfulData(draft))
-      .map((draft) => activityTypesById[draft.activity_type_id])
-      .filter((activityType) => activityType?.implementation_status === "planned")
-      .filter((activityType) => {
-        if (!activityType || seen.has(activityType.activity_type_id)) return false;
-        seen.add(activityType.activity_type_id);
-        return true;
-      });
-  }, [activityTypesById, visibleActivities]);
-
-  const unsupportedActivityNotices = React.useMemo(
-    () => activeUnsupportedActivities.map((activityType) => ({
-      activityType,
-      notice: getActivitySupportNotice(activityType),
-    })),
-    [activeUnsupportedActivities],
-  );
+  // Phase F1.2 — partial / planned advisories are now computed at App
+  // level via ``buildCatalogAdvisories`` (in ``notices.js``) and
+  // surfaced through the sidebar Notifications panel. The per-tab
+  // memos that used to drive the inline NoticesBanner are gone.
 
   const activityOptions = React.useMemo(
     () => selectableActivities.map((activityType) => ({
@@ -374,13 +341,13 @@ export default function ActivityInputsPanel({
   return (
     <Stack spacing={2}>
       {/*
-        Phase D2 — coverage banner. Sits at the top of the Activity
-        Inputs surface (above the inventory-year row) so completeness
-        is visible the moment a user opens the data-entry tab. Hidden
-        when no applicable lists are configured anywhere — see the
-        component for the gate.
+        Phase F1.2 — coverage status and catalog advisories used to be
+        rendered as inline banners here (CoverageBanner + the
+        consolidated NoticesBanner row). Both moved to the sidebar's
+        Notifications panel so the data-entry surface stops being
+        crowded by persistent advisories. The same data still reaches
+        the user; it's just one click away instead of always-visible.
       */}
-      <CoverageBanner coverage={coverage} activityLabelById={activityLabelById} />
       <Paper sx={{ p: 2 }}>
         <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
           <TextField
@@ -412,33 +379,6 @@ export default function ActivityInputsPanel({
           Add at least one named Reporting Unit in the Reporting Units tab before entering activity data.
         </Alert>
       ) : null}
-
-      {/*
-        Phase C4: the partial/unsupported advisory stack used to be one
-        full-width Alert per activity. It grew to ~6-8 persistent banners
-        whenever a project had the mix of activity types our test users
-        actually work with. We now collapse the whole stack into a single
-        NoticesBanner row that stays out of the way until the user asks
-        for it. The critical "no reporting units" alert above is kept as
-        a top-level Alert because it gates the entire data-entry flow.
-      */}
-      <NoticesBanner
-        notices={[
-          ...activePartialActivities.map((activityType) => ({
-            id: `partial::${activityType.activity_type_id}`,
-            severity: "warning",
-            title: activityType.label,
-            message: getPartialReason(activityType) || "Catalog metadata marks this activity as partial support.",
-          })),
-          ...unsupportedActivityNotices.map(({ activityType, notice }) => ({
-            id: `unsupported::${activityType.activity_type_id}`,
-            severity: notice?.severity || "info",
-            title: activityType.label,
-            message: notice?.message || "Visible for draft entry and snapshotting, but not available for calculation yet.",
-          })),
-        ]}
-        storageKey="ghgp.notices.activityInputs.dismissed"
-      />
 
       {/*
         Post-C4 item 2: the view-selector + save/run bar sticks just
