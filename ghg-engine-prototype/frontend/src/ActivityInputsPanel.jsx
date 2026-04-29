@@ -475,7 +475,7 @@ export default function ActivityInputsPanel({
         }}
         data-testid="view-selector-bar"
       >
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+        <Stack direction="row" justifyContent="flex-start" alignItems="center" sx={{ mb: 1 }}>
           <ToggleButtonGroup
             value={viewMode}
             exclusive
@@ -488,14 +488,9 @@ export default function ActivityInputsPanel({
             <ToggleButton value="byActivity">By Activity</ToggleButton>
             <ToggleButton value="byFacility">By Reporting Unit</ToggleButton>
           </ToggleButtonGroup>
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={() => saveCurrentVersion("Checkpoint before calculation.")}>
-              Save Checkpoint
-            </Button>
-            <Button variant="contained" onClick={runCalculation} disabled={calculating}>
-              {calculating ? "Calculating..." : "Run Calculation"}
-            </Button>
-          </Stack>
+          {/* Phase F1: Save Version + Run Calculation moved to App.jsx
+              top bar so they're reachable from any tab. Keep this row
+              for the view-mode toggle only. */}
         </Stack>
         <Typography variant="body2" color="text.secondary">
           Paste from spreadsheets in the By Activity and By Reporting Unit views with Ctrl+V, use Tab to move across, and use Enter to move down to the next row in the same column. ArrowUp/ArrowDown also move between rows.
