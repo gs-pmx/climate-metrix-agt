@@ -960,6 +960,14 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       for (const [facilityId, facilityRows] of Object.entries(grouped)) {
         const fac = facilitiesNow.find((f) => f.id === facilityId);
         const payload = {
+          // Phase E1.5: the backend route uses ``project_id`` to look
+          // up the project's GL mappings, FX rates, and inflation
+          // indices, then composes the ``EQMContext`` the spend-based
+          // plugin needs. Without it, the plugin raises and any spend
+          // row falls into ``validation_error``. Set unconditionally —
+          // the field is optional on the backend and harmless for
+          // non-spend activities.
+          project_id: activeProjectId || undefined,
           context: {
             inventory_year: Number(inventoryYear),
             gwp_set: gwpSet,

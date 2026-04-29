@@ -270,7 +270,7 @@ uv sync
 uv run python tools/ingest_eeio_factors.py \
     --useeio ../eeio/USEEIO/SupplyChainGHGEmissionFactorsv1.4.0.xlsx \
     --exiobase ../eeio/EXIOBASE/3.8.2/IOT_2022_pxp.zip \
-    --db state/projects.sqlite
+    --db state/ghg_projects.sqlite
 ```
 
 Verified end-to-end on 2026-04-28: USEEIO loads 1016 NAICS-keyed factors at 2022 USD basis (the original ~411 estimate referred to BEA detail-level codes; v1.4.0 actually keys on 6-digit NAICS, which is the right shape for GL mapping). EXIOBASE loads 184 GLOBAL-aggregated factors at 2022 EUR. ``pymrio`` install side-effect downgrades ``openpyxl`` from 3.1.5 to 3.1.0; ``uv sync`` reverts after ingestion.
