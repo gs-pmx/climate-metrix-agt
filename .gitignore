@@ -8,3 +8,4 @@ __pycache__
 .env
 eeio
 backlog_notes.md
+docs/backlog_notes.md
