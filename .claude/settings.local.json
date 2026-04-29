@@ -14,7 +14,8 @@
       "Bash(npx eslint:*)",
       "Bash(ls eslint*)",
       "Bash(npm run:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(uv run *)"
     ]
   }
 }
