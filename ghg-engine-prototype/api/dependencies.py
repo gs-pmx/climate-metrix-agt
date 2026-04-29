@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sqlite3
 from functools import lru_cache
 
 from config import Settings, get_settings
@@ -13,6 +14,25 @@ from project_store import ProjectStore
 log = logging.getLogger(__name__)
 
 
+def _enable_wal_mode(db_path) -> None:
+    """Switch the SQLite database into WAL journal mode.
+
+    WAL is a sticky, database-wide setting (persists across opens once
+    set), so applying it once at boot is enough. Read paths benefit
+    from concurrent readers + a single writer; the cost is one extra
+    ``-wal`` and ``-shm`` file alongside the database.
+    """
+    try:
+        conn = sqlite3.connect(db_path)
+        try:
+            mode = conn.execute("PRAGMA journal_mode = WAL").fetchone()
+            log.info("SQLite journal_mode=%s db=%s", mode[0] if mode else "?", db_path)
+        finally:
+            conn.close()
+    except sqlite3.DatabaseError as exc:  # pragma: no cover - defensive
+        log.warning("Could not enable WAL mode on %s: %s", db_path, exc)
+
+
 @lru_cache(maxsize=1)
 def _build(
     settings: Settings | None = None,
@@ -20,6 +40,7 @@ def _build(
     if settings is None:
         settings = get_settings()
     activity_catalog = ActivityCatalog.from_json(settings.data_dir / "activity_types.json")
+    _enable_wal_mode(settings.db_path)
     store = ProjectStore(settings.db_path)
 
     if settings.factor_backend == "document":

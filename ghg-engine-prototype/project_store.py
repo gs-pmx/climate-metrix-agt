@@ -190,6 +190,12 @@ class ProjectStore:
                     "strip AR6 footnote markers from refrigerant subtypes so the matcher resolves them",
                     self._migration_11_strip_refrigerant_footnote_markers,
                 ),
+                (
+                    12,
+                    "covering index on factor_versions(factor_kind, emission_category, factor_type, attribute) "
+                    "for the post-#33 _coarse_records lookup",
+                    self._migration_12_factor_lookup_covering_index,
+                ),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -708,6 +714,30 @@ class ProjectStore:
                 "WHERE factor_version_id = ?",
                 (cleaned, row["factor_version_id"]),
             )
+
+    def _migration_12_factor_lookup_covering_index(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        # PR #33 dropped ``dataset_id`` from the ``_coarse_records`` WHERE
+        # clause, which left the existing
+        # ``idx_factor_versions_lookup`` index (keyed on
+        # ``(dataset_id, emission_category, factor_type, attribute)``)
+        # unable to serve the lookup. SQLite fell back to filtering
+        # against ``idx_factor_versions_kind`` which only narrows by
+        # ``factor_kind``, so every per-gas factor query scanned the
+        # entire physical-factor set.
+        #
+        # The new index matches the post-#33 query shape exactly and
+        # composes with the join against ``factor_datasets`` (already
+        # indexed on ``status`` via ``idx_factor_datasets_status``).
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_factor_versions_physical_lookup
+                ON factor_versions(
+                    factor_kind, emission_category, factor_type, attribute
+                )
+            """
+        )
 
     def _seed_reference_data(self, conn: sqlite3.Connection) -> None:
         """Populate fx_rates and inflation_indices from bundled CSVs.

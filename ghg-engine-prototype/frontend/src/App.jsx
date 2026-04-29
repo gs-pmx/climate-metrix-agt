@@ -981,6 +981,13 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     setCalculating(true);
     let totalFailure = false;
     let totalFailureMessage = "";
+    // F1.5 — only fetch the audit envelope when the user is actually on
+    // the Audit tab. ``/calculate/audit`` re-issues every per-gas factor
+    // lookup on top of the ones the calc already did, ~doubling SQLite
+    // traffic. The Activity Inputs / Results / Dashboard paths don't
+    // need ``audit_rows``. If the user later opens the Audit tab,
+    // they'll need to re-run the calc to populate it.
+    const needsAudit = tab === 6;
     try {
       for (const [facilityId, facilityRows] of Object.entries(grouped)) {
         const fac = facilitiesNow.find((f) => f.id === facilityId);
@@ -995,7 +1002,9 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         });
         let response;
         try {
-          response = await api.calculateAudit(payload);
+          response = needsAudit
+            ? await api.calculateAudit(payload)
+            : await api.calculate(payload);
         } catch (err) {
           // On total failure the backend still returns the structured
           // envelope (with populated errors[]) alongside HTTP 400. Capture
