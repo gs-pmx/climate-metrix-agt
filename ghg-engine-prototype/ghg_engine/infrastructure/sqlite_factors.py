@@ -152,21 +152,39 @@ class SQLiteFactorRepository:
         )
 
     def _coarse_records(self, conn: sqlite3.Connection, q: FactorQuery) -> list[CanonicalFactorRecord]:
-        dataset = self._dataset(conn)
-        if dataset is None:
-            return []
+        # Query across every published physical-factor dataset rather than
+        # only the most-recently-published one. The original
+        # dataset_id-scoped query made sense when there was a single
+        # ``seed`` dataset, but Phase E1 added separately-published
+        # spend datasets (USEEIO, EXIOBASE) that became the
+        # "most-recently-published" row and silently masked the seed's
+        # physical factors — every direct_factor / refrigerant /
+        # scope2_energy / passenger_distance lookup started returning
+        # nothing.
+        #
+        # Spend factors live behind a different code path
+        # (``get_by_factor_id`` against ``source_record_key``), so
+        # scoping by ``factor_kind = 'physical'`` keeps the two
+        # channels separate. ``status = 'published'`` excludes
+        # superseded / draft datasets.
         emission_category, factor_type, attribute = self._translate_query(q)
-        rows = conn.execute(
-            """
-            SELECT *
-            FROM factor_versions
-            WHERE dataset_id = ?
-              AND emission_category = ?
-              AND factor_type = ?
-              AND attribute = ?
-            """,
-            (dataset["dataset_id"], emission_category, factor_type, attribute),
-        ).fetchall()
+        params: tuple[Any, ...] = (emission_category, factor_type, attribute)
+        sql = """
+            SELECT fv.*
+            FROM factor_versions fv
+            JOIN factor_datasets fd ON fd.dataset_id = fv.dataset_id
+            WHERE fd.status = 'published'
+              AND fv.factor_kind = 'physical'
+              AND fv.emission_category = ?
+              AND fv.factor_type = ?
+              AND fv.attribute = ?
+        """
+        if self._dataset_key is not None:
+            # Honour a caller-supplied dataset_key override (kept for
+            # the test and admin paths that pin a specific dataset).
+            sql += " AND fd.dataset_key = ?"
+            params = params + (self._dataset_key,)
+        rows = conn.execute(sql, params).fetchall()
         return [self._record_from_row(row) for row in rows]
 
     def _record_from_row(self, row: sqlite3.Row) -> CanonicalFactorRecord:
@@ -250,30 +268,37 @@ class SQLiteFactorRepository:
         return FactorRepository._model_from_canonical(self._record_from_row(row))
 
     def preview(self, query_text: str | None = None) -> list[dict[str, str]]:
+        # Same fix as ``_coarse_records``: scope to all published
+        # physical-factor datasets rather than the single most-recent
+        # one. The preview endpoint feeds the admin browse view; spend
+        # factors have their own ``/catalog/spend-factors`` route.
         with self._connect() as conn:
-            dataset = self._dataset(conn)
-            if dataset is None:
-                return []
-            params: list[Any] = [dataset["dataset_id"]]
+            params: list[Any] = []
             sql = """
-                SELECT source_record_key, emission_category, factor_type, subtype_or_description,
-                       attribute, greenhouse_gas, unit_label, source_id
-                FROM factor_versions
-                WHERE dataset_id = ?
+                SELECT fv.source_record_key, fv.emission_category, fv.factor_type,
+                       fv.subtype_or_description, fv.attribute, fv.greenhouse_gas,
+                       fv.unit_label, fv.source_id
+                FROM factor_versions fv
+                JOIN factor_datasets fd ON fd.dataset_id = fv.dataset_id
+                WHERE fd.status = 'published'
+                  AND fv.factor_kind = 'physical'
             """
+            if self._dataset_key is not None:
+                sql += " AND fd.dataset_key = ?"
+                params.append(self._dataset_key)
             if query_text:
                 sql += """
                     AND LOWER(
-                        COALESCE(source_record_key, '') || ' ' ||
-                        COALESCE(emission_category, '') || ' ' ||
-                        COALESCE(factor_type, '') || ' ' ||
-                        COALESCE(subtype_or_description, '') || ' ' ||
-                        COALESCE(attribute, '') || ' ' ||
-                        COALESCE(source_id, '')
+                        COALESCE(fv.source_record_key, '') || ' ' ||
+                        COALESCE(fv.emission_category, '') || ' ' ||
+                        COALESCE(fv.factor_type, '') || ' ' ||
+                        COALESCE(fv.subtype_or_description, '') || ' ' ||
+                        COALESCE(fv.attribute, '') || ' ' ||
+                        COALESCE(fv.source_id, '')
                     ) LIKE ?
                 """
                 params.append(f"%{query_text.lower()}%")
-            sql += " ORDER BY factor_type, attribute LIMIT 100"
+            sql += " ORDER BY fv.factor_type, fv.attribute LIMIT 100"
             rows = conn.execute(sql, params).fetchall()
         return [
             {
@@ -290,14 +315,24 @@ class SQLiteFactorRepository:
         ]
 
     def count(self) -> int:
+        # Counts physical factors across every published dataset. The
+        # dependency-injection startup log uses this to confirm the
+        # factor warehouse loaded a non-zero set; scoping it to the
+        # most-recently-published dataset wrongly reported "0 physical
+        # factors" once the spend datasets started being published.
         with self._connect() as conn:
-            dataset = self._dataset(conn)
-            if dataset is None:
-                return 0
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM factor_versions WHERE dataset_id = ?",
-                (dataset["dataset_id"],),
-            ).fetchone()
+            params: tuple[Any, ...] = ()
+            sql = """
+                SELECT COUNT(*) AS c
+                FROM factor_versions fv
+                JOIN factor_datasets fd ON fd.dataset_id = fv.dataset_id
+                WHERE fd.status = 'published'
+                  AND fv.factor_kind = 'physical'
+            """
+            if self._dataset_key is not None:
+                sql += " AND fd.dataset_key = ?"
+                params = (self._dataset_key,)
+            row = conn.execute(sql, params).fetchone()
         return int(row["c"]) if row is not None else 0
 
 
