@@ -185,6 +185,11 @@ class ProjectStore:
                     "gl_mappings.gl_account_name: human-readable label alongside gl_code",
                     self._migration_10_gl_account_name,
                 ),
+                (
+                    11,
+                    "strip AR6 footnote markers from refrigerant subtypes so the matcher resolves them",
+                    self._migration_11_strip_refrigerant_footnote_markers,
+                ),
             ]
             for version, description, fn in migrations:
                 if version <= current:
@@ -661,6 +666,48 @@ class ProjectStore:
         }
         if "gl_account_name" not in cols:
             conn.execute("ALTER TABLE gl_mappings ADD COLUMN gl_account_name TEXT")
+
+    def _migration_11_strip_refrigerant_footnote_markers(
+        self, conn: sqlite3.Connection
+    ) -> None:
+        # The seed JSON imported refrigerant rows whose subtype values
+        # incorporate AR6 Annex VII footnote markers — e.g.
+        # ``"HFO-1234yf a"`` instead of ``"HFO-1234yf"``. The
+        # ``RefrigerantMassToGwpMethod`` matcher queries by the clean
+        # catalog label, so any catalog refrigerant whose subtype
+        # carries a marker is unresolvable. The user reported this as
+        # "no AR6 GWP factor matched refrigerant_type 'HFO-1234yf'"
+        # for refrigerants that *should* be in scope.
+        #
+        # Fix: strip a trailing single-letter footnote suffix from
+        # ``subtype_or_description`` (the field FactorQuery.description
+        # ultimately matches against). Other slug fields
+        # (``lineage_id``, ``source_record_key``, ``substance_code``,
+        # ``greenhouse_gas``) carry the same markers but are
+        # cosmetic — leaving them untouched keeps the migration
+        # focused on the load-bearing fix and avoids touching every
+        # column that incorporates the slug.
+        import re
+
+        pattern = re.compile(r" [a-z]$")
+        rows = conn.execute(
+            """
+            SELECT factor_version_id, subtype_or_description
+            FROM factor_versions
+            WHERE factor_kind = 'physical'
+              AND emission_category = 'refrigerant-release'
+              AND subtype_or_description GLOB '* [a-z]'
+            """
+        ).fetchall()
+        for row in rows:
+            cleaned = pattern.sub("", row["subtype_or_description"])
+            if cleaned == row["subtype_or_description"]:
+                continue
+            conn.execute(
+                "UPDATE factor_versions SET subtype_or_description = ? "
+                "WHERE factor_version_id = ?",
+                (cleaned, row["factor_version_id"]),
+            )
 
     def _seed_reference_data(self, conn: sqlite3.Connection) -> None:
         """Populate fx_rates and inflation_indices from bundled CSVs.
