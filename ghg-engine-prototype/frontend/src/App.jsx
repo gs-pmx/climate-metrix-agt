@@ -42,6 +42,7 @@ import {
 import { useAutosave } from "./useAutosave";
 import { flushActiveEdit } from "./flushActiveEdit";
 import AutosaveStatusChip from "./AutosaveStatusChip";
+import Sidebar from "./Sidebar";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
 const ReportingUnitsTab = React.lazy(() => import("./ReportingUnitsTab"));
@@ -209,7 +210,14 @@ function useStickyTopHeightVar(ref) {
 
 export default function App({ colorMode = "light", onToggleColorMode = () => {} }) {
   const { snack, show, close } = useSnack();
-  const [tab, setTab] = React.useState(0);
+  // Phase F1 — sidebar-mediated views. ``view`` selects between the
+  // project-context tab surface and the project-agnostic
+  // Projects / Catalog surfaces that previously lived in the tab
+  // strip. Tab indices stay stable inside ``view === 'project'`` so
+  // the existing tab-content rendering continues to work; tabs 0
+  // (Projects) and 7 (Catalog) are no longer rendered in the strip.
+  const [view, setView] = React.useState("projects");
+  const [tab, setTab] = React.useState(1);
   const isScrolled = useIsScrolled();
   const topBarRef = React.useRef(null);
   useStickyTopHeightVar(topBarRef);
@@ -604,6 +612,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       await refreshVersions(projectId);
       const latest = await loadLatestSnapshot(projectId);
       await checkForDraft(projectId, latest);
+      // Loading a project from the sidebar drops the user back into
+      // the project tab surface (Reporting Units by default). Without
+      // this they'd stay on the Projects sidebar view and see no tabs.
+      setView("project");
+      setTab(1);
     },
     [autosaveMarkBaseline, checkForDraft, loadLatestSnapshot, projects, refreshVersions],
   );
@@ -699,6 +712,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       await refreshVersions(project.project_id);
       await loadLatestSnapshot(project.project_id);
       show(`Project "${project.name}" created.`, "success");
+      // Drop into the new project's Reporting Units tab so the user
+      // can start configuring sources immediately.
+      setView("project");
+      setTab(1);
     } catch (e) {
       show(`Project creation failed: ${e.message || e}`, "error");
     } finally {
@@ -888,11 +905,12 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
 
     if (!hasActiveProject) {
       show("Create or select a project first.", "warning");
-      setTab(0);
+      setView("projects");
       return;
     }
     if (!dataEntryFacilitiesNow.length) {
       show("Add at least one named Reporting Unit before entering activity data.", "warning");
+      setView("project");
       setTab(1);
       return;
     }
@@ -1069,6 +1087,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           "warning",
         );
       } else {
+        setView("project");
         setTab(4);
         if (skippedRows.length) {
           show(
@@ -1089,7 +1108,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 } }}>
+    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+      <Sidebar
+        activeView={view}
+        onSelectView={(next) => {
+          setView(next);
+          // Returning to project mode lands on whatever tab the user
+          // last had open within project mode (existing ``tab`` state).
+        }}
+        notificationCount={0}
+      />
+      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 }, flexGrow: 1 }}>
       {/*
         Post-C4 polish item 1: split the former single sticky shell into
         two cooperating elements:
@@ -1160,27 +1189,59 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         data-testid="app-top-bar"
       >
         <Stack direction="row" alignItems="center" spacing={1.5} sx={{ width: "100%" }}>
-          <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flexGrow: 1, minHeight: 48 }}>
-            <Tab label="Projects" />
-            <Tab label="Reporting Units" disabled={!hasActiveProject} />
-            <Tab label="Activity Inputs" disabled={!hasActiveProject} />
-            <Tab label="Spend Inputs" disabled={!hasActiveProject} />
-            <Tab label="Results" disabled={!hasActiveProject} />
-            <Tab label="Dashboard" disabled={!hasActiveProject} />
-            <Tab label="Audit" disabled={!hasActiveProject} />
-            <Tab label="Catalog" />
-          </Tabs>
+          {/*
+            Phase F1 — tabs render only in project view; Projects and
+            Catalog are now sidebar-mediated. ``value`` props keep the
+            internal indices stable (1..6) so the existing tab-content
+            rendering below continues to work without index shifting.
+          */}
+          {view === "project" ? (
+            <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ flexGrow: 1, minHeight: 48 }}>
+              <Tab value={1} label="Reporting Units" disabled={!hasActiveProject} />
+              <Tab value={2} label="Activity Inputs" disabled={!hasActiveProject} />
+              <Tab value={3} label="Spend Inputs" disabled={!hasActiveProject} />
+              <Tab value={4} label="Results" disabled={!hasActiveProject} />
+              <Tab value={5} label="Dashboard" disabled={!hasActiveProject} />
+              <Tab value={6} label="Audit" disabled={!hasActiveProject} />
+            </Tabs>
+          ) : (
+            <Box sx={{ flexGrow: 1, py: 1.5 }}>
+              <Typography variant="subtitle1">
+                {view === "projects" ? "Projects" : view === "catalog" ? "Catalog" : ""}
+              </Typography>
+            </Box>
+          )}
           {isScrolled && activeProject ? (
             <Chip
               color="secondary"
               size="small"
               label={`Project: ${activeProject.name}`}
               sx={{
-                mr: 1,
                 opacity: isScrolled ? 1 : 0,
                 transition: "opacity 180ms ease",
               }}
             />
+          ) : null}
+          {hasActiveProject ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              <AutosaveStatusChip status={autosave.status} lastSavedAt={autosave.lastSavedAt} />
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => saveCurrentVersion("Manual checkpoint.")}
+                disabled={projectBusy}
+              >
+                Save Version
+              </Button>
+              <Button
+                variant="contained"
+                size="small"
+                onClick={runCalculation}
+                disabled={calculating}
+              >
+                {calculating ? "Calculating..." : "Run Calculation"}
+              </Button>
+            </Stack>
           ) : null}
         </Stack>
       </Paper>
@@ -1212,7 +1273,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </Alert>
       ) : null}
 
-      {tab === 0 && (
+      {view === "projects" && (
         <Stack spacing={2}>
           <Paper sx={{ p: 2 }}>
             <Stack spacing={1.5}>
@@ -1357,7 +1418,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </Stack>
       )}
 
-      {tab === 1 && hasActiveProject && (
+      {view === "project" && tab === 1 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <ReportingUnitsTab
             reportingUnits={facilities}
@@ -1371,7 +1432,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 2 && hasActiveProject && (
+      {view === "project" && tab === 2 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <ActivityInputsPanel
             activities={activities}
@@ -1399,7 +1460,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 3 && hasActiveProject && (
+      {view === "project" && tab === 3 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <SpendInputsTab
             projectId={activeProjectId}
@@ -1411,7 +1472,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 4 && hasActiveProject && (
+      {view === "project" && tab === 4 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <ResultsTab
             resultRows={resultRows}
@@ -1422,7 +1483,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 5 && hasActiveProject && (
+      {view === "project" && tab === 5 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           {/*
             Option-B refactor: the dashboard now derives its analytics
@@ -1439,12 +1500,12 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             coverage={projectCoverage}
             coverageSummaryText={coverageSummaryText}
             activityLabelById={activityLabelById}
-            onJumpToActivityInputs={() => setTab(2)}
+            onJumpToActivityInputs={() => { setView("project"); setTab(2); }}
           />
         </React.Suspense>
       )}
 
-      {tab === 6 && hasActiveProject && (
+      {view === "project" && tab === 6 && hasActiveProject && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <AuditTab
             auditRows={auditRows}
@@ -1453,15 +1514,15 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         </React.Suspense>
       )}
 
-      {tab === 7 && (
+      {view === "catalog" && (
         <React.Suspense fallback={<LazyTabFallback />}>
           <CatalogTab activityCatalog={activityCatalog} />
         </React.Suspense>
       )}
 
-      {!hasActiveProject && tab !== 0 && tab !== 7 ? (
+      {!hasActiveProject && view === "project" ? (
         <Alert severity="info" sx={{ mt: 2 }}>
-          Create or select a project in the Projects tab to unlock data entry and calculation tabs.
+          Create or select a project from the Projects panel (left sidebar) to unlock data entry and calculation tabs.
         </Alert>
       ) : null}
 
@@ -1481,6 +1542,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           {snack.msg}
         </Alert>
       </Snackbar>
-    </Container>
+      </Container>
+    </Box>
   );
 }
