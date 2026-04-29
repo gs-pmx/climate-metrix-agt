@@ -656,6 +656,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           await refreshVersions(newest.project_id);
           const latest = await loadLatestSnapshot(newest.project_id);
           await checkForDraft(newest.project_id, latest);
+          // Drop the user straight into the project workspace on
+          // auto-select; otherwise they land on the Projects sidebar
+          // view with no obvious way into the tabs.
+          setView("project");
+          setTab(1);
         }
       } catch (e) {
         if (!mounted) return;
@@ -1205,13 +1210,22 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
               <Tab value={6} label="Audit" disabled={!hasActiveProject} />
             </Tabs>
           ) : (
-            <Box sx={{ flexGrow: 1, py: 1.5 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexGrow: 1, py: 1.5 }}>
               <Typography variant="subtitle1">
                 {view === "projects" ? "Projects" : view === "catalog" ? "Catalog" : ""}
               </Typography>
-            </Box>
+              {hasActiveProject ? (
+                <Chip
+                  color="primary"
+                  size="small"
+                  label={`Open ${activeProject.name}`}
+                  onClick={() => { setView("project"); setTab(1); }}
+                  sx={{ cursor: "pointer" }}
+                />
+              ) : null}
+            </Stack>
           )}
-          {isScrolled && activeProject ? (
+          {isScrolled && activeProject && view === "project" ? (
             <Chip
               color="secondary"
               size="small"
@@ -1333,6 +1347,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                   disabled={!hasActiveProject || projectBusy}
                   onClick={async () => {
                     await loadLatestSnapshot(activeProjectId);
+                    setView("project");
+                    setTab(1);
                     show("Loaded latest snapshot.", "success");
                   }}
                 >
@@ -1399,6 +1415,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                               try {
                                 const payload = await api.getProjectSnapshot(activeProjectId, v.version_number);
                                 applySnapshot(payload);
+                                setView("project");
+                                setTab(1);
                                 show(`Loaded version v${v.version_number}.`, "success");
                               } catch (e) {
                                 show(`Failed to load version: ${e.message || e}`, "error");
