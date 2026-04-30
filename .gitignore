@@ -10,6 +10,11 @@ eeio
 backlog_notes.md
 docs/backlog_notes.md
 
+# Agent-created task worktrees. Branches should be checked out here rather
+# than in the primary repository checkout.
+.claude/worktrees/
+.codex/worktrees/
+
 # Raw emissions-factor source files are large and source-controlled only
 # selectively. Keep source-library metadata trackable while ignoring generated
 # indexes and downloaded workbooks/archives.

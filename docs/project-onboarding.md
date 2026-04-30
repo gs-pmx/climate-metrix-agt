@@ -22,6 +22,21 @@ It does not replace project documentation, source code, tests, issue notes, or l
 - Tests: backend tests under `ghg-engine-prototype/tests`; frontend tests through `frontend/package.json`
 - Local state: SQLite project/inventory/factor stores, with Docker volume-backed state in local development
 
+## Worktree Workflow
+
+Agentic write tasks should use purpose-built git worktrees. Do not switch the primary project checkout onto a task branch for normal agent work.
+
+Use this pattern from the project root before editing:
+
+```powershell
+git worktree add -b codex/<task-slug> .codex\worktrees\<task-slug> origin/main
+cd .codex\worktrees\<task-slug>
+```
+
+Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work should use `.codex\worktrees\<task-slug>` unless a task-specific harness provides a different path. Run app commands from `ghg-engine-prototype` inside the task worktree.
+
+Read-only inspection can happen from the primary checkout. Writing, committing, testing with generated files, or opening a PR should happen from the task worktree. Check `git status` inside the worktree before staging and preserve unrelated work.
+
 ## Canonical Context
 
 Canonical Workshop OS files for this project:
@@ -183,11 +198,12 @@ Before editing this repo, an agent should:
 
 1. Read this file.
 2. Compile or request Workshop OS context for `climate-metrix`.
-3. Work from `ghg-engine-prototype` for active app changes unless the task says otherwise.
-4. Read relevant local project docs and task files.
-5. Inspect the current git status and avoid overwriting unrelated work.
-6. Identify whether the task touches GHG calculation logic, domain model architecture, factors, boundaries, auditability, or UI workflow.
-7. If the task affects architecture or scientific/accounting assumptions, pause and document the decision point before making changes.
+3. Create or enter a purpose-built task worktree for any write task.
+4. Work from `ghg-engine-prototype` inside that worktree for active app changes unless the task says otherwise.
+5. Read relevant local project docs and task files.
+6. Inspect the current git status and avoid overwriting unrelated work.
+7. Identify whether the task touches GHG calculation logic, domain model architecture, factors, boundaries, auditability, or UI workflow.
+8. If the task affects architecture or scientific/accounting assumptions, pause and document the decision point before making changes.
 
 ## Climate Metrix Guardrails
 
@@ -203,13 +219,14 @@ Agents should preserve these project-level requirements:
 
 ## Approval Boundaries
 
-Agents may usually act autonomously for routine, non-destructive implementation work inside an approved branch or worktree.
+Agents may usually act autonomously for routine, non-destructive implementation work inside a purpose-built task worktree.
 
 Agents should pause before:
 
 - major architectural forks;
 - changes that break or delete existing work;
 - changes to GHG accounting methodology, factor selection, scope/category mapping, or inventory boundary behavior;
+- working directly in the primary checkout for an agentic write task;
 - pushing to `main` or mutating protected/shared branches;
 - destructive filesystem or git actions;
 - initiating communication with other humans;
