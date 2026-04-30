@@ -10,9 +10,10 @@ Before substantial work:
 
 1. Read `docs/project-onboarding.md` in this repository.
 2. Compile or request Workshop OS context for `climate-metrix`.
-3. Work from `ghg-engine-prototype` for active app changes unless the task says otherwise.
-4. Read the relevant local task, plan, docs, and code before editing.
-5. Check `git status` and preserve unrelated work.
+3. Create or enter a purpose-built task worktree before making repository changes.
+4. Work from `ghg-engine-prototype` inside that worktree for active app changes unless the task says otherwise.
+5. Read the relevant local task, plan, docs, and code before editing.
+6. Check `git status` in the task worktree and preserve unrelated work.
 
 Workshop OS root:
 
@@ -39,6 +40,27 @@ For a task file:
 ```powershell
 python -m workshop_os compile --project climate-metrix --adapter codex --task C:\path\to\task-or-plan.md
 ```
+
+## Worktree Workflow
+
+Agentic write tasks should happen in a purpose-built git worktree, not by switching the primary checkout onto a task branch. This keeps the main local checkout stable while parallel agents work.
+
+Preferred local pattern:
+
+```powershell
+git worktree add -b codex/<task-slug> .codex\worktrees\<task-slug> origin/main
+cd .codex\worktrees\<task-slug>
+```
+
+Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work should use `.codex\worktrees\<task-slug>` unless a task-specific harness says otherwise.
+
+Use direct branches in the primary checkout only for explicitly requested recovery, maintenance, or human-directed git operations. Read-only inspection may happen from the primary checkout.
+
+When commits are bundled for handoff, use meaningful commit messages, push the task branch, and open a draft PR when policy and repository auth allow it. The PR title/body should summarize what changed, why it changed, notable commits, validation run, and any blocker or manual follow-up. Surface the PR link in the final response using the available worktree/PR metadata so the review target and change description are visible without branch hunting. If auth blocks PR creation, provide the PR creation link plus a ready-to-paste title and body.
+
+## Windows Tooling
+
+Do not use `rg` in the Windows sandbox for this workspace; it is consistently blocked. Use PowerShell-native commands such as `Get-ChildItem`, `Select-String`, and targeted `Get-Content` reads instead.
 
 ## Common Commands
 
@@ -109,6 +131,7 @@ Pause before:
 - destructive filesystem or git actions;
 - changes expected to break or delete existing work;
 - changes to GHG accounting methodology, factor selection, scope/category mapping, or inventory boundary behavior;
+- working directly in the primary checkout for an agentic write task;
 - pushing to `main` or mutating protected/shared branches;
 - initiating communication with other humans;
 - bypassing security controls.
