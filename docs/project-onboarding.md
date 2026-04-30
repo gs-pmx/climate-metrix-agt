@@ -37,7 +37,7 @@ Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work 
 
 Read-only inspection can happen from the primary checkout. Writing, committing, testing with generated files, or opening a PR should happen from the task worktree. Check `git status` inside the worktree before staging and preserve unrelated work.
 
-When a task produces a bundle of commits, push the task branch and open a draft PR when policy and repository auth allow it. Surface the PR link in the final response through the available worktree/PR metadata so the handoff is easy to find.
+When a task produces a bundle of commits, use meaningful commit messages, push the task branch, and open a draft PR when policy and repository auth allow it. The PR title/body should summarize what changed, why it changed, notable commits, validation run, and any blocker or manual follow-up. Surface the PR link in the final response through the available worktree/PR metadata so the handoff and change description are easy to find. If auth blocks PR creation, provide the PR creation link plus a ready-to-paste title and body.
 
 ## Windows Tooling
 

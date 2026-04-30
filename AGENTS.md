@@ -56,7 +56,7 @@ Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work 
 
 Use direct branches in the primary checkout only for explicitly requested recovery, maintenance, or human-directed git operations. Read-only inspection may happen from the primary checkout.
 
-When commits are bundled for handoff, push the task branch and open a draft PR when policy and repository auth allow it. Surface the PR link in the final response using the available worktree/PR metadata so the review target is visible without branch hunting.
+When commits are bundled for handoff, use meaningful commit messages, push the task branch, and open a draft PR when policy and repository auth allow it. The PR title/body should summarize what changed, why it changed, notable commits, validation run, and any blocker or manual follow-up. Surface the PR link in the final response using the available worktree/PR metadata so the review target and change description are visible without branch hunting. If auth blocks PR creation, provide the PR creation link plus a ready-to-paste title and body.
 
 ## Windows Tooling
 
