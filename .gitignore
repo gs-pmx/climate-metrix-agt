@@ -9,4 +9,13 @@ __pycache__
 eeio
 backlog_notes.md
 docs/backlog_notes.md
-efs
+
+# Raw emissions-factor source files are large and source-controlled only
+# selectively. Keep source-library metadata trackable while ignoring generated
+# indexes and downloaded workbooks/archives.
+efs/*
+!efs/README.md
+!efs/manifest.json
+!efs/index/
+efs/index/*
+!efs/index/README.md
