@@ -6,13 +6,11 @@ from typing import Any
 
 from ghg_engine.infrastructure.sqlite_common import connect_sqlite, utc_now_iso
 from ghg_engine.infrastructure.sqlite_factors import SQLiteFactorStore
-from ghg_engine.infrastructure.sqlite_inventory import (
-    SQLiteInventoryStore,
-    _applicability_map,
-)
+from ghg_engine.infrastructure.sqlite_inventory import SQLiteInventoryStore
 from ghg_engine.infrastructure.sqlite_workspace import SQLiteWorkspaceDraftStore
 from ghg_engine.models import ProjectSnapshot
 from ghg_engine.ports.persistence import InventoryRepository, WorkspaceDraftRepository
+from ghg_engine.services.applicability import build_applicability_map
 
 
 class ProjectService:
@@ -76,7 +74,7 @@ class ProjectService:
             results=snapshot.result_rows,
             traces=snapshot.trace_rows,
             engine_version="workspace_snapshot",
-            applicability=_applicability_map(snapshot),
+            applicability=build_applicability_map(snapshot),
             conn=conn,
         )
         # Phase D1: explicit version supersedes any in-flight draft.

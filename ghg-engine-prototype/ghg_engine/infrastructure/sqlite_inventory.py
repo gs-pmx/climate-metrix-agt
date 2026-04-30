@@ -6,45 +6,20 @@ from pathlib import Path
 from typing import Any
 
 from ghg_engine.models import ProjectSnapshot, ResultRecord, TraceRecord
+from ghg_engine.services.applicability import (
+    build_applicability_map,
+    is_applicable,
+)
 
 from .sqlite_common import connect_sqlite, utc_now_iso
 
-
-def _applicability_map(snapshot: ProjectSnapshot) -> dict[str, frozenset[str] | None]:
-    """Build ``{facility_id: allowed activity_type_ids | None}`` for the snapshot.
-
-    ``None`` means "show all" — the legacy/empty-list case. A ``frozenset``
-    means "only these ``activity_type_id`` values are applicable". Reporting
-    units that aren't present in the snapshot don't appear in the map and
-    are treated permissively (``None``) for safety.
-    """
-
-    result: dict[str, frozenset[str] | None] = {}
-    for unit in snapshot.reporting_units:
-        allowed = tuple(unit.applicable_activity_types or ())
-        if not allowed:
-            result[unit.id] = None
-        else:
-            result[unit.id] = frozenset(allowed)
-    return result
-
-
-def _is_applicable(
-    applicability: dict[str, frozenset[str] | None],
-    facility_id: str,
-    activity_type_id: str,
-) -> bool:
-    """Return ``True`` if ``(facility_id, activity_type_id)`` is applicable.
-
-    Unknown reporting units and units with an empty ``applicable_activity_types``
-    are treated permissively — this matches the "legacy = show all" rule from
-    the Phase C2 alignment doc.
-    """
-
-    allowed = applicability.get(facility_id)
-    if allowed is None:
-        return True
-    return activity_type_id in allowed
+# PR B — applicability helpers moved to ``ghg_engine.services.applicability``
+# so the API calc routes can share them. ``_applicability_map`` and
+# ``_is_applicable`` remain as thin aliases for any in-tree caller that
+# imports them by their historical names; new code should import from the
+# service directly.
+_applicability_map = build_applicability_map
+_is_applicable = is_applicable
 
 
 class SQLiteInventoryStore:

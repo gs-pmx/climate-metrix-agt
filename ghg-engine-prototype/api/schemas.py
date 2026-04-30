@@ -44,6 +44,14 @@ class CalculationRequest(BaseModel):
     context: CalculationContext
     activities: list[ActivityRecord]
     project_id: str | None = None
+    # PR B — backend-enforced reporting-unit applicability. Each map
+    # entry is a Reporting Unit id mapped to its checklist of allowed
+    # ``activity_type_id`` values; ``None`` or ``[]`` for an entry means
+    # "legacy permissive — show all" for that RU. Field omitted (``None``)
+    # triggers the backend fallback chain (latest draft → snapshot →
+    # permissive); empty dict ``{}`` is an explicit "no rules, no
+    # fallback".
+    applicability: dict[str, list[str] | None] | None = None
 
 
 class ProjectCreateRequest(BaseModel):
