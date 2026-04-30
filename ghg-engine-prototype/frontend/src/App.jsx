@@ -1245,12 +1245,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
               sx={{ color: "text.primary" }}
             >
               <ParametrixLogo height={22} />
+              {/* F2 PR 1 corrections — divider was barely visible on
+                  the gradient body. Bumped to a 2px rule using the
+                  text-secondary token so it has contrast in both
+                  modes without going loud. */}
               <Box
                 sx={{
-                  width: "1px",
+                  width: "2px",
                   alignSelf: "stretch",
-                  bgcolor: "divider",
-                  opacity: 0.7,
+                  bgcolor: "text.secondary",
+                  opacity: 0.55,
+                  borderRadius: 1,
                 }}
               />
               <ClimateMetrixWordmark height={20} />
