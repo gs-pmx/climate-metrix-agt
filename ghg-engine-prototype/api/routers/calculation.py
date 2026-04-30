@@ -63,9 +63,15 @@ def _classify_exception(exc: Exception, activity: ActivityRecord) -> tuple[str, 
     to validation_error when ambiguous and expose the original exception type
     in details for debuggability.
     """
-    # Phase E1 — spend-based plugin emits typed exceptions for the two
-    # structured failures we want the frontend to surface inline.
-    from ghg_engine.eqms.spend_based import MissingFxRateError, UnmappedGLCodeError
+    # Phase E1 — spend-based plugin emits typed exceptions for structured
+    # failures we want the frontend to surface inline. PR A (review
+    # remediation) added ``UnsupportedSpendFactorUnitError`` for factors
+    # whose denominator is missing or non-currency.
+    from ghg_engine.eqms.spend_based import (
+        MissingFxRateError,
+        UnmappedGLCodeError,
+        UnsupportedSpendFactorUnitError,
+    )
 
     message = str(exc)
     details: dict = {"exception_type": type(exc).__name__}
@@ -78,6 +84,10 @@ def _classify_exception(exc: Exception, activity: ActivityRecord) -> tuple[str, 
         details["currency"] = exc.currency
         details["transaction_year"] = exc.year
         return "missing_fx_rate", details
+    if isinstance(exc, UnsupportedSpendFactorUnitError):
+        details["factor_id"] = exc.factor_id
+        details["unit_label"] = exc.unit_label
+        return "unsupported_spend_factor_unit", details
 
     if isinstance(exc, KeyError):
         if "unknown activity_type_id" in message:

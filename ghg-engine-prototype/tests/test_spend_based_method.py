@@ -19,6 +19,7 @@ from ghg_engine.eqms.spend_based import (
     SpendBasedMethod,
     StaticGLMappingResolver,
     UnmappedGLCodeError,
+    UnsupportedSpendFactorUnitError,
 )
 from ghg_engine.models import ActivityRecord, CalculationContext, EmissionFactorRow
 
@@ -389,3 +390,216 @@ def test_transaction_year_defaulted_then_inflation_correction_runs():
     rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
     expected = 100.0 * (292.655 / 258.811) * 2.0
     assert rows[0].value == pytest.approx(expected, rel=1e-6)
+
+
+# ---------------------------------------------------------------------------
+# PR A — factor-denominator unit-aware math
+#
+# The plugin used to assume every spend factor was kg/USD. EXIOBASE is
+# kg/EUR; running EUR-denominated factors through the old USD-only path
+# silently produced wrong numbers. The tests below cover the FX matrix
+# (USD<->USD, EUR<->EUR, USD<->EUR, GBP via USD pivot to EUR), the new
+# unsupported-denominator error, and the trace-text policy that calls
+# out the us_cpi_u proxy when the factor denominator is non-USD.
+# ---------------------------------------------------------------------------
+
+
+def _build_context_with_factors(
+    *,
+    factor_by_id: dict[str, EmissionFactorRow],
+    fx_rates: dict[tuple[str, int], float] | None = None,
+    cpi: dict[int, float] | None = None,
+    mappings: list[dict[str, Any]] | None = None,
+) -> EQMContext:
+    """``_build_context`` variant for tests that need multiple factors
+    with different denominators (e.g. one USEEIO USD factor + one EXIOBASE
+    EUR factor) routed by ``factor_id``."""
+
+    if fx_rates is None:
+        fx_rates = {
+            ("USD", 2022): 1.0,
+            ("EUR", 2022): 1.0537,
+            ("GBP", 2022): 1.2380,
+        }
+    cpi = cpi or {2022: 292.655, 2020: 258.811, 2024: 313.689}
+    mappings = mappings or [
+        {"reporting_unit_id": None, "gl_code": "G_USD", "factor_id": "useeio:541110"},
+        {"reporting_unit_id": None, "gl_code": "G_EUR", "factor_id": "exiobase:CRS_C26"},
+    ]
+
+    def fx(currency: str, year: int):
+        rate = fx_rates.get((currency.upper(), int(year)))
+        if rate is None:
+            return None
+        return {"currency": currency.upper(), "year": year, "rate_to_usd": rate, "source": "test"}
+
+    def inflation(name: str, year: int):
+        if name != "us_cpi_u":
+            return None
+        value = cpi.get(int(year))
+        if value is None:
+            return None
+        return {"index_name": name, "year": year, "index_value": value, "source": "test"}
+
+    spend_ctx = SpendBasedContext(
+        gl_resolver=StaticGLMappingResolver.from_rows(mappings),
+        factor_provider=factor_by_id.get,
+        fx_provider=fx,
+        inflation_provider=inflation,
+    )
+    return EQMContext(spend_based=spend_ctx)
+
+
+def test_eur_factor_with_eur_spend_no_fx_lookup():
+    """EUR spend × EUR-denominated factor should not hit the FX provider —
+    same-currency conversions are no-ops."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=1000.0, currency="EUR", gl_code="G_EUR", transaction_year=2022)
+    factor_by_id = {
+        "exiobase:CRS_C26": _factor(0.4, factor_id="exiobase:CRS_C26", unit="kg/EUR"),
+    }
+
+    fx_calls: list[tuple[str, int]] = []
+
+    def fx(currency: str, year: int):
+        fx_calls.append((currency, year))
+        return None  # would fail if we actually needed it
+
+    spend_ctx = SpendBasedContext(
+        gl_resolver=StaticGLMappingResolver.from_rows(
+            [{"reporting_unit_id": None, "gl_code": "G_EUR", "factor_id": "exiobase:CRS_C26"}]
+        ),
+        factor_provider=factor_by_id.get,
+        fx_provider=fx,
+        inflation_provider=lambda name, year: None,  # skip inflation
+    )
+    rows, trace = plugin.compute(
+        resolved, activity_def, factors=None, eqm_context=EQMContext(spend_based=spend_ctx)
+    )
+    # 1000 EUR * 0.4 kg/EUR = 400 kg, no FX needed
+    assert rows[0].value == pytest.approx(400.0)
+    assert fx_calls == []
+    assert any("no conversion needed" in note for note in trace.conversions)
+
+
+def test_usd_spend_with_eur_factor_divides_by_eur_rate():
+    """USD spend with an EUR-denominated factor divides by the EUR rate
+    to express the basis in EUR before applying the kg/EUR factor."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=1000.0, currency="USD", gl_code="G_EUR", transaction_year=2022)
+    factor_by_id = {
+        "exiobase:CRS_C26": _factor(0.4, factor_id="exiobase:CRS_C26", unit="kg/EUR"),
+    }
+    ctx = _build_context_with_factors(
+        factor_by_id=factor_by_id,
+        fx_rates={("USD", 2022): 1.0, ("EUR", 2022): 1.0537},
+    )
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    # 1000 USD / 1.0537 (EUR rate_to_usd) = 949.04 EUR; * 0.4 kg/EUR = 379.61 kg
+    expected = (1000.0 / 1.0537) * 0.4
+    assert rows[0].value == pytest.approx(expected, rel=1e-6)
+
+
+def test_gbp_spend_with_eur_factor_pivots_via_usd():
+    """Cross non-USD <-> non-USD goes through the USD pivot: GBP -> USD -> EUR."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=500.0, currency="GBP", gl_code="G_EUR", transaction_year=2022)
+    factor_by_id = {
+        "exiobase:CRS_C26": _factor(0.4, factor_id="exiobase:CRS_C26", unit="kg/EUR"),
+    }
+    ctx = _build_context_with_factors(
+        factor_by_id=factor_by_id,
+        fx_rates={("USD", 2022): 1.0, ("EUR", 2022): 1.0537, ("GBP", 2022): 1.2380},
+    )
+    rows, _ = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    # 500 GBP * 1.2380 = 619 USD; / 1.0537 = 587.45 EUR; * 0.4 = 234.98 kg
+    expected = (500.0 * 1.2380 / 1.0537) * 0.4
+    assert rows[0].value == pytest.approx(expected, rel=1e-6)
+
+
+def test_missing_fx_rate_for_factor_denominator_currency_raises():
+    """When the factor denominator is non-USD and its FX rate is missing,
+    we surface MissingFxRateError naming that currency (not the spend's)."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=100.0, currency="USD", gl_code="G_EUR", transaction_year=2030)
+    factor_by_id = {
+        "exiobase:CRS_C26": _factor(0.4, factor_id="exiobase:CRS_C26", unit="kg/EUR"),
+    }
+    ctx = _build_context_with_factors(
+        factor_by_id=factor_by_id,
+        fx_rates={("USD", 2030): 1.0},  # EUR for 2030 deliberately missing
+    )
+    with pytest.raises(MissingFxRateError) as excinfo:
+        plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    assert excinfo.value.currency == "EUR"
+    assert excinfo.value.year == 2030
+
+
+def test_unsupported_factor_denominator_raises_typed_error():
+    """A factor whose unit is not denominator-shaped (e.g. ``kg`` only or
+    something weird like ``kg/kg``) cannot be applied to spend-based math."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=100.0, currency="USD", gl_code="G123", transaction_year=2022)
+    bad_factor = _factor(0.4, factor_id="weird:noncurrency", unit="kg/kg")
+    ctx = _build_context_with_factors(
+        factor_by_id={"weird:noncurrency": bad_factor},
+        mappings=[{"reporting_unit_id": None, "gl_code": "G123", "factor_id": "weird:noncurrency"}],
+    )
+    with pytest.raises(UnsupportedSpendFactorUnitError) as excinfo:
+        plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    assert excinfo.value.factor_id == "weird:noncurrency"
+    assert excinfo.value.unit_label == "kg/kg"
+
+
+def test_inflation_trace_for_eur_factor_calls_out_us_cpi_proxy():
+    """When the factor denominator is non-USD, the inflation trace text
+    must label ``us_cpi_u`` as a proxy so a reader doesn't assume a
+    local index was used."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=1000.0, currency="EUR", gl_code="G_EUR", transaction_year=2020)
+    factor_by_id = {
+        "exiobase:CRS_C26": _factor(
+            0.4, factor_id="exiobase:CRS_C26", unit="kg/EUR", year=2022
+        ),
+    }
+    ctx = _build_context_with_factors(
+        factor_by_id=factor_by_id,
+        fx_rates={("EUR", 2020): 1.1422},
+        cpi={2020: 258.811, 2022: 292.655},
+    )
+    rows, trace = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    # Inflation conversion line should mention EUR (not USD) and proxy.
+    inflation_lines = [c for c in trace.conversions if "inflation" in c]
+    assert inflation_lines, f"no inflation trace line: {trace.conversions}"
+    assert "EUR 2020 basis -> EUR 2022 basis" in inflation_lines[0]
+    assert "us_cpi_u proxy" in inflation_lines[0]
+    # And the trace surfaces the factor denominator explicitly.
+    assert any("factor denominator: EUR" in note for note in trace.defaults_applied)
+
+
+def test_trace_intermediate_quantities_use_factor_basis_keys():
+    """PR A renamed the trace keys from ``usd_in_*_year`` to
+    ``factor_basis_in_*_year`` since the basis isn't always USD."""
+
+    plugin = SpendBasedMethod()
+    activity_def = _activity_def()
+    resolved = _resolved(spend=1000.0, currency="USD", gl_code="G123", transaction_year=2022)
+    ctx = _build_context(factor_value=0.5, factor_year=2022)
+    _, trace = plugin.compute(resolved, activity_def, factors=None, eqm_context=ctx)
+    assert "factor_basis_in_transaction_year" in trace.intermediate_quantities
+    assert "factor_basis_in_ef_year" in trace.intermediate_quantities
+    # Old keys are no longer emitted.
+    assert "usd_in_transaction_year" not in trace.intermediate_quantities
+    assert "usd_in_ef_year" not in trace.intermediate_quantities

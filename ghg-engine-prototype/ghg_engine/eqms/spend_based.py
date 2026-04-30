@@ -11,6 +11,7 @@ calculation envelope translates into ``unmapped_gl_code`` /
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Any, Callable, Protocol
 
@@ -20,6 +21,8 @@ from ..models import EmissionFactorRow, ResultRecord, TraceRecord
 from ..time_utils import observation_bucket
 from .base import EQMContext, EQMPlugin
 from .context import inventory_year
+
+_CURRENCY_CODE_RE = re.compile(r"^[A-Z]{3}$")
 
 
 class UnmappedGLCodeError(ValueError):
@@ -45,6 +48,27 @@ class MissingFxRateError(ValueError):
         super().__init__(message)
         self.currency = currency
         self.year = year
+
+
+class UnsupportedSpendFactorUnitError(ValueError):
+    """Raised when a spend factor's denominator is not a recognized currency.
+
+    Spend-based math is only well-defined when the factor is denominated
+    in a currency the FX rate table can resolve (USD pivot). Factors with
+    a missing or non-currency denominator (e.g. ``kg/kg`` or ``kg``) cannot
+    be applied to a spend transaction; the API surfaces this so the user
+    sees a structured error instead of a silent miscalculation.
+    """
+
+    def __init__(self, factor_id: str, unit_label: str | None) -> None:
+        message = (
+            f"unsupported_spend_factor_unit: factor '{factor_id}' has "
+            f"unit_label='{unit_label or '?'}' whose denominator is not a "
+            f"recognized 3-letter currency code (e.g. USD, EUR)"
+        )
+        super().__init__(message)
+        self.factor_id = factor_id
+        self.unit_label = unit_label
 
 
 class GLMappingResolver(Protocol):
@@ -94,6 +118,72 @@ class StaticGLMappingResolver:
             if gl_code in ru_map:
                 return ru_map[gl_code]
         return self.project_default.get(gl_code)
+
+
+def _factor_denominator(factor: EmissionFactorRow) -> str | None:
+    """Detect the currency denominator on a spend factor row.
+
+    Prefers the structured ``unit_2`` field (the SQLite store splits
+    ``unit_numerator`` / ``unit_denominator`` on ingest, so USEEIO writes
+    ``USD`` and EXIOBASE writes ``EUR`` straight into ``unit_2``). Falls
+    back to parsing the slash from ``unit_label`` and finally ``unit``
+    so legacy CSV-seeded rows still resolve.
+    Returns ``None`` when no recognized 3-letter currency code is found;
+    callers raise ``UnsupportedSpendFactorUnitError`` in that case.
+    """
+    candidates = [factor.unit_2, factor.unit_label, factor.unit]
+    for raw in candidates:
+        if not raw:
+            continue
+        token = str(raw).strip()
+        if "/" in token:
+            _, denom = token.split("/", 1)
+            token = denom.strip()
+        token = token.upper()
+        if _CURRENCY_CODE_RE.match(token):
+            return token
+    return None
+
+
+def _convert_currency(
+    *,
+    amount: float,
+    from_currency: str,
+    to_currency: str,
+    year: int,
+    fx_provider: Callable[[str, int], dict[str, Any] | None],
+) -> float:
+    """Convert ``amount`` between currencies using USD as the pivot.
+
+    The ``fx_rates`` table only records ``rate_to_usd`` per currency, so
+    cross-currency conversion always pivots: ``A -> USD -> B``. Same-
+    currency requests are no-ops (no FX lookup needed). USD on either
+    side short-circuits to a unit rate so the v1 USD-only entry path
+    keeps working without an explicit USD seed row.
+
+    Raises ``MissingFxRateError`` for the offending currency when the
+    provider returns ``None`` or a non-positive rate.
+    """
+    src = (from_currency or "").upper()
+    dst = (to_currency or "").upper()
+    if src == dst:
+        return amount
+
+    def rate_to_usd(currency: str) -> float:
+        if currency == "USD":
+            return 1.0
+        row = fx_provider(currency, year)
+        if row is None:
+            raise MissingFxRateError(currency, year)
+        rate = float(row.get("rate_to_usd") or 0.0)
+        if rate <= 0:
+            raise MissingFxRateError(currency, year)
+        return rate
+
+    usd_amount = amount if src == "USD" else amount * rate_to_usd(src)
+    if dst == "USD":
+        return usd_amount
+    return usd_amount / rate_to_usd(dst)
 
 
 @dataclass
@@ -192,27 +282,47 @@ class SpendBasedMethod(EQMPlugin):
         if factor is None:
             raise UnmappedGLCodeError(gl_code, reporting_unit_id)
 
-        if currency == "USD":
-            # Short-circuit: USD is always 1:1 against itself, so we
-            # never depend on a real row in fx_rates. This keeps the v1
-            # USD-only entry path resilient to a missing seed.
-            rate_to_usd = 1.0
-        else:
-            fx_row = spend_ctx.fx_provider(currency, transaction_year)
-            if fx_row is None:
-                raise MissingFxRateError(currency, transaction_year)
-            rate_to_usd = float(fx_row.get("rate_to_usd") or 0.0)
-            if rate_to_usd <= 0:
-                raise MissingFxRateError(currency, transaction_year)
-        usd_in_transaction_year = spend_amount * rate_to_usd
-        trace.conversions.append(
-            f"FX: {spend_amount:.4f} {currency} * {rate_to_usd:.6f} = "
-            f"{usd_in_transaction_year:.4f} USD ({transaction_year})"
-        )
+        # Detect the factor's denominator currency. Spend-based math is
+        # ``co2e = factor_basis_in_factor_year * factor.value`` where the
+        # basis must already be denominated in whatever currency the
+        # factor expects (USEEIO=USD, EXIOBASE=EUR, ...). Pre-F1.5-review
+        # the plugin assumed USD on every factor and silently gave wrong
+        # numbers for EUR-denominated factors.
+        factor_denom = _factor_denominator(factor)
+        if factor_denom is None:
+            raise UnsupportedSpendFactorUnitError(
+                factor_id=factor.factor_id or factor_id,
+                unit_label=factor.unit_label or factor.unit,
+            )
 
+        # Spend currency -> factor denominator (USD-pivot). Same-currency
+        # is a no-op; non-USD <-> USD uses one FX row; non-USD <-> non-USD
+        # chains via USD.
+        factor_basis_in_transaction_year = _convert_currency(
+            amount=spend_amount,
+            from_currency=currency,
+            to_currency=factor_denom,
+            year=transaction_year,
+            fx_provider=spend_ctx.fx_provider,
+        )
+        if currency == factor_denom:
+            trace.conversions.append(
+                f"FX: no conversion needed ({spend_amount:.4f} {currency} = "
+                f"{factor_basis_in_transaction_year:.4f} {factor_denom}, {transaction_year})"
+            )
+        else:
+            trace.conversions.append(
+                f"FX: {spend_amount:.4f} {currency} -> "
+                f"{factor_basis_in_transaction_year:.4f} {factor_denom} "
+                f"({transaction_year}, USD pivot)"
+            )
+
+        # Inflation correction. Project policy is ``us_cpi_u`` for every
+        # denominator until per-currency local indices are wired up, so
+        # we apply the US CPI ratio to the factor-denominator basis even
+        # for non-USD factors and label the trace as a proxy.
         ef_year = self._factor_reference_year(factor)
-        usd_in_ef_year = usd_in_transaction_year
-        inflation_note = ""
+        factor_basis_in_ef_year = factor_basis_in_transaction_year
         if ef_year is not None and ef_year != transaction_year:
             txn_idx = spend_ctx.inflation_provider(
                 spend_ctx.inflation_index_name, transaction_year
@@ -222,10 +332,16 @@ class SpendBasedMethod(EQMPlugin):
                 txn_value = float(txn_idx.get("index_value") or 0.0)
                 ef_value = float(ef_idx.get("index_value") or 0.0)
                 if txn_value > 0:
-                    usd_in_ef_year = usd_in_transaction_year * (ef_value / txn_value)
-                    inflation_note = (
-                        f"inflation: USD {transaction_year} -> USD {ef_year} "
-                        f"via {spend_ctx.inflation_index_name} "
+                    factor_basis_in_ef_year = (
+                        factor_basis_in_transaction_year * (ef_value / txn_value)
+                    )
+                    proxy_suffix = (
+                        " proxy" if factor_denom != "USD" else ""
+                    )
+                    trace.conversions.append(
+                        f"inflation: {factor_denom} {transaction_year} basis -> "
+                        f"{factor_denom} {ef_year} basis via "
+                        f"{spend_ctx.inflation_index_name}{proxy_suffix} "
                         f"({ef_value:.3f}/{txn_value:.3f})"
                     )
             else:
@@ -233,14 +349,15 @@ class SpendBasedMethod(EQMPlugin):
                     f"inflation index missing for {transaction_year} or {ef_year}"
                     f"; emissions reported without inflation correction"
                 )
-        if inflation_note:
-            trace.conversions.append(inflation_note)
 
-        co2e_kg = usd_in_ef_year * float(factor.value)
+        co2e_kg = factor_basis_in_ef_year * float(factor.value)
         trace.factor_matches.append(factor.factor_id or factor_id)
+        trace.defaults_applied.append(f"factor denominator: {factor_denom}")
         trace.intermediate_quantities["spend_local"] = spend_amount
-        trace.intermediate_quantities["usd_in_transaction_year"] = usd_in_transaction_year
-        trace.intermediate_quantities["usd_in_ef_year"] = usd_in_ef_year
+        trace.intermediate_quantities["factor_basis_in_transaction_year"] = (
+            factor_basis_in_transaction_year
+        )
+        trace.intermediate_quantities["factor_basis_in_ef_year"] = factor_basis_in_ef_year
         trace.intermediate_quantities["factor_value"] = float(factor.value)
 
         result = ResultRecord(
@@ -294,4 +411,5 @@ __all__ = [
     "StaticGLMappingResolver",
     "UnmappedGLCodeError",
     "MissingFxRateError",
+    "UnsupportedSpendFactorUnitError",
 ]
