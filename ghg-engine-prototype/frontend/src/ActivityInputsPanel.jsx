@@ -2,11 +2,8 @@ import * as React from "react";
 import {
   Alert,
   Button,
-  MenuItem,
   Paper,
-  Select,
   Stack,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Typography,
@@ -42,12 +39,6 @@ export default function ActivityInputsPanel({
   activityTypesById,
   activityLabelById = {},
   facilityOptions,
-  inventoryYear,
-  setInventoryYear,
-  gwpSet,
-  setGwpSet,
-  includeTrace,
-  setIncludeTrace,
   runCalculation,
   calculating,
   saveCurrentVersion,
@@ -347,33 +338,14 @@ export default function ActivityInputsPanel({
         Notifications panel so the data-entry surface stops being
         crowded by persistent advisories. The same data still reaches
         the user; it's just one click away instead of always-visible.
-      */}
-      <Paper sx={{ p: 2 }}>
-        <Stack direction={{ xs: "column", md: "row" }} spacing={1} alignItems="center">
-          <TextField
-            label="Inventory Year"
-            value={inventoryYear}
-            onChange={(event) => setInventoryYear(event.target.value)}
-            sx={{ width: 150 }}
-          />
-          <Select value={gwpSet} onChange={(event) => setGwpSet(event.target.value)} sx={{ width: 150 }}>
-            <MenuItem value="AR6">AR6</MenuItem>
-            <MenuItem value="AR5">AR5</MenuItem>
-          </Select>
-          <Select
-            value={String(includeTrace)}
-            onChange={(event) => setIncludeTrace(event.target.value === "true")}
-            sx={{ width: 170 }}
-          >
-            <MenuItem value="true">Include Trace</MenuItem>
-            <MenuItem value="false">No Trace</MenuItem>
-          </Select>
-          <Typography variant="body2" color="text.secondary">
-            Reporting Unit geo context still drives geography-sensitive factor selection.
-          </Typography>
-        </Stack>
-      </Paper>
 
+        Phase F1.4 — the Inventory Year / GWP / Include Trace inputs
+        moved out of this panel. They now surface read-only in the
+        non-sticky project header sub-line and edit through the
+        EditProjectSetupDialog opened from the top bar. Reporting Unit
+        geo context still drives geography-sensitive factor selection
+        (handled per-RU in the Reporting Units tab).
+      */}
       {reportingUnits.length === 0 ? (
         <Alert severity="info">
           Add at least one named Reporting Unit in the Reporting Units tab before entering activity data.
