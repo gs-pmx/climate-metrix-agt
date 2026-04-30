@@ -192,12 +192,12 @@ function ReportingUnitCard({
     }),
     [activities, activityCatalog, reportingUnit],
   );
-  // Phase D2: surface missing/orphaned counts pulled from the same
-  // project-level coverage helper that drives the Activity Inputs
-  // banner and Dashboard widget. Legacy permissive units (empty
-  // applicable list) get no missing/orphaned chips — there's no
-  // expected set to audit against.
-  const missingCount = unitCoverage && !unitCoverage.legacyPermissive ? unitCoverage.missing : 0;
+  // Phase D2: orphaned count comes from the same project-level coverage
+  // helper that drives the Activity Inputs banner and Dashboard widget.
+  // Legacy permissive units (empty applicable list) get no orphaned
+  // count — there's no expected set to audit against. ``missing`` is
+  // implicit in the ``X/Y complete`` fraction so it's not surfaced
+  // separately on the card after F1.3.
   const orphanedCount = unitCoverage && !unitCoverage.legacyPermissive ? unitCoverage.orphaned : 0;
   const needsOnboarding = isNewlyCreated && (reportingUnit.applicable_activity_types || []).length === 0;
   const displayName = reportingUnit.facility_name?.trim() || "Untitled Reporting Unit";
@@ -221,37 +221,34 @@ function ReportingUnitCard({
           {reportingUnit.egrid_subregion ? <Chip label={reportingUnit.egrid_subregion} size="small" variant="outlined" /> : null}
         </Stack>
 
-        <Stack direction="row" spacing={0.75} alignItems="center" flexWrap="wrap">
-          <Chip
-            size="small"
-            variant="outlined"
-            label={progress.legacyPermissive ? "All sources (legacy)" : `${progress.selected} selected`}
-          />
-          <Chip size="small" variant="outlined" label={`${progress.withData} with data`} />
-          <Chip size="small" variant="outlined" label={`${progress.complete} complete`} />
-          {missingCount > 0 ? (
-            <Tooltip title="Sources selected on this unit that have no draft data yet.">
-              <Chip
-                size="small"
-                color="warning"
-                variant="filled"
-                label={`${missingCount} missing`}
-                data-testid={`ru-chip-missing-${reportingUnit.id}`}
-              />
-            </Tooltip>
-          ) : null}
-          {orphanedCount > 0 ? (
-            <Tooltip title="Activities with data on this unit that are not in its applicable list. Won't flow to inventory.">
-              <Chip
-                size="small"
-                color="default"
-                variant="outlined"
-                label={`${orphanedCount} orphaned`}
-                data-testid={`ru-chip-orphaned-${reportingUnit.id}`}
-              />
-            </Tooltip>
-          ) : null}
-        </Stack>
+        {(progress.selected > 0 || progress.legacyPermissive) ? (
+          <Typography
+            variant="body2"
+            color="text.secondary"
+            sx={{ flexShrink: 0 }}
+            data-testid={`ru-summary-${reportingUnit.id}`}
+          >
+            {progress.legacyPermissive
+              ? "All sources (legacy)"
+              : `${progress.selected} sources`}
+            {progress.legacyPermissive
+              ? null
+              : ` · ${progress.complete}/${progress.selected} complete`}
+            {orphanedCount > 0 ? (
+              <>
+                {" · "}
+                <Tooltip title="Activities with data on this unit that are not in its applicable list. Won't flow to inventory.">
+                  <Box
+                    component="span"
+                    data-testid={`ru-chip-orphaned-${reportingUnit.id}`}
+                  >
+                    {orphanedCount} orphaned
+                  </Box>
+                </Tooltip>
+              </>
+            ) : null}
+          </Typography>
+        ) : null}
 
         <Tooltip title={needsOnboarding ? "Configure sources to begin" : "Configure which activity types apply to this Reporting Unit."}>
           <Button
