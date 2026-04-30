@@ -6,7 +6,6 @@ import "./index.css";
 import {
   brand,
   radius,
-  shadows,
   surfaces,
   text,
   transitions,
@@ -63,8 +62,10 @@ function buildTheme(mode) {
     text: isDark ? text.dark : text.light,
     divider: isDark ? surfaces.dark.divider : surfaces.light.divider,
   };
-  const modeShadows = isDark ? shadows.dark : shadows.light;
-  const modeSurfaces = isDark ? surfaces.dark : surfaces.light;
+  // F2 PR 1 corrections — ``modeShadows`` / ``modeSurfaces`` were used
+  // by the original PR 1 flat-Paper treatment. With the revert to the
+  // pre-F2 shadow/border/blur values they're no longer referenced;
+  // tokens.js still exports them so a future design pass can re-engage.
 
   return createTheme({
     palette,
@@ -102,12 +103,16 @@ function buildTheme(mode) {
           },
           body: {
             minHeight: "100vh",
-            // F2: solid surface color. The pre-F2 radial gradients
-            // washed every panel in a soft tint and conflicted with
-            // the locked "no decorative color" direction. Solid
-            // background lets data-bearing surfaces sit at full
-            // contrast.
-            background: palette.background.default,
+            // F2 PR 1 originally swapped the radial-gradient
+            // background for a solid surface color. Stephen's
+            // feedback after the smoke test: the solid background
+            // was a step in the wrong direction. Reverting to the
+            // pre-F2 gradient treatment — soft blue/green washes
+            // that give the surface character without competing
+            // with data-bearing panels above.
+            background: isDark
+              ? "radial-gradient(1200px 420px at -8% -10%, rgba(78,159,207,0.2), transparent 60%), radial-gradient(800px 320px at 105% -15%, rgba(132,178,109,0.18), transparent 55%), linear-gradient(180deg, #1f2831 0%, #161d24 100%)"
+              : "radial-gradient(1200px 420px at -8% -10%, rgba(179,210,218,0.85), transparent 60%), radial-gradient(900px 320px at 105% -15%, rgba(191,214,158,0.6), transparent 55%), linear-gradient(180deg, #f1f3f4 0%, #ffffff 100%)",
           },
           ".sticky-top-shell": {
             position: "sticky",
@@ -117,25 +122,26 @@ function buildTheme(mode) {
         },
       },
       MuiPaper: {
-        defaultProps: {
-          // Raised by default with a single, restrained shadow. Variant
-          // "outlined" continues to render border-only (no shadow).
-          elevation: 0,
-        },
+        // F2 PR 1 originally tried to flatten the Paper treatment
+        // (no shadow in dark, light shadow in light, neutral border,
+        // no backdrop blur) per the locked design direction's
+        // "calm chrome / vibrant data viz" split. Stephen's feedback
+        // after the smoke test: the pre-F2 treatment was easier to
+        // interpret. Reverting to the prior values — primary-tinted
+        // border, deep boxShadow, 1px backdrop blur.
         styleOverrides: {
-          root: {
-            border: `1px solid ${modeSurfaces.border}`,
-            boxShadow: modeShadows.none,
-            backgroundImage: "none",
-          },
-          // ``elevation`` >= 1 gets the restrained raised shadow. The
-          // numeric variant index isn't a meaningful design dial in our
-          // app — anything from 1-24 collapses to "raised" visually.
-          elevation1: { boxShadow: modeShadows.raised },
-          elevation2: { boxShadow: modeShadows.raised },
-          elevation3: { boxShadow: modeShadows.raised },
-          elevation4: { boxShadow: modeShadows.raised },
-          elevation5: { boxShadow: modeShadows.raised },
+          root: ({ theme }) => ({
+            border: `1px solid ${
+              theme.palette.mode === "dark"
+                ? "rgba(121,186,224,0.2)"
+                : "rgba(0,78,130,0.12)"
+            }`,
+            boxShadow:
+              theme.palette.mode === "dark"
+                ? "0 10px 28px rgba(8, 14, 20, 0.45)"
+                : "0 10px 30px rgba(0, 48, 86, 0.08)",
+            backdropFilter: "blur(1px)",
+          }),
         },
       },
       MuiAccordion: {
@@ -162,9 +168,6 @@ function buildTheme(mode) {
       },
       MuiDialog: {
         defaultProps: { transitionDuration: { enter: 100, exit: 90 } },
-        styleOverrides: {
-          paper: { boxShadow: modeShadows.overlay },
-        },
       },
       MuiDataGrid: {
         styleOverrides: {

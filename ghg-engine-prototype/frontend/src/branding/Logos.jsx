@@ -11,20 +11,25 @@
 export const BRAND_RED = "#d92626";
 
 export function ParametrixLogo({ height = 22, title = "Parametrix" }) {
+  // F2 PR 1 originally placed a small brand-red square at the top
+  // right — meant to mirror the PDF brand mark's accent dot. After
+  // the live smoke test it read as a stray dot rather than a
+  // recognizable brand element. Removed; the wordmark stands alone
+  // and the viewBox tightens to drop the empty space the square left
+  // behind.
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      viewBox="0 0 220 36"
+      viewBox="0 0 200 32"
       role="img"
       aria-label={title}
       height={height}
       style={{ display: "block" }}
     >
       <title>{title}</title>
-      <rect x="186" y="0" width="9" height="9" fill={BRAND_RED} />
       <text
         x="0"
-        y="30"
+        y="26"
         fontFamily="Assistant, system-ui, sans-serif"
         fontSize="28"
         fontWeight="800"
