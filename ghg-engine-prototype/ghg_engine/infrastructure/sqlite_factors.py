@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import date, datetime
 from hashlib import sha1
 from pathlib import Path
@@ -11,6 +12,11 @@ from uuid import uuid4
 from ghg_engine.domain import CanonicalFactorRecord
 from ghg_engine.factors import FactorQuery, FactorRepository
 from ghg_engine.models import EmissionFactorRow
+from ghg_engine.perf_profile import (
+    current_factor_cache,
+    record_connection_open,
+    time_query,
+)
 from ghg_engine.services import FactorSelectionService
 
 from .sqlite_common import connect_sqlite, utc_now_iso
@@ -120,9 +126,28 @@ class SQLiteFactorRepository:
         self._db_path = db_path
         self._dataset_key = dataset_key
         self._selector = FactorSelectionService()
+        # Per-thread connection cache. The repository is built once via
+        # ``lru_cache`` in ``api.dependencies`` and shared across the
+        # FastAPI threadpool, so each worker thread gets its own SQLite
+        # handle and reuses it across calls. Reads-only paths run without
+        # explicit transactions; the write paths below still open their
+        # own connection via ``connect_sqlite``.
+        self._tls = threading.local()
 
-    def _connect(self) -> sqlite3.Connection:
-        return connect_sqlite(self._db_path)
+    def _get_conn(self) -> sqlite3.Connection:
+        conn = getattr(self._tls, "conn", None)
+        if conn is None:
+            conn = connect_sqlite(self._db_path)
+            # Read-side tuning, applied once per connection. ``WAL`` is a
+            # database-wide setting also enabled at boot in
+            # ``api.dependencies``; setting it here is a no-op when
+            # already active. The other pragmas are per-connection.
+            conn.execute("PRAGMA synchronous = NORMAL")
+            conn.execute("PRAGMA cache_size = -20000")
+            conn.execute("PRAGMA temp_store = MEMORY")
+            self._tls.conn = conn
+            record_connection_open()
+        return conn
 
     def _dataset(self, conn: sqlite3.Connection) -> sqlite3.Row | None:
         if self._dataset_key is not None:
@@ -222,7 +247,8 @@ class SQLiteFactorRepository:
         )
 
     def candidates(self, q: FactorQuery) -> list[EmissionFactorRow]:
-        with self._connect() as conn:
+        with time_query("candidates"):
+            conn = self._get_conn()
             records = self._coarse_records(conn, q)
         return [
             FactorRepository._model_from_canonical(record)
@@ -235,7 +261,8 @@ class SQLiteFactorRepository:
         *,
         trace: list[str] | None = None,
     ) -> EmissionFactorRow | None:
-        with self._connect() as conn:
+        with time_query("select_best"):
+            conn = self._get_conn()
             records = self._coarse_records(conn, q)
         chosen = self._selector.select_best(
             records,
@@ -252,7 +279,17 @@ class SQLiteFactorRepository:
         return self.select_best(q)
 
     def get_by_factor_id(self, factor_id: str) -> EmissionFactorRow | None:
-        with self._connect() as conn:
+        # Request-scoped cache collapses repeat lookups (e.g. the audit
+        # endpoint asks for the same factor_id once per gas per
+        # accounting_method per activity). The cache only exists inside
+        # a ``request_scope`` context — outside one, every call still
+        # hits SQLite.
+        cache = current_factor_cache()
+        cache_key = f"by_factor_id:{factor_id}"
+        if cache is not None and cache_key in cache:
+            return cache[cache_key]
+        with time_query("get_by_factor_id"):
+            conn = self._get_conn()
             row = conn.execute(
                 """
                 SELECT *
@@ -263,16 +300,22 @@ class SQLiteFactorRepository:
                 """,
                 (factor_id, factor_id),
             ).fetchone()
-        if row is None:
-            return None
-        return FactorRepository._model_from_canonical(self._record_from_row(row))
+        result = (
+            FactorRepository._model_from_canonical(self._record_from_row(row))
+            if row is not None
+            else None
+        )
+        if cache is not None:
+            cache[cache_key] = result
+        return result
 
     def preview(self, query_text: str | None = None) -> list[dict[str, str]]:
         # Same fix as ``_coarse_records``: scope to all published
         # physical-factor datasets rather than the single most-recent
         # one. The preview endpoint feeds the admin browse view; spend
         # factors have their own ``/catalog/spend-factors`` route.
-        with self._connect() as conn:
+        with time_query("preview"):
+            conn = self._get_conn()
             params: list[Any] = []
             sql = """
                 SELECT fv.source_record_key, fv.emission_category, fv.factor_type,
@@ -320,7 +363,8 @@ class SQLiteFactorRepository:
         # factor warehouse loaded a non-zero set; scoping it to the
         # most-recently-published dataset wrongly reported "0 physical
         # factors" once the spend datasets started being published.
-        with self._connect() as conn:
+        with time_query("count"):
+            conn = self._get_conn()
             params: tuple[Any, ...] = ()
             sql = """
                 SELECT COUNT(*) AS c

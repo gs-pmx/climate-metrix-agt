@@ -16,3 +16,7 @@ frontend/dist/
 ghg_prototype.egg-info/
 pytest-of-GreenSte/
 tmp_factor_debug.sqlite
+.benchmark.sqlite
+.benchmark.sqlite-journal
+.benchmark.sqlite-wal
+.benchmark.sqlite-shm

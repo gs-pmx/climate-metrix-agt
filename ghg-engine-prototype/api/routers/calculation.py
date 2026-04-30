@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import time
 from collections import defaultdict
 from typing import Callable
 
@@ -22,9 +24,11 @@ from ghg_engine.eqms.base import EQMContext
 from ghg_engine.eqms.spend_based import SpendBasedContext, StaticGLMappingResolver
 from ghg_engine.factors import FactorRepository
 from ghg_engine.models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
+from ghg_engine.perf_profile import format_profile_summary, request_profile
 from project_store import ProjectStore
 
 router = APIRouter()
+log = logging.getLogger(__name__)
 
 
 def _build_spend_eqm_context_builder(
@@ -167,33 +171,46 @@ def calculate(
     traces: list[TraceRecord] = []
     errors: list[ActivityCalculationErrorDTO] = []
 
-    eqm_context_builder = _build_spend_eqm_context_builder(
-        payload.project_id, store, factors
-    )
+    started = time.perf_counter()
+    with request_profile() as profile:
+        eqm_context_builder = _build_spend_eqm_context_builder(
+            payload.project_id, store, factors
+        )
 
-    for index, activity in enumerate(payload.activities):
-        try:
-            rows, trace = engine.calculate_one(
-                activity, payload.context, eqm_context_builder=eqm_context_builder
+        for index, activity in enumerate(payload.activities):
+            try:
+                rows, trace = engine.calculate_one(
+                    activity, payload.context, eqm_context_builder=eqm_context_builder
+                )
+            except Exception as exc:  # noqa: BLE001 - we classify and surface
+                errors.append(_build_activity_error(index, activity, None, exc))
+                continue
+            results.extend(rows)
+            traces.append(trace)
+
+        summary: dict[str, float] = defaultdict(float)
+        for row in results:
+            summary[_summary_key(row)] = float(
+                summary.get(_summary_key(row), 0.0) + row.value
             )
-        except Exception as exc:  # noqa: BLE001 - we classify and surface
-            errors.append(_build_activity_error(index, activity, None, exc))
-            continue
-        results.extend(rows)
-        traces.append(trace)
 
-    summary: dict[str, float] = defaultdict(float)
-    for row in results:
-        summary[_summary_key(row)] = float(summary.get(_summary_key(row), 0.0) + row.value)
-
-    partial_success = bool(errors) and bool(results)
-    response = calculation_response_to_dto(
-        results=results,
-        summary=dict(summary),
-        trace=traces if payload.context.include_trace else None,
-        errors=errors,
-        partial_success=partial_success,
-    )
+        partial_success = bool(errors) and bool(results)
+        response = calculation_response_to_dto(
+            results=results,
+            summary=dict(summary),
+            trace=traces if payload.context.include_trace else None,
+            errors=errors,
+            partial_success=partial_success,
+        )
+        elapsed = time.perf_counter() - started
+        log.info(
+            "calc.request endpoint=/calculate total=%.3fs activities=%d project_id=%s",
+            elapsed,
+            len(payload.activities),
+            payload.project_id,
+        )
+        if profile is not None:
+            log.info("calc.profile endpoint=/calculate %s", format_profile_summary(profile))
 
     if errors and not results:
         return _total_failure_response(response.model_dump(mode="json"))
@@ -213,41 +230,55 @@ def calculate_with_audit(
     errors: list[ActivityCalculationErrorDTO] = []
     summary: dict[str, float] = defaultdict(float)
 
-    eqm_context_builder = _build_spend_eqm_context_builder(
-        payload.project_id, store, factors
-    )
+    started = time.perf_counter()
+    with request_profile() as profile:
+        eqm_context_builder = _build_spend_eqm_context_builder(
+            payload.project_id, store, factors
+        )
 
-    for index, activity in enumerate(payload.activities):
-        try:
-            rows, trace = engine.calculate_one(
-                activity, payload.context, eqm_context_builder=eqm_context_builder
+        for index, activity in enumerate(payload.activities):
+            try:
+                rows, trace = engine.calculate_one(
+                    activity, payload.context, eqm_context_builder=eqm_context_builder
+                )
+                activity_def = engine.activity_catalog.get_required(activity.activity_type_id)
+                activity_audit_rows = [
+                    AuditRecord(**r)
+                    for r in build_audit_rows(activity, activity_def, rows, trace, factors)
+                ]
+            except Exception as exc:  # noqa: BLE001
+                errors.append(_build_activity_error(index, activity, None, exc))
+                continue
+
+            all_rows.extend(rows)
+            traces.append(trace)
+            audit_rows.extend(activity_audit_rows)
+            for row in rows:
+                summary[_summary_key(row)] = float(
+                    summary.get(_summary_key(row), 0.0) + row.value
+                )
+
+        partial_success = bool(errors) and bool(all_rows)
+        response = calculation_audit_response_to_dto(
+            results=all_rows,
+            summary=dict(summary),
+            trace=traces if payload.context.include_trace else None,
+            audit_rows=audit_rows,
+            errors=errors,
+            partial_success=partial_success,
+        )
+        elapsed = time.perf_counter() - started
+        log.info(
+            "calc.request endpoint=/calculate/audit total=%.3fs activities=%d project_id=%s",
+            elapsed,
+            len(payload.activities),
+            payload.project_id,
+        )
+        if profile is not None:
+            log.info(
+                "calc.profile endpoint=/calculate/audit %s",
+                format_profile_summary(profile),
             )
-            activity_def = engine.activity_catalog.get_required(activity.activity_type_id)
-            activity_audit_rows = [
-                AuditRecord(**r)
-                for r in build_audit_rows(activity, activity_def, rows, trace, factors)
-            ]
-        except Exception as exc:  # noqa: BLE001
-            errors.append(_build_activity_error(index, activity, None, exc))
-            continue
-
-        all_rows.extend(rows)
-        traces.append(trace)
-        audit_rows.extend(activity_audit_rows)
-        for row in rows:
-            summary[_summary_key(row)] = float(
-                summary.get(_summary_key(row), 0.0) + row.value
-            )
-
-    partial_success = bool(errors) and bool(all_rows)
-    response = calculation_audit_response_to_dto(
-        results=all_rows,
-        summary=dict(summary),
-        trace=traces if payload.context.include_trace else None,
-        audit_rows=audit_rows,
-        errors=errors,
-        partial_success=partial_success,
-    )
 
     if errors and not all_rows:
         return _total_failure_response(response.model_dump(mode="json"))

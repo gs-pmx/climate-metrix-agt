@@ -49,5 +49,18 @@ class EQMPlugin(ABC):
         pass
 
 
+_default_ureg = None
+
+
 def default_ureg():
-    return build_unit_registry()
+    # Pint's ``UnitRegistry`` parses the bundled definitions file on
+    # every construction (~hundreds of ms) and re-defining custom units
+    # like ``short_ton`` / ``therm`` emits a redefinition warning each
+    # time. The registry is read-only after construction in our use, so
+    # we share one instance across the process. This is the dominant
+    # cost in the calc loop pre-F1.5: 30 activities × one rebuild each
+    # was ~12s of every Run Calc.
+    global _default_ureg
+    if _default_ureg is None:
+        _default_ureg = build_unit_registry()
+    return _default_ureg
