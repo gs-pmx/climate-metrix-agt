@@ -44,6 +44,7 @@ import { flushActiveEdit } from "./flushActiveEdit";
 import AutosaveStatusChip from "./AutosaveStatusChip";
 import Sidebar from "./Sidebar";
 import NotificationsPanel from "./NotificationsPanel";
+import EditProjectSetupDialog from "./EditProjectSetupDialog";
 import { buildNotifications } from "./notices";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
@@ -250,6 +251,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [inventoryYear, setInventoryYear] = React.useState(String(new Date().getFullYear()));
   const [gwpSet, setGwpSet] = React.useState("AR6");
   const [includeTrace, setIncludeTrace] = React.useState(true);
+  // Phase F1.4 — these three settings are read-only inside the project
+  // view by default; the only edit affordance is the EditProjectSetupDialog
+  // opened from the non-sticky header. The dialog is the explicit
+  // confirmation for an action that invalidates saved calc results.
+  const [editProjectSetupOpen, setEditProjectSetupOpen] = React.useState(false);
   const [calculating, setCalculating] = React.useState(false);
   const [resultRows, setResultRows] = React.useState([]);
   const [summaryRows, setSummaryRows] = React.useState([]);
@@ -1156,6 +1162,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         activityTypesById={activityTypesById}
         activityLabelById={activityLabelById}
       />
+      <EditProjectSetupDialog
+        open={editProjectSetupOpen}
+        onClose={() => setEditProjectSetupOpen(false)}
+        inventoryYear={inventoryYear}
+        gwpSet={gwpSet}
+        includeTrace={includeTrace}
+        onSave={({ inventory_year, gwp_set, include_trace }) => {
+          setInventoryYear(String(inventory_year));
+          setGwpSet(gwp_set);
+          setIncludeTrace(include_trace);
+          setEditProjectSetupOpen(false);
+        }}
+      />
       <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 }, flexGrow: 1 }}>
       {/*
         Post-C4 polish item 1: split the former single sticky shell into
@@ -1198,12 +1217,36 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
           <Box>
             <Typography variant="h4">GHG Calculation Workspace</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Project-based data entry with immutable version snapshots.
-            </Typography>
+            {/* Phase F1.4 — when a project is active the subtitle becomes
+                a read-only metadata strip (year · GWP · trace). The
+                static product description still anchors the
+                no-active-project state. */}
+            {activeProject ? (
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                data-testid="project-setup-summary"
+              >
+                {`${inventoryYear} inventory · GWP ${gwpSet} · Trace ${includeTrace ? "on" : "off"}`}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Project-based data entry with immutable version snapshots.
+              </Typography>
+            )}
           </Box>
           <Stack direction="row" spacing={1} alignItems="center">
             {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
+            {activeProject ? (
+              <Button
+                variant="outlined"
+                size="small"
+                onClick={() => setEditProjectSetupOpen(true)}
+                data-testid="edit-project-setup-button"
+              >
+                Edit Project Setup
+              </Button>
+            ) : null}
             <Button variant="outlined" onClick={onToggleColorMode}>
               {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
             </Button>
@@ -1494,12 +1537,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             activityTypesById={activityTypesById}
             activityLabelById={activityLabelById}
             facilityOptions={facilityOptions}
-            inventoryYear={inventoryYear}
-            setInventoryYear={setInventoryYear}
-            gwpSet={gwpSet}
-            setGwpSet={setGwpSet}
-            includeTrace={includeTrace}
-            setIncludeTrace={setIncludeTrace}
             runCalculation={runCalculation}
             calculating={calculating}
             saveCurrentVersion={saveCurrentVersion}
