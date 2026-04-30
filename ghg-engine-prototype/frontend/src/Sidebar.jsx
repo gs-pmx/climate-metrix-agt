@@ -11,7 +11,8 @@ import {
 import FolderOutlinedIcon from "@mui/icons-material/FolderOutlined";
 import LibraryBooksOutlinedIcon from "@mui/icons-material/LibraryBooksOutlined";
 import NotificationsNoneOutlinedIcon from "@mui/icons-material/NotificationsNoneOutlined";
-import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
+import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 
 // Phase F1 — vertical-rail sidebar.
 //
@@ -138,12 +139,17 @@ export default function Sidebar({
             aria-label={expanded ? "collapse navigation" : "expand navigation"}
             sx={{
               alignSelf: expanded ? "flex-end" : "center",
-              transform: expanded ? "rotate(0deg)" : "rotate(180deg)",
-              transition: "transform 160ms ease",
               p: 0.5,
             }}
           >
-            <KeyboardArrowLeftIcon fontSize="small" />
+            {/* F2 — explicit double-arrow glyph in the direction the
+                rail will move. Pre-F2 used a single-chevron rotated
+                180° which read as "back" rather than "expand". */}
+            {expanded ? (
+              <KeyboardDoubleArrowLeftIcon fontSize="small" />
+            ) : (
+              <KeyboardDoubleArrowRightIcon fontSize="small" />
+            )}
           </IconButton>
         </Tooltip>
       </Stack>
