@@ -37,6 +37,12 @@ Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work 
 
 Read-only inspection can happen from the primary checkout. Writing, committing, testing with generated files, or opening a PR should happen from the task worktree. Check `git status` inside the worktree before staging and preserve unrelated work.
 
+When a task produces a bundle of commits, push the task branch and open a draft PR when policy and repository auth allow it. Surface the PR link in the final response through the available worktree/PR metadata so the handoff is easy to find.
+
+## Windows Tooling
+
+Do not use `rg` in the Windows sandbox for this workspace; it is consistently blocked. Use PowerShell-native commands such as `Get-ChildItem`, `Select-String`, and targeted `Get-Content` reads instead.
+
 ## Canonical Context
 
 Canonical Workshop OS files for this project:

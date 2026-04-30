@@ -56,6 +56,12 @@ Claude-managed work may use `.claude\worktrees\<task-slug>`; Codex-managed work 
 
 Use direct branches in the primary checkout only for explicitly requested recovery, maintenance, or human-directed git operations. Read-only inspection may happen from the primary checkout.
 
+When commits are bundled for handoff, push the task branch and open a draft PR when policy and repository auth allow it. Surface the PR link in the final response using the available worktree/PR metadata so the review target is visible without branch hunting.
+
+## Windows Tooling
+
+Do not use `rg` in the Windows sandbox for this workspace; it is consistently blocked. Use PowerShell-native commands such as `Get-ChildItem`, `Select-String`, and targeted `Get-Content` reads instead.
+
 ## Common Commands
 
 Run from `ghg-engine-prototype` unless noted otherwise.
