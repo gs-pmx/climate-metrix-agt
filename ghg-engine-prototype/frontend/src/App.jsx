@@ -5,6 +5,7 @@ import {
   Button,
   Chip,
   Container,
+  IconButton,
   MenuItem,
   Paper,
   Select,
@@ -19,8 +20,12 @@ import {
   TableRow,
   Tabs,
   TextField,
+  Tooltip,
   Typography,
 } from "@mui/material";
+import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
+import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
+import { ParametrixLogo, ClimateMetrixWordmark } from "./branding/Logos";
 import { api, ApiError, saveDraftViaBeacon } from "./api";
 import {
   EMPTY_ACTIVITY,
@@ -1218,29 +1223,66 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             : "opacity 70ms ease",
         }}
       >
-        <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={1.5}>
-          <Box>
-            <Typography variant="h4">GHG Calculation Workspace</Typography>
-            {/* Phase F1.4 — when a project is active the subtitle becomes
-                a read-only metadata strip (year · GWP · trace). The
-                static product description still anchors the
-                no-active-project state. */}
+        <Stack
+          direction={{ xs: "column", md: "row" }}
+          justifyContent="space-between"
+          alignItems={{ md: "flex-start" }}
+          spacing={1.5}
+        >
+          {/* Phase F2 — branded chrome. Parametrix corporate logo +
+              ClimateMetrix product wordmark sit on the left; when a
+              project is active, its name becomes the page H1
+              underneath with the metadata sub-line. The duplicate
+              project chip + product-name title that lived here pre-F2
+              are gone — the sticky top bar's scrolled-state chip is
+              the single project anchor once the user scrolls past
+              this header. */}
+          <Stack spacing={1.25} sx={{ minWidth: 0 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              alignItems="center"
+              sx={{ color: "text.primary" }}
+            >
+              <ParametrixLogo height={22} />
+              <Box
+                sx={{
+                  width: "1px",
+                  alignSelf: "stretch",
+                  bgcolor: "divider",
+                  opacity: 0.7,
+                }}
+              />
+              <ClimateMetrixWordmark height={20} />
+            </Stack>
             {activeProject ? (
+              <Box>
+                <Typography
+                  variant="h2"
+                  sx={{ mt: 0.5, color: "text.primary" }}
+                  data-testid="project-page-title"
+                >
+                  {activeProject.name}
+                </Typography>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  data-testid="project-setup-summary"
+                >
+                  {`${inventoryYear} inventory · GWP ${gwpSet} · Trace ${includeTrace ? "on" : "off"}`}
+                </Typography>
+              </Box>
+            ) : (
               <Typography
                 variant="body2"
                 color="text.secondary"
-                data-testid="project-setup-summary"
+                sx={{ mt: 0.5 }}
               >
-                {`${inventoryYear} inventory · GWP ${gwpSet} · Trace ${includeTrace ? "on" : "off"}`}
-              </Typography>
-            ) : (
-              <Typography variant="body2" color="text.secondary">
                 Project-based data entry with immutable version snapshots.
               </Typography>
             )}
-          </Box>
+          </Stack>
           <Stack direction="row" spacing={1} alignItems="center">
-            {activeProject ? <Chip color="secondary" label={`Project: ${activeProject.name}`} /> : null}
             {activeProject ? (
               <Button
                 variant="outlined"
@@ -1251,9 +1293,21 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                 Edit Project Setup
               </Button>
             ) : null}
-            <Button variant="outlined" onClick={onToggleColorMode}>
-              {colorMode === "dark" ? "Use Light Mode" : "Use Dark Mode"}
-            </Button>
+            <Tooltip
+              title={colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <IconButton
+                size="small"
+                onClick={onToggleColorMode}
+                aria-label={colorMode === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {colorMode === "dark" ? (
+                  <LightModeOutlinedIcon fontSize="small" />
+                ) : (
+                  <DarkModeOutlinedIcon fontSize="small" />
+                )}
+              </IconButton>
+            </Tooltip>
           </Stack>
         </Stack>
       </Paper>
