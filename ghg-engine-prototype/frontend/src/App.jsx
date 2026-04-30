@@ -1005,6 +1005,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           facility: fac,
           rows: facilityRows,
           activityTypesById,
+          // PR B — ship the project's applicability map so the backend
+          // can filter inapplicable rows defensively (the existing
+          // client-side filter is the UX/bandwidth pre-filter).
+          reportingUnits: facilitiesNow,
         });
         let response;
         try {

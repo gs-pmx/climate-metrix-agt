@@ -25,6 +25,11 @@ from ghg_engine.eqms.spend_based import SpendBasedContext, StaticGLMappingResolv
 from ghg_engine.factors import FactorRepository
 from ghg_engine.models import ActivityRecord, AuditRecord, ResultRecord, TraceRecord
 from ghg_engine.perf_profile import format_profile_summary, request_profile
+from ghg_engine.services.applicability import (
+    ApplicabilityMap,
+    is_applicable,
+    resolve_applicability,
+)
 from project_store import ProjectStore
 
 router = APIRouter()
@@ -151,6 +156,31 @@ def _build_activity_error(
     )
 
 
+def _filter_by_applicability(
+    activities: list[ActivityRecord],
+    applicability: ApplicabilityMap | None,
+) -> tuple[list[ActivityRecord], list[int]]:
+    """Drop inapplicable activities; preserve original payload indices.
+
+    Returns ``(filtered_activities, original_indices)`` so calculation
+    errors raised against the kept set can still be mapped back to the
+    user's payload row by ``activity_index``. ``applicability is None``
+    is the legacy permissive case — every activity is kept and indices
+    are 0..N.
+    """
+    if applicability is None:
+        return list(activities), list(range(len(activities)))
+    kept: list[ActivityRecord] = []
+    indices: list[int] = []
+    for index, activity in enumerate(activities):
+        facility_id = activity.facility_id or ""
+        activity_type_id = activity.activity_type_id or ""
+        if is_applicable(applicability, facility_id, activity_type_id):
+            kept.append(activity)
+            indices.append(index)
+    return kept, indices
+
+
 def _summary_key(row: ResultRecord) -> str:
     biogenic = "biogenic" if row.is_biogenic else "non_biogenic"
     return (
@@ -187,13 +217,28 @@ def calculate(
             payload.project_id, store, factors
         )
 
-        for index, activity in enumerate(payload.activities):
+        # PR B — resolve applicability per the fallback chain (payload →
+        # latest draft → latest snapshot → permissive) and silently drop
+        # inapplicable activities before the engine sees them. ``kept_*``
+        # stays parallel so error reporting points back at the user's
+        # original payload row index.
+        applicability = resolve_applicability(
+            payload_applicability=payload.applicability,
+            project_id=payload.project_id,
+            store=store,
+        )
+        kept_activities, original_indices = _filter_by_applicability(
+            payload.activities, applicability
+        )
+
+        for kept_index, activity in enumerate(kept_activities):
+            original_index = original_indices[kept_index]
             try:
                 rows, trace = engine.calculate_one(
                     activity, payload.context, eqm_context_builder=eqm_context_builder
                 )
             except Exception as exc:  # noqa: BLE001 - we classify and surface
-                errors.append(_build_activity_error(index, activity, None, exc))
+                errors.append(_build_activity_error(original_index, activity, None, exc))
                 continue
             results.extend(rows)
             traces.append(trace)
@@ -214,9 +259,11 @@ def calculate(
         )
         elapsed = time.perf_counter() - started
         log.info(
-            "calc.request endpoint=/calculate total=%.3fs activities=%d project_id=%s",
+            "calc.request endpoint=/calculate total=%.3fs activities=%d kept=%d "
+            "project_id=%s",
             elapsed,
             len(payload.activities),
+            len(kept_activities),
             payload.project_id,
         )
         if profile is not None:
@@ -246,7 +293,17 @@ def calculate_with_audit(
             payload.project_id, store, factors
         )
 
-        for index, activity in enumerate(payload.activities):
+        applicability = resolve_applicability(
+            payload_applicability=payload.applicability,
+            project_id=payload.project_id,
+            store=store,
+        )
+        kept_activities, original_indices = _filter_by_applicability(
+            payload.activities, applicability
+        )
+
+        for kept_index, activity in enumerate(kept_activities):
+            original_index = original_indices[kept_index]
             try:
                 rows, trace = engine.calculate_one(
                     activity, payload.context, eqm_context_builder=eqm_context_builder
@@ -257,7 +314,7 @@ def calculate_with_audit(
                     for r in build_audit_rows(activity, activity_def, rows, trace, factors)
                 ]
             except Exception as exc:  # noqa: BLE001
-                errors.append(_build_activity_error(index, activity, None, exc))
+                errors.append(_build_activity_error(original_index, activity, None, exc))
                 continue
 
             all_rows.extend(rows)
@@ -279,9 +336,11 @@ def calculate_with_audit(
         )
         elapsed = time.perf_counter() - started
         log.info(
-            "calc.request endpoint=/calculate/audit total=%.3fs activities=%d project_id=%s",
+            "calc.request endpoint=/calculate/audit total=%.3fs activities=%d "
+            "kept=%d project_id=%s",
             elapsed,
             len(payload.activities),
+            len(kept_activities),
             payload.project_id,
         )
         if profile is not None:

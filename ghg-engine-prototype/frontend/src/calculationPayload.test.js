@@ -1,7 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildCalculationPayload } from "./calculationPayload.js";
+import {
+  buildApplicabilityMap,
+  buildCalculationPayload,
+} from "./calculationPayload.js";
 
 const NATURAL_GAS = {
   activity_type_id: "scope1_natural_gas",
@@ -237,5 +240,82 @@ test("activities array is empty when rows is null/empty", () => {
     });
     assert.deepEqual(payload.activities, []);
   }
+});
+
+// ---------------------------------------------------------------------------
+// PR B — applicability map shipped to backend so /calculate can enforce
+// reporting-unit checklists defensively. Existing client-side filter
+// stays as a UX/bandwidth pre-filter.
+// ---------------------------------------------------------------------------
+
+test("buildApplicabilityMap returns undefined for empty / missing input", () => {
+  assert.equal(buildApplicabilityMap(undefined), undefined);
+  assert.equal(buildApplicabilityMap(null), undefined);
+  assert.equal(buildApplicabilityMap([]), undefined);
+});
+
+test("buildApplicabilityMap maps each RU id to its applicable list", () => {
+  const map = buildApplicabilityMap([
+    { id: "ru1", applicable_activity_types: ["scope1_natural_gas"] },
+    { id: "ru2", applicable_activity_types: ["scope2_grid", "scope3_spend_based"] },
+  ]);
+  assert.deepEqual(map, {
+    ru1: ["scope1_natural_gas"],
+    ru2: ["scope2_grid", "scope3_spend_based"],
+  });
+});
+
+test("buildApplicabilityMap emits null for legacy permissive RUs", () => {
+  // Empty array OR missing ``applicable_activity_types`` are both
+  // legacy permissive — backend treats null/[] as "show all" for
+  // that RU.
+  const map = buildApplicabilityMap([
+    { id: "legacy_empty", applicable_activity_types: [] },
+    { id: "legacy_missing" },
+  ]);
+  assert.deepEqual(map, { legacy_empty: null, legacy_missing: null });
+});
+
+test("buildApplicabilityMap copies the activity list (no shared reference)", () => {
+  const ru = { id: "ru1", applicable_activity_types: ["scope1_natural_gas"] };
+  const map = buildApplicabilityMap([ru]);
+  // Mutating the source must not mutate the payload.
+  ru.applicable_activity_types.push("MUTATED");
+  assert.deepEqual(map.ru1, ["scope1_natural_gas"]);
+});
+
+test("payload includes applicability map when reporting units are passed", () => {
+  const payload = buildCalculationPayload({
+    projectId: "prj_abc",
+    inventoryYear: "2024",
+    gwpSet: "AR6",
+    includeTrace: false,
+    facility: RU,
+    rows: [_draft()],
+    activityTypesById: CATALOG,
+    reportingUnits: [
+      { id: "ru1", applicable_activity_types: ["scope1_natural_gas"] },
+      { id: "ru2", applicable_activity_types: [] },
+    ],
+  });
+  assert.deepEqual(payload.applicability, {
+    ru1: ["scope1_natural_gas"],
+    ru2: null,
+  });
+});
+
+test("payload omits applicability when no reporting units are passed", () => {
+  const payload = buildCalculationPayload({
+    projectId: "prj_abc",
+    inventoryYear: "2024",
+    gwpSet: "AR6",
+    includeTrace: false,
+    facility: RU,
+    rows: [_draft()],
+    activityTypesById: CATALOG,
+  });
+  assert.equal(payload.applicability, undefined);
+  // Confirm JSON serialization drops the key entirely.
+  assert.equal("applicability" in JSON.parse(JSON.stringify(payload)), false);
 });
 
