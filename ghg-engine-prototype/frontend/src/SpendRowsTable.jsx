@@ -8,12 +8,39 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import { DataGrid } from "@mui/x-data-grid";
 import { NumericEditCell } from "./gridEditingHelpers";
 import { formatNumericDisplay } from "./numericFormat";
+import { autofillSpendRow } from "./spendMappings";
 import { validateSpendRow } from "./spendRows";
+import { parseTSV } from "./usePasteHandler";
+
+// Phase F2 PR 7 — column order for paste import. Pasted TSV is mapped
+// left-to-right onto these fields. The first four are params; the
+// fifth lands on activity.value.
+const PASTE_COLUMNS = [
+  "gl_code",
+  "gl_account_name",
+  "supplier",
+  "supplier_country",
+  "spend_value",
+];
+
+function rowsFromParsedTsv(parsed) {
+  if (!parsed || !parsed.length) return [];
+  return parsed.map((cells) => {
+    const out = {};
+    for (let i = 0; i < PASTE_COLUMNS.length; i += 1) {
+      const value = cells[i];
+      if (value === undefined || value === "") continue;
+      out[PASTE_COLUMNS[i]] = value;
+    }
+    return out;
+  }).filter((row) => Object.keys(row).length > 0);
+}
 
 // Phase E3 — per-RU spend transaction entry table.
 //
@@ -83,6 +110,8 @@ export default function SpendRowsTable({
   onAddRow,
   onPatchRow,
   onDeleteRow,
+  onPasteRows,
+  show,
 }) {
   // Memoize the (row -> warnings) lookup so the chip doesn't recompute
   // on every keystroke in an unrelated cell.
@@ -121,11 +150,82 @@ export default function SpendRowsTable({
       if (newRow.spend_value !== oldRow.spend_value) {
         patch.activity_value = newRow.spend_value;
       }
+
+      // Autofill: if the user just changed code or name and the other
+      // is blank, fill it from the RU's mapping table. Never overwrite
+      // a non-blank field — accountants pasting an ERP export may have
+      // a custom name for a code, and silent rewrites would erase it.
+      let resolvedRow = newRow;
+      if (
+        newRow.gl_code !== oldRow.gl_code
+        || newRow.gl_account_name !== oldRow.gl_account_name
+      ) {
+        const filled = autofillSpendRow(
+          { gl_code: newRow.gl_code, gl_account_name: newRow.gl_account_name },
+          mappingsForRu,
+        );
+        if (filled.gl_account_name !== newRow.gl_account_name) {
+          patch["param.gl_account_name"] = filled.gl_account_name;
+          resolvedRow = { ...resolvedRow, gl_account_name: filled.gl_account_name };
+        }
+        if (filled.gl_code !== newRow.gl_code) {
+          patch["param.gl_code"] = filled.gl_code;
+          resolvedRow = { ...resolvedRow, gl_code: filled.gl_code };
+        }
+      }
+
       if (Object.keys(patch).length) onPatchRow(newRow.id, patch);
-      return newRow;
+      return resolvedRow;
     },
-    [onPatchRow],
+    [mappingsForRu, onPatchRow],
   );
+
+  // Paste handler. Reads TSV (the standard paste format from Excel /
+  // Google Sheets) from either the paste event's clipboardData or via
+  // navigator.clipboard.readText() for the explicit "Paste rows"
+  // button. Each pasted row is bulk-appended via the parent's
+  // onPasteRows callback so it lands as a fresh spend row, even if
+  // the paste exceeds the currently-rendered row count.
+  const applyPaste = React.useCallback(
+    (text) => {
+      if (!onPasteRows) return;
+      const parsed = parseTSV(text || "");
+      const rowDataList = rowsFromParsedTsv(parsed);
+      if (!rowDataList.length) return;
+      onPasteRows(rowDataList);
+      if (show) {
+        show(`Pasted ${rowDataList.length} spend row${rowDataList.length === 1 ? "" : "s"}.`, "success");
+      }
+    },
+    [onPasteRows, show],
+  );
+
+  const handlePasteEvent = React.useCallback(
+    (event) => {
+      // If a cell is in edit mode, the focused element is an <input> /
+      // <textarea> — let the cell's own paste handler take over.
+      const tag = event.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const text = event.clipboardData?.getData("text/plain") || "";
+      if (!text.trim()) return;
+      event.preventDefault();
+      applyPaste(text);
+    },
+    [applyPaste],
+  );
+
+  const handlePasteButton = React.useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) {
+        if (show) show("Clipboard is empty.", "warning");
+        return;
+      }
+      applyPaste(text);
+    } catch (e) {
+      if (show) show("Could not read clipboard. Check browser permissions.", "warning");
+    }
+  }, [applyPaste, show]);
 
   const columns = React.useMemo(
     () => [
@@ -196,7 +296,15 @@ export default function SpendRowsTable({
 
   return (
     <Stack spacing={1}>
-      <Box sx={{ width: "100%" }}>
+      {/* tabIndex makes the wrapper focusable so a top-level paste
+          (after clicking on the table area but before entering a cell)
+          gets routed through ``handlePasteEvent``. Cell-level paste
+          while editing is still handled by the cell's own input. */}
+      <Box
+        sx={{ width: "100%" }}
+        tabIndex={0}
+        onPaste={handlePasteEvent}
+      >
         <DataGrid
           rows={tableRows}
           columns={columns}
@@ -217,7 +325,7 @@ export default function SpendRowsTable({
                 sx={{ height: "100%", py: 4 }}
               >
                 <Typography variant="body2" color="text.secondary">
-                  No spend transactions yet — click “Add row” to start.
+                  No spend transactions yet — click “Add row” or paste a block from your spreadsheet.
                 </Typography>
               </Stack>
             ),
@@ -228,6 +336,17 @@ export default function SpendRowsTable({
         <Button startIcon={<AddIcon />} size="small" onClick={onAddRow}>
           Add row
         </Button>
+        {onPasteRows ? (
+          <Tooltip title="Paste tab-separated rows from a spreadsheet (gl_code, account name, supplier, country, spend).">
+            <Button
+              startIcon={<ContentPasteIcon />}
+              size="small"
+              onClick={handlePasteButton}
+            >
+              Paste rows
+            </Button>
+          </Tooltip>
+        ) : null}
       </Stack>
     </Stack>
   );
