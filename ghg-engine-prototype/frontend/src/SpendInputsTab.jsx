@@ -17,9 +17,11 @@ import SpendRowsTable from "./SpendRowsTable";
 import { filterRusWithSpendSelected, groupMappingsByRu } from "./spendMappings";
 import {
   appendSpendRow,
+  appendSpendRowsWithData,
   deleteSpendRow,
   getSpendRowsForRu,
   patchSpendRow,
+  summarizeSpendRows,
 } from "./spendRows";
 
 // Phase E2 + E3 — Spend Inputs tab.
@@ -32,6 +34,90 @@ import {
 // onto ``scope3_spend_based`` activity drafts in the project's
 // ``activities`` array, so the existing calc / autosave / snapshot
 // machinery picks them up without additional wiring.
+
+// Phase F2 PR 7 — single-glance card summary. Replaces the previous
+// two-chip cluster ("12 GL mappings" / "47 spend rows") with a
+// summary line + warning chips so the user sees totals and
+// readiness at a glance.
+
+function formatDollars(value) {
+  const n = Number(value || 0);
+  if (!Number.isFinite(n)) return "$0";
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  const rounded = Math.round(abs);
+  const withSep = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return `${sign}$${withSep}`;
+}
+
+function SpendCardSummary({ hasMappings, mappingCount, summary, loadingMappings }) {
+  if (loadingMappings) {
+    return (
+      <Typography variant="caption" color="text.secondary">
+        loading…
+      </Typography>
+    );
+  }
+  if (!hasMappings) {
+    return (
+      <Chip
+        size="small"
+        label="No mappings configured"
+        variant="outlined"
+      />
+    );
+  }
+  const { count, totalSpend, missingGlCode, unmappedGlCode, missingSpend } = summary;
+  const rowsCopy = count === 0
+    ? "no rows yet"
+    : `${formatDollars(totalSpend)} across ${count} row${count === 1 ? "" : "s"}`;
+  return (
+    <Stack
+      direction="row"
+      spacing={0.75}
+      alignItems="center"
+      flexWrap="wrap"
+      sx={{ rowGap: 0.5 }}
+    >
+      <Chip
+        size="small"
+        label={`${mappingCount} GL mapping${mappingCount === 1 ? "" : "s"}`}
+        color="primary"
+        variant="outlined"
+      />
+      <Typography variant="body2" color="text.secondary">
+        ·
+      </Typography>
+      <Typography variant="body2" color="text.secondary">
+        {rowsCopy}
+      </Typography>
+      {unmappedGlCode > 0 ? (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label={`${unmappedGlCode} unmapped`}
+        />
+      ) : null}
+      {missingGlCode > 0 ? (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label={`${missingGlCode} missing GL`}
+        />
+      ) : null}
+      {missingSpend > 0 ? (
+        <Chip
+          size="small"
+          color="warning"
+          variant="outlined"
+          label={`${missingSpend} missing spend`}
+        />
+      ) : null}
+    </Stack>
+  );
+}
 
 export default function SpendInputsTab({
   projectId,
@@ -116,6 +202,16 @@ export default function SpendInputsTab({
   const editingRu = spendRus.find((ru) => ru.id === editingRuId) || null;
   const editingMappings = editingRuId ? mappingsByRu[editingRuId] || [] : [];
 
+  // Phase F2 PR 7 — bulk paste handler. Routes through the pure
+  // ``appendSpendRowsWithData`` helper so autofill (code <-> name)
+  // applies to every pasted row at insertion time.
+  const handlePasteRows = React.useCallback(
+    (ruId, ruMappings, rowDataList) => {
+      setActivities((prev) => appendSpendRowsWithData(prev, ruId, rowDataList, ruMappings).activities);
+    },
+    [setActivities],
+  );
+
   const handleSaveRuMappings = async (ruId, ruMappings) => {
     if (!projectId) return;
     setSaving(true);
@@ -194,60 +290,36 @@ export default function SpendInputsTab({
           configure the GL mapping.
         </Alert>
       ) : (
-        <Stack spacing={2}>
+        <Stack spacing={1.5}>
           {spendRus.map((ru) => {
             const ruMappings = mappingsByRu[ru.id] || [];
             const hasMappings = ruMappings.length > 0;
             const spendRowsForRu = getSpendRowsForRu(activities, ru.id);
+            const summary = summarizeSpendRows(spendRowsForRu, ruMappings);
             return (
               <Card key={ru.id} variant="outlined">
-                <CardContent>
+                <CardContent sx={{ p: 1.75, "&:last-child": { pb: 1.75 } }}>
                   <Stack
                     direction={{ xs: "column", sm: "row" }}
-                    spacing={2}
+                    spacing={1.25}
                     alignItems={{ sm: "center" }}
                     justifyContent="space-between"
                   >
-                    <Stack spacing={0.5}>
-                      <Typography variant="subtitle1">
+                    <Stack spacing={0.25} sx={{ minWidth: 0 }}>
+                      <Typography variant="subtitle1" sx={{ lineHeight: 1.3 }}>
                         {ru.facility_name || "(unnamed Reporting Unit)"}
                       </Typography>
-                      <Stack direction="row" spacing={1} alignItems="center">
-                        {hasMappings ? (
-                          <Chip
-                            size="small"
-                            label={`${ruMappings.length} GL mapping${
-                              ruMappings.length === 1 ? "" : "s"
-                            }`}
-                            color="primary"
-                            variant="outlined"
-                          />
-                        ) : (
-                          <Chip
-                            size="small"
-                            label="No mappings configured"
-                            variant="outlined"
-                          />
-                        )}
-                        {hasMappings ? (
-                          <Chip
-                            size="small"
-                            label={`${spendRowsForRu.length} spend row${
-                              spendRowsForRu.length === 1 ? "" : "s"
-                            }`}
-                            variant="outlined"
-                          />
-                        ) : null}
-                        {loadingMappings ? (
-                          <Typography variant="caption" color="text.secondary">
-                            loading…
-                          </Typography>
-                        ) : null}
-                      </Stack>
+                      <SpendCardSummary
+                        hasMappings={hasMappings}
+                        mappingCount={ruMappings.length}
+                        summary={summary}
+                        loadingMappings={loadingMappings}
+                      />
                     </Stack>
                     <Box>
                       <Button
                         variant={hasMappings ? "outlined" : "contained"}
+                        size="small"
                         startIcon={hasMappings ? <EditOutlinedIcon /> : null}
                         onClick={() => setEditingRuId(ru.id)}
                         disabled={loadingFactors && !spendFactors.length}
@@ -258,7 +330,7 @@ export default function SpendInputsTab({
                   </Stack>
                   {hasMappings ? (
                     <>
-                      <Divider sx={{ my: 2 }} />
+                      <Divider sx={{ my: 1.5 }} />
                       <SpendRowsTable
                         rows={spendRowsForRu}
                         mappingsForRu={ruMappings}
@@ -271,6 +343,10 @@ export default function SpendInputsTab({
                         onDeleteRow={(id) =>
                           setActivities((prev) => deleteSpendRow(prev, id))
                         }
+                        onPasteRows={(rowDataList) =>
+                          handlePasteRows(ru.id, ruMappings, rowDataList)
+                        }
+                        show={show}
                       />
                     </>
                   ) : null}

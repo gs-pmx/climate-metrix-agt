@@ -3,11 +3,13 @@ import assert from "node:assert/strict";
 
 import {
   appendSpendRow,
+  appendSpendRowsWithData,
   createEmptySpendRow,
   deleteSpendRow,
   getSpendRowsForRu,
   isSpendRow,
   patchSpendRow,
+  summarizeSpendRows,
   validateSpendRow,
   SPEND_BASED_ACTIVITY_ID,
 } from "./spendRows.js";
@@ -162,4 +164,93 @@ test("validateSpendRow returns empty list for non-spend activities", () => {
     validateSpendRow({ activity_type_id: "scope1_natural_gas" }),
     [],
   );
+});
+
+const SAMPLE_MAPPINGS = [
+  { gl_code: "10101", gl_account_name: "Office Supplies", factor_id: "useeio:111" },
+  { gl_code: "10102", gl_account_name: "Travel Expenses", factor_id: "useeio:481" },
+];
+
+test("appendSpendRowsWithData creates one row per pasted entry", () => {
+  const out = appendSpendRowsWithData([], "ru1", [
+    { gl_code: "10101", spend_value: 1234 },
+    { gl_code: "10102", spend_value: 567 },
+  ], SAMPLE_MAPPINGS);
+  assert.equal(out.activities.length, 2);
+  assert.equal(out.newRowIds.length, 2);
+  assert.equal(out.activities[0].facility_id, "ru1");
+  assert.equal(out.activities[0].activity_type_id, SPEND_BASED_ACTIVITY_ID);
+});
+
+test("appendSpendRowsWithData applies autofill on each pasted row", () => {
+  const out = appendSpendRowsWithData([], "ru1", [
+    { gl_code: "10101" },                       // name should fill
+    { gl_account_name: "Travel Expenses" },     // code should fill
+  ], SAMPLE_MAPPINGS);
+  assert.equal(out.activities[0].params.gl_account_name, "Office Supplies");
+  assert.equal(out.activities[1].params.gl_code, "10102");
+});
+
+test("appendSpendRowsWithData preserves existing activities and appends after them", () => {
+  const existing = [{ id: "existing", activity_type_id: SPEND_BASED_ACTIVITY_ID, facility_id: "ru1" }];
+  const out = appendSpendRowsWithData(existing, "ru1", [
+    { gl_code: "10101", spend_value: 100 },
+  ], SAMPLE_MAPPINGS);
+  assert.equal(out.activities.length, 2);
+  assert.equal(out.activities[0].id, "existing");
+});
+
+test("appendSpendRowsWithData copies spend_value into activity.value", () => {
+  const out = appendSpendRowsWithData([], "ru1", [
+    { gl_code: "10101", spend_value: 4242 },
+  ], SAMPLE_MAPPINGS);
+  assert.equal(out.activities[0].activity.value, 4242);
+});
+
+test("appendSpendRowsWithData no-ops on empty input", () => {
+  const start = [{ id: "a" }];
+  assert.equal(appendSpendRowsWithData(start, "ru1", []).activities, start);
+  assert.equal(appendSpendRowsWithData(start, "ru1", null).activities, start);
+});
+
+test("appendSpendRowsWithData no-ops without a reportingUnitId", () => {
+  const start = [{ id: "a" }];
+  assert.equal(appendSpendRowsWithData(start, "", [{ gl_code: "10101" }]).activities, start);
+});
+
+test("summarizeSpendRows totals only finite-numeric spend values", () => {
+  const rows = [
+    _spendRow({ glCode: "10101", spend: 100 }),
+    _spendRow({ glCode: "10102", spend: 250 }),
+    _spendRow({ glCode: "10103", spend: "" }),    // blank — excluded
+    _spendRow({ glCode: "10104", spend: "abc" }), // non-numeric — excluded
+  ];
+  const summary = summarizeSpendRows(rows, SAMPLE_MAPPINGS);
+  assert.equal(summary.count, 4);
+  assert.equal(summary.totalSpend, 350);
+  assert.equal(summary.countedSpend, 2);
+});
+
+test("summarizeSpendRows rolls up validation warning counts", () => {
+  const rows = [
+    _spendRow({ glCode: "", spend: 100 }),         // missing_gl_code + (spend ok)
+    _spendRow({ glCode: "10101", spend: 100 }),    // mapped + spend ok
+    _spendRow({ glCode: "99999", spend: "" }),     // unmapped + missing_spend
+    _spendRow({ glCode: "10102", spend: 50 }),     // mapped + spend ok
+  ];
+  const summary = summarizeSpendRows(rows, SAMPLE_MAPPINGS);
+  assert.equal(summary.missingGlCode, 1);
+  assert.equal(summary.unmappedGlCode, 1);
+  assert.equal(summary.missingSpend, 1);
+});
+
+test("summarizeSpendRows handles empty / nullish input", () => {
+  assert.deepEqual(summarizeSpendRows([], SAMPLE_MAPPINGS), {
+    count: 0,
+    totalSpend: 0,
+    countedSpend: 0,
+    missingGlCode: 0,
+    unmappedGlCode: 0,
+    missingSpend: 0,
+  });
 });

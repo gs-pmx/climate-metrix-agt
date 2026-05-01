@@ -7,6 +7,8 @@
 // existing calc / autosave / snapshot machinery picks them up
 // without any additional wiring.
 
+import { autofillSpendRow } from "./spendMappings.js";
+
 export const SPEND_BASED_ACTIVITY_ID = "scope3_spend_based";
 
 // Public field list for the spend rows table — kept here so the
@@ -106,6 +108,84 @@ export function patchSpendRow(activities, draftId, patch) {
     if (activityTouched) next.activity = nextActivity;
     return next;
   });
+}
+
+// Phase F2 PR 7 — bulk-append spend rows from pasted data. Each entry
+// in ``rowDataList`` is a partial row payload (gl_code, gl_account_name,
+// supplier, supplier_country, spend_value, description); blanks are
+// fine. The autofill rule fires on each row before append, so a paste
+// of (gl_code only) auto-completes to (gl_code + gl_account_name)
+// where the RU has a matching mapping.
+//
+// Returns ``{ activities, newRowIds }``. Callers can use ``newRowIds``
+// to focus the first newly-added row.
+export function appendSpendRowsWithData(
+  activities,
+  reportingUnitId,
+  rowDataList,
+  mappingsForRu = [],
+) {
+  const list = Array.isArray(activities) ? activities : [];
+  const data = Array.isArray(rowDataList) ? rowDataList : [];
+  if (!reportingUnitId || data.length === 0) {
+    return { activities: list, newRowIds: [] };
+  }
+  const newRowIds = [];
+  const additions = [];
+  for (const entry of data) {
+    const row = createEmptySpendRow(reportingUnitId);
+    const filledParams = autofillSpendRow(
+      {
+        gl_code: String(entry?.gl_code ?? "").trim(),
+        gl_account_name: String(entry?.gl_account_name ?? "").trim(),
+        supplier: String(entry?.supplier ?? "").trim(),
+        supplier_country: String(entry?.supplier_country ?? "").trim(),
+        description: String(entry?.description ?? "").trim(),
+      },
+      mappingsForRu,
+    );
+    row.params = { ...row.params, ...filledParams };
+    if (entry?.spend_value !== undefined && entry?.spend_value !== "") {
+      row.activity = { ...row.activity, value: entry.spend_value };
+    }
+    additions.push(row);
+    newRowIds.push(row.id);
+  }
+  return { activities: [...list, ...additions], newRowIds };
+}
+
+// Phase F2 PR 7 — per-RU summary of the spend rows for the card header.
+//
+// Surfaces a number total + per-warning roll-up so the card can show a
+// single-glance summary instead of forcing the user to skim every
+// status chip in the grid. ``totalSpend`` includes only rows whose
+// spend value parses as a finite number (blank rows are excluded).
+export function summarizeSpendRows(rows, mappingsForRu = []) {
+  let totalSpend = 0;
+  let countedSpend = 0;
+  let missingGlCode = 0;
+  let unmappedGlCode = 0;
+  let missingSpend = 0;
+  for (const row of rows || []) {
+    const raw = row?.activity?.value;
+    const num = typeof raw === "number" ? raw : Number(raw);
+    if (Number.isFinite(num) && raw !== "" && raw !== null && raw !== undefined) {
+      totalSpend += num;
+      countedSpend += 1;
+    }
+    const warnings = validateSpendRow(row, mappingsForRu);
+    if (warnings.includes("missing_gl_code")) missingGlCode += 1;
+    if (warnings.includes("unmapped_gl_code")) unmappedGlCode += 1;
+    if (warnings.includes("missing_spend")) missingSpend += 1;
+  }
+  return {
+    count: (rows || []).length,
+    totalSpend,
+    countedSpend,
+    missingGlCode,
+    unmappedGlCode,
+    missingSpend,
+  };
 }
 
 // Per-row validation. Returns a list of warning-code strings; an empty

@@ -2,7 +2,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  autofillSpendRow,
   filterRusWithSpendSelected,
+  findMappingByCode,
+  findMappingByName,
   groupMappingsByRu,
 } from "./spendMappings.js";
 
@@ -63,4 +66,73 @@ test("groupMappingsByRu returns empty object for nullish input", () => {
   assert.deepEqual(groupMappingsByRu(null), {});
   assert.deepEqual(groupMappingsByRu(undefined), {});
   assert.deepEqual(groupMappingsByRu([]), {});
+});
+
+const SAMPLE_MAPPINGS = [
+  { gl_code: "10101", gl_account_name: "Office Supplies", factor_id: "useeio:111" },
+  { gl_code: "10102", gl_account_name: "Travel Expenses", factor_id: "useeio:481" },
+  { gl_code: "10103", gl_account_name: "Utilities", factor_id: "useeio:221" },
+];
+
+test("findMappingByCode is case-insensitive and trim-tolerant", () => {
+  assert.equal(findMappingByCode(SAMPLE_MAPPINGS, "10101")?.gl_account_name, "Office Supplies");
+  assert.equal(findMappingByCode(SAMPLE_MAPPINGS, " 10102 ")?.gl_account_name, "Travel Expenses");
+});
+
+test("findMappingByCode returns null when no match or input is blank", () => {
+  assert.equal(findMappingByCode(SAMPLE_MAPPINGS, "99999"), null);
+  assert.equal(findMappingByCode(SAMPLE_MAPPINGS, ""), null);
+  assert.equal(findMappingByCode(SAMPLE_MAPPINGS, null), null);
+});
+
+test("findMappingByName matches case-insensitively", () => {
+  assert.equal(findMappingByName(SAMPLE_MAPPINGS, "office supplies")?.gl_code, "10101");
+  assert.equal(findMappingByName(SAMPLE_MAPPINGS, "  Travel Expenses  ")?.gl_code, "10102");
+});
+
+test("findMappingByName returns null when no match", () => {
+  assert.equal(findMappingByName(SAMPLE_MAPPINGS, "Unknown account"), null);
+  assert.equal(findMappingByName(SAMPLE_MAPPINGS, ""), null);
+});
+
+test("autofillSpendRow fills the name when code is supplied alone", () => {
+  const out = autofillSpendRow({ gl_code: "10101", gl_account_name: "" }, SAMPLE_MAPPINGS);
+  assert.equal(out.gl_account_name, "Office Supplies");
+  assert.equal(out.gl_code, "10101");
+});
+
+test("autofillSpendRow fills the code when name is supplied alone", () => {
+  const out = autofillSpendRow(
+    { gl_code: "", gl_account_name: "Utilities" },
+    SAMPLE_MAPPINGS,
+  );
+  assert.equal(out.gl_code, "10103");
+  assert.equal(out.gl_account_name, "Utilities");
+});
+
+test("autofillSpendRow does not overwrite a non-blank field even if mapping disagrees", () => {
+  // User typed a custom name for code 10101 — keep their input.
+  const params = { gl_code: "10101", gl_account_name: "Stationery (custom)" };
+  const out = autofillSpendRow(params, SAMPLE_MAPPINGS);
+  assert.equal(out, params);
+});
+
+test("autofillSpendRow returns the input reference when no fill applies", () => {
+  const params = { gl_code: "", gl_account_name: "" };
+  assert.equal(autofillSpendRow(params, SAMPLE_MAPPINGS), params);
+
+  const noMatch = { gl_code: "99999", gl_account_name: "" };
+  assert.equal(autofillSpendRow(noMatch, SAMPLE_MAPPINGS), noMatch);
+});
+
+test("autofillSpendRow preserves other params keys (supplier, country, etc.)", () => {
+  const params = {
+    gl_code: "10101",
+    gl_account_name: "",
+    supplier: "Acme",
+    supplier_country: "US",
+  };
+  const out = autofillSpendRow(params, SAMPLE_MAPPINGS);
+  assert.equal(out.supplier, "Acme");
+  assert.equal(out.supplier_country, "US");
 });
