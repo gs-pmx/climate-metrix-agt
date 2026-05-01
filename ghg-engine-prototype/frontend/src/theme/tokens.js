@@ -50,7 +50,15 @@ export const brand = {
 
 export const surfaces = {
   light: {
-    surface: "#f7f5f0", // warm off-white, slightly cream
+    // F2 PR 1 originally moved this to ``#f7f5f0`` (warm cream).
+    // After PR 1 corrections landed Stephen flagged the page as ever
+    // so slightly warm — wanting a notch cooler to lift the
+    // foreground/background contrast. Restored to the pre-F2 cool
+    // neutral. Most components paint over the body's gradient anyway,
+    // but ``palette.background.default`` flows into Container fallbacks
+    // and any deep-nested Box that references the token, so the value
+    // still reads.
+    surface: "#f1f3f4",
     raised: "#ffffff",
     overlay: "#ffffff",
     border: "rgba(20, 24, 30, 0.08)",

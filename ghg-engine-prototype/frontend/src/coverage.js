@@ -220,7 +220,7 @@ export function formatCoverageSummary(coverage) {
     return `${coverage.missing} of ${total} sources missing data`;
   }
   if (coverage.orphaned > 0) {
-    return `All ${total} sources complete, ${coverage.orphaned} orphaned`;
+    return `All ${total} sources complete, ${coverage.orphaned} excluded`;
   }
   return `All sources complete (${coverage.complete}/${total})`;
 }

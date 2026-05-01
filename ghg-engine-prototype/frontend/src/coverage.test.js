@@ -288,10 +288,10 @@ test("formatCoverageSummary calls out missing when no errors", () => {
   );
 });
 
-test("formatCoverageSummary mentions orphaned data when otherwise complete", () => {
+test("formatCoverageSummary mentions excluded data when otherwise complete", () => {
   assert.equal(
     formatCoverageSummary({ totalApplicable: 5, complete: 5, missing: 0, errored: 0, orphaned: 2 }),
-    "All 5 sources complete, 2 orphaned",
+    "All 5 sources complete, 2 excluded",
   );
 });
 

@@ -1365,15 +1365,30 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             </Stack>
           )}
           {isScrolled && activeProject && view === "project" ? (
-            <Chip
-              color="secondary"
-              size="small"
-              label={`Project: ${activeProject.name}`}
+            // F2 PR 3 — pre-PR-3 this was a green chip
+            // (``color="secondary"``). It collided with
+            // ``AutosaveStatusChip``'s success-green "Saved" pill;
+            // the two read as two status indicators next to each
+            // other rather than "page identity" + "save status".
+            // Replaced with a plain text label — the project name is
+            // wayfinding, not state.
+            <Typography
+              variant="subtitle2"
               sx={{
+                fontWeight: 600,
+                color: "text.primary",
+                pl: 0.5,
+                pr: 1.5,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
                 opacity: isScrolled ? 1 : 0,
                 transition: "opacity 180ms ease",
               }}
-            />
+              data-testid="scrolled-project-label"
+            >
+              {activeProject.name}
+            </Typography>
           ) : null}
           {hasActiveProject ? (
             <Stack direction="row" spacing={1} alignItems="center">

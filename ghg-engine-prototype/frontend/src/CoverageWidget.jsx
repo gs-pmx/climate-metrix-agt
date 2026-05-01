@@ -157,7 +157,7 @@ export default function CoverageWidget({
 
         {orphaned > 0 ? (
           <Chip
-            label={`${orphaned} orphaned ${orphaned === 1 ? "activity" : "activities"} (data preserved but not in inventory)`}
+            label={`${orphaned} excluded ${orphaned === 1 ? "activity" : "activities"} (data preserved but not in inventory)`}
             size="small"
             variant="outlined"
             color="default"

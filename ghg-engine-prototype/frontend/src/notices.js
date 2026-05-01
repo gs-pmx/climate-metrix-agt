@@ -69,7 +69,11 @@ export function buildCoverageNotice(coverage) {
     return {
       id: "coverage::orphaned",
       severity: "info",
-      title: "Orphaned activity data",
+      // F2 PR 3 — display copy switched from "orphaned" to "excluded"
+      // per the design review. ``detailKind`` stays ``"orphaned"`` so
+      // the NotificationsPanel router doesn't lose track of which
+      // detail list to render.
+      title: "Excluded activity data",
       message: `All ${total} sources complete, ${orphaned} ${
         orphaned === 1 ? "activity has" : "activities have"
       } data that isn't included in your inventory.`,

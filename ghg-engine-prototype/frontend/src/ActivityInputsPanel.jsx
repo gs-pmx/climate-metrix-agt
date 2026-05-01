@@ -1,18 +1,18 @@
 import * as React from "react";
 import {
   Alert,
-  Button,
   Paper,
   Stack,
   ToggleButton,
   ToggleButtonGroup,
-  Typography,
 } from "@mui/material";
 import ActivityDetailDialog from "./ActivityDetailDialog";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
 import ByActivityTable from "./ByActivityTable";
 import ByReportingUnitTable from "./ByReportingUnitTable";
 import RowByRowView from "./RowByRowView";
+import ScopeChips, { SCOPE_CHIP_DEFS } from "./ScopeChips";
+import { groupByTOC } from "./categorizeForTOC";
 import {
   EMPTY_ACTIVITY,
   createEmptyDraft,
@@ -50,6 +50,11 @@ export default function ActivityInputsPanel({
   const [viewMode, setViewMode] = React.useState("byActivity");
   const [detailDraftId, setDetailDraftId] = React.useState("");
   const [repeatableDialog, setRepeatableDialog] = React.useState(null);
+  // F2 PR 3 — active scope tracked via IntersectionObserver below so the
+  // ScopeChips in the sticky toolbar highlight the scope currently in
+  // view. Decoupled from ``ByActivityTable`` so the table can stay
+  // focused on rendering rows.
+  const [activeScopeId, setActiveScopeId] = React.useState("");
 
   // Bug 2 mitigation: whenever a calculation begins, force-close every
   // detail dialog (which is where the Emission Factor Override field
@@ -70,6 +75,60 @@ export default function ActivityInputsPanel({
     () => activityCatalog.filter((activityType) => isEntryVisibleActivity(activityType)),
     [activityCatalog],
   );
+
+  // F2 PR 3 — scope set to feed the ScopeChips, derived from the same
+  // catalog tree the table uses. The chips only render scopes that
+  // actually exist in the current catalog so we don't show "Scope 3"
+  // when there are no Scope 3 rows.
+  const availableScopeIds = React.useMemo(() => {
+    const tree = groupByTOC(selectableActivities);
+    return new Set(
+      tree
+        .filter((scope) => scope.subcategories.some((sub) => sub.activities.length > 0))
+        .map((scope) => scope.id),
+    );
+  }, [selectableActivities]);
+
+  // Active-scope scroll-spy. Watches the scope anchor Boxes
+  // ``ByActivityTable`` registers under ``id="scope-${scope.id}"`` and
+  // sets ``activeScopeId`` to the topmost scope intersecting the
+  // viewport. Only runs when "By Activity" is active so we don't burn
+  // observer cycles in the other view modes.
+  React.useEffect(() => {
+    if (viewMode !== "byActivity") {
+      setActiveScopeId("");
+      return undefined;
+    }
+    if (typeof window === "undefined" || !("IntersectionObserver" in window)) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible.length === 0) return;
+        const id = visible[0].target.id || "";
+        const scopeId = id.startsWith("scope-") ? id.slice("scope-".length) : "";
+        if (scopeId) setActiveScopeId(scopeId);
+      },
+      {
+        root: null,
+        // Anchor lands just below the sticky stack; offset accordingly
+        // so the spy flags the scope right under the toolbar.
+        rootMargin: "-220px 0px -65% 0px",
+        threshold: [0, 0.1],
+      },
+    );
+    // Attach to every present scope anchor. Any not-yet-mounted scopes
+    // (e.g. before the table renders) get picked up on a re-run when
+    // ``availableScopeIds`` changes.
+    SCOPE_CHIP_DEFS.forEach((scope) => {
+      const node = document.getElementById(`scope-${scope.id}`);
+      if (node) observer.observe(node);
+    });
+    return () => observer.disconnect();
+  }, [viewMode, availableScopeIds]);
   const visibleReportingUnitIds = React.useMemo(
     () => new Set(reportingUnits.map((ru) => ru.id)),
     [reportingUnits],
@@ -387,7 +446,13 @@ export default function ActivityInputsPanel({
         }}
         data-testid="view-selector-bar"
       >
-        <Stack direction="row" justifyContent="flex-start" alignItems="center" sx={{ mb: 1 }}>
+        <Stack
+          direction="row"
+          justifyContent="flex-start"
+          alignItems="center"
+          spacing={2}
+          sx={{ flexWrap: "wrap", rowGap: 1 }}
+        >
           <ToggleButtonGroup
             value={viewMode}
             exclusive
@@ -400,16 +465,27 @@ export default function ActivityInputsPanel({
             <ToggleButton value="byActivity">By Activity</ToggleButton>
             <ToggleButton value="byFacility">By Reporting Unit</ToggleButton>
           </ToggleButtonGroup>
+          {/* F2 PR 3 — Scope chips render only when "By Activity" is the
+              active view; in Row-by-Row and By-Reporting-Unit the
+              chips have no scope anchors to jump to. The chips read
+              from a memoized scope set computed downstream and call
+              ``scrollToScope`` (anchor-based navigation, decoupled
+              from the table). Active-scope highlight is driven by
+              the scroll-spy in the Activity Inputs container. */}
+          {viewMode === "byActivity" ? (
+            <ScopeChips
+              activeScopeId={activeScopeId}
+              availableScopeIds={availableScopeIds}
+            />
+          ) : null}
           {/* Phase F1: Save Version + Run Calculation moved to App.jsx
-              top bar so they're reachable from any tab. Keep this row
-              for the view-mode toggle only. */}
+              top bar so they're reachable from any tab.
+              Phase F2 PR 3: dropped the inline "how to paste" + the
+              "implemented/planned" status copy that used to sit
+              beneath this toggle — daily users know how to paste, and
+              the implementation-status framing isn't customer-facing
+              language. */}
         </Stack>
-        <Typography variant="body2" color="text.secondary">
-          Paste from spreadsheets in the By Activity and By Reporting Unit views with Ctrl+V, use Tab to move across, and use Enter to move down to the next row in the same column. ArrowUp/ArrowDown also move between rows.
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Implemented and partial rows are calculable in this phase. Planned rows remain visible for draft entry, save/load, and completeness tracking, but are skipped during calculation.
-        </Typography>
       </Paper>
 
       {viewMode === "rowByRow" ? (
