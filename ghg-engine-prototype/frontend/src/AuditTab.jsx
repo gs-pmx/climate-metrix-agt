@@ -216,15 +216,18 @@ export default function AuditTab({ auditRows, onExportAuditCsv }) {
 
   return (
     <Paper sx={{ p: 2 }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
         <Typography variant="h6">Audit Pathway</Typography>
         <Button variant="outlined" onClick={onExportAuditCsv}>
           Export Audit CSV
         </Button>
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-        Linear audit rows by facility and source with inputs, selected factors, conversions, and gas-level outputs. Hover a clamped cell for the full value.
-      </Typography>
+      {/* F2 PR 5 — dropped the descriptive "Linear audit rows by
+          facility and source with inputs, selected factors,
+          conversions, and gas-level outputs. Hover a clamped cell
+          for the full value." paragraph. The columns themselves
+          describe what's there; the line-clamp + tooltip pattern
+          is intuitive on first hover. */}
       <Box sx={{ height: 560 }}>
         <DataGrid
           rows={auditRows}

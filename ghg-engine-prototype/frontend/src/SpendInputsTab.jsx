@@ -175,16 +175,10 @@ export default function SpendInputsTab({
 
   return (
     <Box sx={{ mt: 2 }}>
-      <Stack spacing={1} sx={{ mb: 2 }}>
-        <Typography variant="h6">Spend Inputs</Typography>
-        <Typography variant="body2" color="text.secondary">
-          Configure GL-code-to-factor mappings for each Reporting Unit
-          that has Scope 3 spend-based emissions enabled, then enter
-          the underlying spend transactions below the mapping summary.
-          Transactions map 1:1 to activity drafts and flow through the
-          standard calculation path.
-        </Typography>
-      </Stack>
+      {/* F2 PR 5 — dropped the persistent "Configure GL-code-to-factor
+          mappings for each Reporting Unit..." paragraph and the
+          h6 header. The tab title in the sticky bar already says
+          "Spend Inputs" — no need to repeat it on every load. */}
 
       {error ? (
         <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError("")}>

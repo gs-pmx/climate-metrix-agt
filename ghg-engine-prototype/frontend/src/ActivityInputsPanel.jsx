@@ -1,6 +1,7 @@
 import * as React from "react";
 import {
   Alert,
+  Box,
   Paper,
   Stack,
   ToggleButton,
@@ -464,18 +465,18 @@ export default function ActivityInputsPanel({
             <ToggleButton value="byActivity">By Activity</ToggleButton>
             <ToggleButton value="byFacility">By Reporting Unit</ToggleButton>
           </ToggleButtonGroup>
-          {/* F2 PR 3 — Scope chips render only when "By Activity" is the
-              active view; in Row-by-Row and By-Reporting-Unit the
-              chips have no scope anchors to jump to. The chips read
-              from a memoized scope set computed downstream and call
-              ``scrollToScope`` (anchor-based navigation, decoupled
-              from the table). Active-scope highlight is driven by
-              the scroll-spy in the Activity Inputs container. */}
+          {/* F2 PR 3 — Scope chips only render in the By-Activity view.
+              F2 PR 5 — pushed to the right of the bar via
+              ``marginLeft: "auto"`` so the toggle stays anchored
+              left and the scope-jump affordance reads as the
+              right-justified secondary action. */}
           {viewMode === "byActivity" ? (
-            <ScopeChips
-              activeScopeId={activeScopeId}
-              availableScopeIds={availableScopeIds}
-            />
+            <Box sx={{ ml: "auto !important" }}>
+              <ScopeChips
+                activeScopeId={activeScopeId}
+                availableScopeIds={availableScopeIds}
+              />
+            </Box>
           ) : null}
           {/* Phase F1: Save Version + Run Calculation moved to App.jsx
               top bar so they're reachable from any tab.
