@@ -122,19 +122,22 @@ function buildTheme(mode) {
         },
       },
       MuiPaper: {
-        // F2 PR 1 originally tried to flatten the Paper treatment
-        // (no shadow in dark, light shadow in light, neutral border,
-        // no backdrop blur) per the locked design direction's
-        // "calm chrome / vibrant data viz" split. Stephen's feedback
-        // after the smoke test: the pre-F2 treatment was easier to
-        // interpret. Reverting to the prior values — primary-tinted
-        // border, deep boxShadow, 1px backdrop blur.
+        // F2 PR 5 — light-mode token refresh per the design review's
+        // "tighten the token system: calmer light background, less
+        // beige dominance, fewer primary-tinted borders, clearer
+        // elevation rules." Borders shift from primary-tinted
+        // (rgba(0,78,130,0.12) light / rgba(121,186,224,0.2) dark) to
+        // mode-appropriate neutrals so cards stop reading as accented
+        // by the brand color and start reading as cleanly-bounded
+        // surfaces.
+        // Shadow + backdrop blur are unchanged from the F2 PR 1
+        // corrections — Stephen has called those out as good.
         styleOverrides: {
           root: ({ theme }) => ({
             border: `1px solid ${
               theme.palette.mode === "dark"
-                ? "rgba(121,186,224,0.2)"
-                : "rgba(0,78,130,0.12)"
+                ? "rgba(220, 230, 240, 0.10)"
+                : "rgba(20, 24, 30, 0.10)"
             }`,
             boxShadow:
               theme.palette.mode === "dark"

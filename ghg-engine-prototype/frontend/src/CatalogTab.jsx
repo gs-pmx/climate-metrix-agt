@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Stack, Typography } from "@mui/material";
+import { Stack } from "@mui/material";
 import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
 
 // Post-C4 item 5: the Catalog Coverage browser used to render at the
@@ -10,11 +10,11 @@ import CatalogCoverageBrowser from "./CatalogCoverageBrowser";
 // coverage browser — but keeps a separate module so future reference
 // surfaces (e.g., emission factor browser) can slot in next to it.
 export default function CatalogTab({ activityCatalog }) {
+  // F2 PR 5 — dropped the "Reference view of every activity type
+  // available in the catalog..." persistent intro paragraph.
+  // The browser below is self-explanatory.
   return (
     <Stack spacing={2}>
-      <Typography variant="body2" color="text.secondary">
-        Reference view of every activity type available in the catalog, grouped by UI category. Use this to check scope assignment, implementation status, allowed units, and required input fields before entering data.
-      </Typography>
       <CatalogCoverageBrowser activityCatalog={activityCatalog} />
     </Stack>
   );

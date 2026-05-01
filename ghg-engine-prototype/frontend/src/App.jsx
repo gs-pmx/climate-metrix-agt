@@ -1001,13 +1001,17 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     setCalculating(true);
     let totalFailure = false;
     let totalFailureMessage = "";
-    // F1.5 — only fetch the audit envelope when the user is actually on
-    // the Audit tab. ``/calculate/audit`` re-issues every per-gas factor
-    // lookup on top of the ones the calc already did, ~doubling SQLite
-    // traffic. The Activity Inputs / Results / Dashboard paths don't
-    // need ``audit_rows``. If the user later opens the Audit tab,
-    // they'll need to re-run the calc to populate it.
-    const needsAudit = tab === 6;
+    // F2 PR 5 — always fetch the audit envelope. F1.5 introduced a
+    // ``needsAudit = tab === 6`` gate to skip the audit endpoint
+    // when the user wasn't on the Audit tab; the rationale was
+    // SQLite traffic. F1.5's perf fixes (pint cache, factor LRU,
+    // request-scoped get_by_factor_id cache) closed that gap to
+    // single-digit ms — ``/calculate/audit`` now costs ~3ms more
+    // than ``/calculate``. The gate's behavioral cost (Audit tab
+    // looks blank until the user re-runs Calc from there) is no
+    // longer worth its perf benefit. Always calling the audit
+    // endpoint keeps the audit data in step with the rest of the
+    // calc state.
     try {
       for (const [facilityId, facilityRows] of Object.entries(grouped)) {
         const fac = facilitiesNow.find((f) => f.id === facilityId);
@@ -1026,9 +1030,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         });
         let response;
         try {
-          response = needsAudit
-            ? await api.calculateAudit(payload)
-            : await api.calculate(payload);
+          response = await api.calculateAudit(payload);
         } catch (err) {
           // On total failure the backend still returns the structured
           // envelope (with populated errors[]) alongside HTTP 400. Capture
@@ -1218,34 +1220,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         the `--sticky-top-height` CSS variable so downstream sticky bars
         (view-selector in ActivityInputsPanel, TOC sidebar) line up.
       */}
-      <Paper
+      <Box
         sx={{
+          // F2 PR 5 — title bar is no longer wrapped in a Paper. Per
+          // Stephen's smoke-test feedback after PR 4: "remove the
+          // bubble background on the top section entirely — land it
+          // on the background so we eliminate one more bubble
+          // element". The sticky tabs below have their own opaque
+          // bgcolor and ``position: sticky``; on scroll, the title
+          // bar scrolls naturally up under them. The opacity-fade +
+          // pointer-events dance from prior phases is gone — the
+          // sticky bar covers the title bar without help.
           mb: 1,
-          // F2 PR 4 — header padding tightened from 16-20px to 12-16px
-          // per the design review's "fewer stacked bars" critique.
-          // The header still earns a row but takes less vertical real
-          // estate before the user reaches the tabs and content.
-          p: { xs: 1.5, md: 2 },
-          // Fade the full header out as the compact bar takes over so
-          // the two don't ghost each other during the transition.
-          opacity: isScrolled ? 0 : 1,
-          // `pointer-events: none` when faded prevents stale click targets
-          // (e.g. toggle color-mode button) under a covering compact bar.
-          pointerEvents: isScrolled ? "none" : "auto",
-          // Post-C4 round-4 item 11: asymmetric fade durations. The
-          // fade-out (scrolling down past 48px) stays at the prior
-          // 180ms because users don't watch it closely. The fade-in
-          // (scrolling back to the top) used the same duration and
-          // read as jarringly slow — the header would reveal itself
-          // well after the user had already arrived at the top. Shrink
-          // fade-in to ~70ms so the header snaps back in. When
-          // isScrolled=false we're targeting opacity 1 (fade-in in
-          // progress); when isScrolled=true we're targeting opacity 0
-          // (fade-out in progress). The active transition is the one
-          // rendered at the target end state.
-          transition: isScrolled
-            ? "opacity 180ms ease"
-            : "opacity 70ms ease",
+          py: { xs: 1, md: 1.25 },
         }}
       >
         <Stack
@@ -1254,16 +1241,14 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           alignItems={{ md: "center" }}
           spacing={1}
         >
-          {/* Phase F2 — branded chrome. Parametrix corporate logo +
-              ClimateMetrix product wordmark sit on the left; when a
-              project is active, its name + metadata follow on the
-              same row.
-              Phase F2 PR 4 — compacted from a two-row stack
-              (logos / project name H1 / metadata) into a single
-              center-aligned row. Drops the "Project-based data entry
-              with immutable version snapshots." marketing subtitle
-              when no project is active. The H1 became an h4 to fit
-              the row height comfortably. */}
+          {/* F2 PR 5 — uniform spacing across the header row. Both
+              dividers now use the same dimensions (1.5px wide,
+              text-secondary at 0.4 opacity) and inherit the parent
+              Stack's ``spacing={2}`` rhythm with no extra mx
+              overrides — Stephen's PR 4 smoke flagged the prior
+              uneven spacing (extra margin on the second divider) and
+              the inconsistent divider weights (one too thick, one
+              too thin). */}
           <Stack
             direction="row"
             spacing={2}
@@ -1271,15 +1256,12 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             sx={{ color: "text.primary", minWidth: 0, flexWrap: "wrap", rowGap: 0.5 }}
           >
             <ParametrixLogo height={22} />
-            {/* F2 PR 1 corrections — divider was barely visible on
-                the gradient body. 2px rule using the text-secondary
-                token reads in both modes without going loud. */}
             <Box
               sx={{
-                width: "2px",
+                width: "1.5px",
                 alignSelf: "stretch",
                 bgcolor: "text.secondary",
-                opacity: 0.55,
+                opacity: 0.4,
                 borderRadius: 1,
               }}
             />
@@ -1288,10 +1270,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
               <>
                 <Box
                   sx={{
-                    width: "1px",
+                    width: "1.5px",
                     alignSelf: "stretch",
-                    bgcolor: "divider",
-                    mx: 0.5,
+                    bgcolor: "text.secondary",
+                    opacity: 0.4,
+                    borderRadius: 1,
                   }}
                 />
                 <Typography
@@ -1350,7 +1333,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             </Tooltip>
           </Stack>
         </Stack>
-      </Paper>
+      </Box>
 
       <Paper
         ref={topBarRef}

@@ -595,9 +595,10 @@ export default function ReportingUnitsTab({
             Add Reporting Unit
           </Button>
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          Each Reporting Unit is a location, entity, or activity bucket you track. Configure the set of applicable activity types per unit to shape the data-entry grids.
-        </Typography>
+        {/* F2 PR 5 — dropped the persistent "Each Reporting Unit is
+            a location, entity, or activity bucket you track..." copy.
+            Daily users don't need to be re-told what an RU is on
+            every page load. */}
         <Stack spacing={1}>
           {reportingUnits.length === 0 ? (
             <Typography color="text.secondary">No Reporting Units yet. Add one above.</Typography>
@@ -620,9 +621,9 @@ export default function ReportingUnitsTab({
         <Stack direction="row" justifyContent="space-between" sx={{ mb: 1 }}>
           <Typography variant="h6">Reporting Unit Details (Geo Context)</Typography>
         </Stack>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-          Paste a block of cells with Ctrl+V from a spreadsheet to fill multiple rows at once.
-        </Typography>
+        {/* F2 PR 5 — dropped the persistent "Paste a block of cells
+            with Ctrl+V..." instruction. Spreadsheet paste is
+            Ctrl+V everywhere; daily users know. */}
         <Box sx={{ width: "100%", overflowX: "auto" }}>
           <Box sx={{ height: 420, minWidth: 1100 }}>
             <DataGrid
