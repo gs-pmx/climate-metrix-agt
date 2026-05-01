@@ -23,6 +23,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
+import CloseIcon from "@mui/icons-material/Close";
 import DarkModeOutlinedIcon from "@mui/icons-material/DarkModeOutlined";
 import LightModeOutlinedIcon from "@mui/icons-material/LightModeOutlined";
 import { ParametrixLogo, ClimateMetrixWordmark } from "./branding/Logos";
@@ -274,6 +275,14 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   // draft exists in the backend, hold it here until the user accepts or
   // discards via the restore banner. ``null`` means no banner shown.
   const [pendingDraft, setPendingDraft] = React.useState(null);
+  // F2 PR 4 — restore-banner session dismissal. The Alert used to be
+  // unconditional whenever a draft existed; per the design review's
+  // "instructional copy too persistent" critique, users now get an X
+  // button to hide the banner for the current draft. Dismissal is
+  // keyed off ``pendingDraft.updated_at`` so a freshly-saved draft
+  // (different timestamp) re-surfaces the banner. Reload re-shows
+  // too — there's no on-disk persistence of the dismissal.
+  const [restoreBannerDismissedFor, setRestoreBannerDismissedFor] = React.useState(null);
 
   const hasActiveProject = Boolean(activeProjectId);
   const activeProject = React.useMemo(
@@ -1200,7 +1209,11 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       <Paper
         sx={{
           mb: 1,
-          p: { xs: 2, md: 2.5 },
+          // F2 PR 4 — header padding tightened from 16-20px to 12-16px
+          // per the design review's "fewer stacked bars" critique.
+          // The header still earns a row but takes less vertical real
+          // estate before the user reaches the tabs and content.
+          p: { xs: 1.5, md: 2 },
           // Fade the full header out as the compact bar takes over so
           // the two don't ghost each other during the transition.
           opacity: isScrolled ? 0 : 1,
@@ -1226,45 +1239,58 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <Stack
           direction={{ xs: "column", md: "row" }}
           justifyContent="space-between"
-          alignItems={{ md: "flex-start" }}
-          spacing={1.5}
+          alignItems={{ md: "center" }}
+          spacing={1}
         >
           {/* Phase F2 — branded chrome. Parametrix corporate logo +
               ClimateMetrix product wordmark sit on the left; when a
-              project is active, its name becomes the page H1
-              underneath with the metadata sub-line. The duplicate
-              project chip + product-name title that lived here pre-F2
-              are gone — the sticky top bar's scrolled-state chip is
-              the single project anchor once the user scrolls past
-              this header. */}
-          <Stack spacing={1.25} sx={{ minWidth: 0 }}>
-            <Stack
-              direction="row"
-              spacing={2}
-              alignItems="center"
-              sx={{ color: "text.primary" }}
-            >
-              <ParametrixLogo height={22} />
-              {/* F2 PR 1 corrections — divider was barely visible on
-                  the gradient body. Bumped to a 2px rule using the
-                  text-secondary token so it has contrast in both
-                  modes without going loud. */}
-              <Box
-                sx={{
-                  width: "2px",
-                  alignSelf: "stretch",
-                  bgcolor: "text.secondary",
-                  opacity: 0.55,
-                  borderRadius: 1,
-                }}
-              />
-              <ClimateMetrixWordmark height={20} />
-            </Stack>
+              project is active, its name + metadata follow on the
+              same row.
+              Phase F2 PR 4 — compacted from a two-row stack
+              (logos / project name H1 / metadata) into a single
+              center-aligned row. Drops the "Project-based data entry
+              with immutable version snapshots." marketing subtitle
+              when no project is active. The H1 became an h4 to fit
+              the row height comfortably. */}
+          <Stack
+            direction="row"
+            spacing={2}
+            alignItems="center"
+            sx={{ color: "text.primary", minWidth: 0, flexWrap: "wrap", rowGap: 0.5 }}
+          >
+            <ParametrixLogo height={22} />
+            {/* F2 PR 1 corrections — divider was barely visible on
+                the gradient body. 2px rule using the text-secondary
+                token reads in both modes without going loud. */}
+            <Box
+              sx={{
+                width: "2px",
+                alignSelf: "stretch",
+                bgcolor: "text.secondary",
+                opacity: 0.55,
+                borderRadius: 1,
+              }}
+            />
+            <ClimateMetrixWordmark height={20} />
             {activeProject ? (
-              <Box>
+              <>
+                <Box
+                  sx={{
+                    width: "1px",
+                    alignSelf: "stretch",
+                    bgcolor: "divider",
+                    mx: 0.5,
+                  }}
+                />
                 <Typography
-                  variant="h2"
-                  sx={{ mt: 0.5, color: "text.primary" }}
+                  variant="h4"
+                  sx={{
+                    color: "text.primary",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
                   data-testid="project-page-title"
                 >
                   {activeProject.name}
@@ -1273,24 +1299,21 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
                   variant="body2"
                   color="text.secondary"
                   data-testid="project-setup-summary"
+                  sx={{ whiteSpace: "nowrap" }}
                 >
-                  {`${inventoryYear} inventory · GWP ${gwpSet} · Trace ${includeTrace ? "on" : "off"}`}
+                  {`${inventoryYear} · GWP ${gwpSet} · Trace ${includeTrace ? "on" : "off"}`}
                 </Typography>
-              </Box>
-            ) : (
-              <Typography
-                variant="body2"
-                color="text.secondary"
-                sx={{ mt: 0.5 }}
-              >
-                Project-based data entry with immutable version snapshots.
-              </Typography>
-            )}
+              </>
+            ) : null}
           </Stack>
-          <Stack direction="row" spacing={1} alignItems="center">
+          <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
             {activeProject ? (
               <Button
-                variant="outlined"
+                // F2 PR 4 — toned down from outlined to text variant.
+                // Edit Project Setup is a rare action; the outlined
+                // weight made it compete with the primary
+                // Run Calculation button in the sticky bar above.
+                variant="text"
                 size="small"
                 onClick={() => setEditProjectSetupOpen(true)}
                 data-testid="edit-project-setup-button"
@@ -1417,22 +1440,36 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       {/*
         Phase D1 — restore banner. Surfaces when a draft was found on
         project load that's newer than the latest committed version.
-        Non-blocking: tabs remain interactive (the banner persists until
-        the user clicks Restore or Discard).
+        Non-blocking: tabs remain interactive.
+        Phase F2 PR 4 — gained an X dismiss button. Dismissal is
+        keyed off the draft's ``updated_at`` so a fresh draft (newer
+        timestamp) re-shows the banner; reload also re-shows.
       */}
-      {pendingDraft ? (
+      {pendingDraft && restoreBannerDismissedFor !== pendingDraft.updated_at ? (
         <Alert
           severity="info"
           data-testid="autosave-restore-banner"
           sx={{ mb: 2 }}
           action={
-            <Stack direction="row" spacing={1}>
+            // MUI's ``Alert`` swallows the default close icon when
+            // ``action`` is set, so we surface the dismiss control
+            // manually alongside Restore / Discard.
+            <Stack direction="row" spacing={1} alignItems="center">
               <Button color="inherit" size="small" onClick={restoreDraft}>
                 Restore draft
               </Button>
               <Button color="inherit" size="small" onClick={discardDraft}>
                 Discard draft
               </Button>
+              <IconButton
+                size="small"
+                color="inherit"
+                aria-label="Hide restore banner"
+                onClick={() => setRestoreBannerDismissedFor(pendingDraft.updated_at)}
+                data-testid="autosave-restore-banner-dismiss"
+              >
+                <CloseIcon fontSize="small" />
+              </IconButton>
             </Stack>
           }
         >

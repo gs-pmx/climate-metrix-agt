@@ -426,23 +426,22 @@ export default function ActivityInputsPanel({
       */}
       <Paper
         sx={{
-          p: 2,
+          // F2 PR 4 — view-selector bar lightened. Padding from 16
+          // to 12 and the heavy ``0 3px 10px`` override shadow
+          // dropped in favor of a single-line bottom border that
+          // reads as a clean separation without the "floating
+          // obstruction" the design review flagged. Combined with
+          // the bar living flush below the app's sticky tabs, the
+          // user sees a contiguous command band rather than two
+          // stacked floating panels.
+          p: 1.5,
           position: "sticky",
           top: "var(--sticky-top-height)",
           zIndex: (theme) => theme.zIndex.appBar - 1,
           bgcolor: "background.paper",
-          // Post-C4 round-4 item 7: the previous 0 2px 6px rgba(_, 0.08)
-          // shadow was almost invisible on the light-mode background;
-          // the user saw no visual break between the sticky bar and the
-          // data rows scrolling under it. Deepen the spread + darken
-          // the alpha so the bar reads as clearly "above" the content.
-          // Keep the dark-mode value heavier because the paper fill
-          // already blends more with the body gradient.
-          boxShadow: (theme) => `0 3px 10px ${
-            theme.palette.mode === "dark"
-              ? "rgba(0, 0, 0, 0.5)"
-              : "rgba(0, 0, 0, 0.14)"
-          }`,
+          boxShadow: "none",
+          borderRadius: 0,
+          borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
         }}
         data-testid="view-selector-bar"
       >
