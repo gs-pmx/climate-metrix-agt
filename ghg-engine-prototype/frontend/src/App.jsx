@@ -269,8 +269,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [auditRows, setAuditRows] = React.useState([]);
   const [calcErrors, setCalcErrors] = React.useState([]);
   const [catalogError, setCatalogError] = React.useState("");
-  const [factorSourceCoverageRows, setFactorSourceCoverageRows] = React.useState([]);
-  const [factorSourceCoverageError, setFactorSourceCoverageError] = React.useState("");
+  const [factorCatalogRows, setFactorCatalogRows] = React.useState([]);
+  const [factorCatalogError, setFactorCatalogError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
   // Phase D1: when a project is loaded and a newer-than-latest-version
@@ -664,20 +664,20 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   }, [show]);
 
   React.useEffect(() => {
-    const loadFactorSourceCoverage = async () => {
+    const loadFactorCatalog = async () => {
       try {
-        const rows = await api.listFactorSourceCoverage();
+        const rows = await api.listFullInventoryFactorCatalog();
         if (!Array.isArray(rows)) {
-          throw new Error("Factor source coverage API returned non-array payload.");
+          throw new Error("Full inventory factor catalog API returned non-array payload.");
         }
-        setFactorSourceCoverageRows(rows);
-        setFactorSourceCoverageError("");
+        setFactorCatalogRows(rows);
+        setFactorCatalogError("");
       } catch (e) {
-        setFactorSourceCoverageRows([]);
-        setFactorSourceCoverageError(String(e.message || e));
+        setFactorCatalogRows([]);
+        setFactorCatalogError(String(e.message || e));
       }
     };
-    loadFactorSourceCoverage();
+    loadFactorCatalog();
   }, []);
 
   React.useEffect(() => {
@@ -852,30 +852,41 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     window.URL.revokeObjectURL(url);
   };
 
-  const downloadFactorSourcesCsv = () => {
-    if (!factorSourceCoverageRows.length) {
-      show("No factor source rows available to export.", "warning");
+  const downloadFactorCatalogCsv = () => {
+    if (!factorCatalogRows.length) {
+      show("No factor catalog rows available to export.", "warning");
       return;
     }
-    const exportRows = factorSourceCoverageRows.map((row) => ({
+    const exportRows = factorCatalogRows.map((row) => ({
       category: row.category,
       scope: row.scope,
+      protocol_category_code: row.protocol_category_code || "",
+      protocol_category_label: row.protocol_category_label || "",
+      activity_type_id: row.activity_type_id,
+      activity_label: row.activity_label,
+      implementation_status: row.implementation_status,
+      method_id: row.method_id,
+      source_type: row.source_type || "",
+      factor_kind: row.factor_kind,
       factor_domain: row.factor_domain,
+      factor_type: row.factor_type,
+      factor_description: row.factor_description,
+      life_cycle_stage: row.life_cycle_stage,
       accounting_method: row.accounting_method,
+      coverage_status: row.coverage_status,
       sources: (row.sources || []).join("; "),
+      source_details: (row.source_details || []).join("; "),
       data_years: (row.data_years || []).join("; "),
+      unit_labels: (row.unit_labels || []).join("; "),
+      geography_summary: row.geography_summary || "",
       attributes: (row.attributes || []).join("; "),
       expected_attributes: (row.expected_attributes || []).join("; "),
-      factor_types: (row.factor_types || []).join("; "),
       factor_count: row.factor_count,
-      activity_type_count: row.activity_type_count,
-      activity_labels: (row.activity_labels || []).join("; "),
       dataset_keys: (row.dataset_keys || []).join("; "),
       version_labels: (row.version_labels || []).join("; "),
       refresh_policies: (row.refresh_policies || []).join("; "),
       next_review_dates: (row.next_review_dates || []).join("; "),
       statuses: (row.statuses || []).join("; "),
-      coverage_status: row.coverage_status,
       notes: row.notes || "",
     }));
     const cols = Object.keys(exportRows[0]);
@@ -887,7 +898,7 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `ghg_factor_sources_${activeProject?.name || "project"}.csv`;
+    a.download = `ghg_full_inventory_factor_catalog_${activeProject?.name || "project"}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -1766,10 +1777,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <React.Suspense fallback={<LazyTabFallback />}>
           <AuditTab
             auditRows={auditRows}
-            factorSourceCoverageRows={factorSourceCoverageRows}
-            factorSourceCoverageError={factorSourceCoverageError}
+            factorCatalogRows={factorCatalogRows}
+            factorCatalogError={factorCatalogError}
             onExportAuditCsv={downloadAuditCsv}
-            onExportFactorSourcesCsv={downloadFactorSourcesCsv}
+            onExportFactorCatalogCsv={downloadFactorCatalogCsv}
           />
         </React.Suspense>
       )}

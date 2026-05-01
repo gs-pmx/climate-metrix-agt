@@ -92,16 +92,20 @@ const renderWrappedCell = (params) => <WrappedTextCell value={params.value} />;
 
 export default function AuditTab({
   auditRows,
-  factorSourceCoverageRows = [],
-  factorSourceCoverageError = "",
+  factorCatalogRows = [],
+  factorCatalogError = "",
   onExportAuditCsv,
-  onExportFactorSourcesCsv,
+  onExportFactorCatalogCsv,
 }) {
-  const factorSourceColumns = React.useMemo(
+  const factorCatalogColumns = React.useMemo(
     () => [
       { field: "category", headerName: "Category", width: 180, renderCell: renderWrappedCell },
       { field: "scope", headerName: "Scope", width: 110, renderCell: renderWrappedCell },
+      { field: "activity_label", headerName: "Activity", width: 220, renderCell: renderWrappedCell },
+      { field: "implementation_status", headerName: "Catalog Status", width: 140, renderCell: renderWrappedCell },
       { field: "factor_domain", headerName: "Factor Domain", width: 170, renderCell: renderWrappedCell },
+      { field: "factor_type", headerName: "Factor Type", width: 140, renderCell: renderWrappedCell },
+      { field: "life_cycle_stage", headerName: "Lifecycle", width: 120, renderCell: renderWrappedCell },
       { field: "accounting_method", headerName: "Treatment", width: 150, renderCell: renderWrappedCell },
       {
         field: "sources",
@@ -118,12 +122,21 @@ export default function AuditTab({
         renderCell: renderWrappedCell,
       },
       {
-        field: "attributes",
-        headerName: "Attributes",
-        width: 170,
-        valueGetter: (_, row) => formatList(row.attributes),
+        field: "unit_labels",
+        headerName: "Unit(s)",
+        width: 150,
+        valueGetter: (_, row) => formatList(row.unit_labels),
         renderCell: renderWrappedCell,
       },
+      { field: "geography_summary", headerName: "Geography", width: 180, renderCell: renderWrappedCell },
+      {
+        field: "expected_attributes",
+        headerName: "Expected Attributes",
+        width: 170,
+        valueGetter: (_, row) => formatList(row.expected_attributes),
+        renderCell: renderWrappedCell,
+      },
+      { field: "factor_count", headerName: "Factors", type: "number", width: 90 },
       {
         field: "refresh_policies",
         headerName: "Refresh",
@@ -270,20 +283,20 @@ export default function AuditTab({
     <Stack spacing={2}>
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-          <Typography variant="h6">Emission Factor Sources</Typography>
-          <Button variant="outlined" onClick={onExportFactorSourcesCsv}>
-            Export Factor Sources CSV
+          <Typography variant="h6">Full Inventory Emissions Factor Catalog</Typography>
+          <Button variant="outlined" onClick={onExportFactorCatalogCsv}>
+            Export EF Catalog CSV
           </Button>
         </Stack>
-        {factorSourceCoverageError ? (
+        {factorCatalogError ? (
           <Alert severity="warning" sx={{ mb: 1.5 }}>
-            {factorSourceCoverageError}
+            {factorCatalogError}
           </Alert>
         ) : null}
-        <Box sx={{ height: 320 }}>
+        <Box sx={{ height: 420 }}>
           <DataGrid
-            rows={factorSourceCoverageRows}
-            columns={factorSourceColumns}
+            rows={factorCatalogRows}
+            columns={factorCatalogColumns}
             rowHeight={ROW_HEIGHT}
             disableRowSelectionOnClick
           />

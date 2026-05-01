@@ -96,6 +96,7 @@ export const api = {
   listActivityTypes: (status = null) =>
     request(`/catalog/activity-types${status == null ? "" : `?status=${encodeURIComponent(status)}`}`),
   listFactorSourceCoverage: () => request("/catalog/factor-source-coverage"),
+  listFullInventoryFactorCatalog: () => request("/catalog/full-inventory-factor-catalog"),
   getMethodSchema: (methodId) => request(`/schema/method/${methodId}`),
   calculate: (payload) => request("/calculate", { method: "POST", body: JSON.stringify(payload) }),
   calculateAudit: (payload) => request("/calculate/audit", { method: "POST", body: JSON.stringify(payload) }),

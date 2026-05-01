@@ -12,11 +12,13 @@ from api.dto import (
     ActivityTypeDTO,
     FactorPreviewDTO,
     FactorSourceCoverageDTO,
+    FullInventoryFactorCatalogDTO,
     MethodSchemaDTO,
     SpendFactorDTO,
     activity_type_to_dto,
     factor_preview_to_dto,
     factor_source_coverage_to_dto,
+    full_inventory_factor_catalog_to_dto,
     method_schema_to_dto,
     spend_factor_to_dto,
 )
@@ -44,6 +46,15 @@ def catalog_factor_source_coverage(
 ) -> list[FactorSourceCoverageDTO]:
     rows = store.factor_source_coverage(catalog.list())
     return [factor_source_coverage_to_dto(row) for row in rows]
+
+
+@router.get("/catalog/full-inventory-factor-catalog", response_model=list[FullInventoryFactorCatalogDTO])
+def catalog_full_inventory_factor_catalog(
+    catalog: ActivityCatalog = Depends(get_activity_catalog),
+    store: ProjectStore = Depends(get_project_store),
+) -> list[FullInventoryFactorCatalogDTO]:
+    rows = store.full_inventory_factor_catalog(catalog.list())
+    return [full_inventory_factor_catalog_to_dto(row) for row in rows]
 
 
 @router.get("/catalog/activity-types", response_model=list[ActivityTypeDTO])

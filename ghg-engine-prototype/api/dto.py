@@ -353,6 +353,42 @@ class FactorSourceCoverageDTO(BaseModel):
     notes: str = ""
 
 
+class FullInventoryFactorCatalogDTO(BaseModel):
+    """One full-inventory EF catalog row for an activity factor requirement."""
+
+    id: str
+    category: str
+    scope: str
+    protocol_category_code: str | None = None
+    protocol_category_label: str | None = None
+    activity_type_id: str
+    activity_label: str
+    implementation_status: str
+    method_id: str
+    source_type: str | None = None
+    factor_kind: str
+    factor_domain: str
+    factor_type: str
+    factor_description: str
+    life_cycle_stage: str
+    accounting_method: str
+    expected_attributes: list[str] = Field(default_factory=list)
+    attributes: list[str] = Field(default_factory=list)
+    sources: list[str] = Field(default_factory=list)
+    source_details: list[str] = Field(default_factory=list)
+    dataset_keys: list[str] = Field(default_factory=list)
+    version_labels: list[str] = Field(default_factory=list)
+    data_years: list[int] = Field(default_factory=list)
+    unit_labels: list[str] = Field(default_factory=list)
+    geography_summary: str
+    factor_count: int
+    refresh_policies: list[str] = Field(default_factory=list)
+    next_review_dates: list[str] = Field(default_factory=list)
+    statuses: list[str] = Field(default_factory=list)
+    coverage_status: str
+    notes: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Method schema envelope
 # ---------------------------------------------------------------------------
@@ -741,6 +777,10 @@ def factor_source_coverage_to_dto(row: dict[str, Any]) -> FactorSourceCoverageDT
     return FactorSourceCoverageDTO.model_validate(row)
 
 
+def full_inventory_factor_catalog_to_dto(row: dict[str, Any]) -> FullInventoryFactorCatalogDTO:
+    return FullInventoryFactorCatalogDTO.model_validate(row)
+
+
 def method_schema_to_dto(ms: MethodSchema) -> MethodSchemaDTO:
     return MethodSchemaDTO(
         method_id=ms.method_id,
@@ -802,6 +842,7 @@ __all__ = [
     "CalculationAuditResponseDTO",
     "FactorPreviewDTO",
     "FactorSourceCoverageDTO",
+    "FullInventoryFactorCatalogDTO",
     "MethodSchemaDTO",
     "ProjectResponseDTO",
     "ProjectVersionSummaryDTO",
@@ -832,6 +873,7 @@ __all__ = [
     "calculation_audit_response_to_dto",
     "factor_preview_to_dto",
     "factor_source_coverage_to_dto",
+    "full_inventory_factor_catalog_to_dto",
     "method_schema_to_dto",
     "gl_mapping_to_dto",
     "spend_factor_to_dto",
