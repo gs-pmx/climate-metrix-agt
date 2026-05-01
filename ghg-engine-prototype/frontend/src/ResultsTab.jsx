@@ -7,6 +7,7 @@ import {
   Typography,
 } from "@mui/material";
 import { DataGrid } from "@mui/x-data-grid";
+import CoverageWidget from "./CoverageWidget";
 
 function formatNumber(value, digits = 2) {
   const number = Number(value);
@@ -17,7 +18,21 @@ function formatNumber(value, digits = 2) {
   });
 }
 
-export default function ResultsTab({ resultRows, summaryRows, traceRows, onSaveResults }) {
+// Phase F2 PR 2 — Source Coverage moved from the Dashboard top to the
+// Results tab. Dashboard reads as pure outcomes (charts + KPIs);
+// coverage status sits adjacent to results, where the "what got
+// included" framing is more natural and where future export
+// configuration will live too.
+export default function ResultsTab({
+  resultRows,
+  summaryRows,
+  traceRows,
+  onSaveResults,
+  coverage = null,
+  coverageSummaryText = "",
+  activityLabelById = {},
+  onJumpToActivityInputs = null,
+}) {
   const resultColumns = React.useMemo(
     () => [
       { field: "facility_name", headerName: "Reporting Unit", flex: 1 },
@@ -47,6 +62,12 @@ export default function ResultsTab({ resultRows, summaryRows, traceRows, onSaveR
 
   return (
     <Stack spacing={2}>
+      <CoverageWidget
+        coverage={coverage}
+        activityLabelById={activityLabelById}
+        summaryText={coverageSummaryText}
+        onViewMissing={onJumpToActivityInputs ? () => onJumpToActivityInputs() : null}
+      />
       <Paper sx={{ p: 2 }}>
         <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
           <Typography variant="h6">Results</Typography>

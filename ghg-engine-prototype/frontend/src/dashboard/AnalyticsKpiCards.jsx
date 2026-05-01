@@ -16,16 +16,18 @@ function formatMt(value) {
 }
 
 // Phase D3 KPI strip. Reads from filtered analytics rows so the tiles
-// reflect the current filter combo. ``coverage`` is the project-level
-// CoverageWidget data (already computed at App level by the D2 helpers);
-// we surface its top-line percentage as the fourth KPI so the user can
-// scan totals + completeness at a glance.
+// reflect the current filter combo.
+//
+// Phase F2 PR 2 — the Coverage KPI tile moved out with the rest of the
+// Source Coverage widget (now lives on the Results tab). The dashboard
+// is pure outcomes; coverage status sits adjacent to result rows where
+// the "what got included" framing is more natural.
 //
 // Title-row typography (post-D3 polish): bumped from ``overline`` to a
 // 14px / 600-weight label so the labels read as proper field titles
 // rather than captions. The big number still dominates the tile; the
 // label just needs to be legible without leaning in.
-export default function AnalyticsKpiCards({ rows = [], coverage = null }) {
+export default function AnalyticsKpiCards({ rows = [] }) {
   const kpis = React.useMemo(() => aggregateKpis(rows), [rows]);
 
   const tiles = [
@@ -47,23 +49,6 @@ export default function AnalyticsKpiCards({ rows = [], coverage = null }) {
       value: String(kpis.activitiesCalculated),
       detail: "Distinct (RU, activity) pairs",
     },
-    {
-      id: "coverage",
-      label: "Coverage",
-      // ``coverage.percent`` is 0-100; the CoverageWidget owns the
-      // detailed breakdown. We just surface the headline number.
-      value:
-        coverage && Number.isFinite(Number(coverage.percent))
-          ? `${Number(coverage.percent).toLocaleString(undefined, {
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 1,
-            })}%`
-          : "-",
-      detail:
-        coverage && Number.isFinite(Number(coverage.percent))
-          ? "Project-level source coverage"
-          : "Configure sources to see coverage",
-    },
   ];
 
   return (
@@ -71,7 +56,7 @@ export default function AnalyticsKpiCards({ rows = [], coverage = null }) {
       sx={{
         display: "grid",
         gap: 2,
-        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" },
+        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, minmax(0, 1fr))", xl: "repeat(3, minmax(0, 1fr))" },
       }}
     >
       {tiles.map((tile) => (

@@ -13,7 +13,6 @@ import {
   Typography,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
-import CoverageWidget from "./CoverageWidget";
 import {
   filterRows,
   listCategoryOptions,
@@ -68,14 +67,15 @@ function selectionEquals(a, b) {
   );
 }
 
+// Phase F2 PR 2 — Coverage props removed; the Source Coverage widget
+// moved from this tab's top to the Results tab. The Dashboard is now a
+// pure outcomes surface: KPIs, scope-stack bar, treemap, top RUs, and
+// top contributors. Coverage status sits adjacent to the result rows
+// in Results, where the "what got included" framing is more natural.
 export default function DashboardTab({
   projectId = "",
   resultRows = [],
   activityTypesById = {},
-  coverage = null,
-  coverageSummaryText = "",
-  activityLabelById = {},
-  onJumpToActivityInputs = null,
 }) {
   const analytics = React.useMemo(
     () => buildAnalyticsEnvelope(resultRows, activityTypesById),
@@ -224,17 +224,6 @@ export default function DashboardTab({
 
   return (
     <Stack spacing={2}>
-      {/*
-        Phase D2 — Source Coverage widget. Stays at the top so
-        completeness lands before the user drops into emissions totals.
-      */}
-      <CoverageWidget
-        coverage={coverage}
-        activityLabelById={activityLabelById}
-        summaryText={coverageSummaryText}
-        onViewMissing={onJumpToActivityInputs ? () => onJumpToActivityInputs() : null}
-      />
-
       {hasResults ? (
         <>
           {/*
@@ -272,7 +261,7 @@ export default function DashboardTab({
             </Paper>
           ) : null}
 
-          <AnalyticsKpiCards rows={filteredRows} coverage={coverage} />
+          <AnalyticsKpiCards rows={filteredRows} />
 
           <Paper sx={{ p: 2 }}>
             <Stack

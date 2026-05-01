@@ -1193,7 +1193,19 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
           setEditProjectSetupOpen(false);
         }}
       />
-      <Container maxWidth="xl" sx={{ py: { xs: 2, md: 3 }, flexGrow: 1 }}>
+      {/*
+        Phase F2 PR 2 — generous bottom padding so the last data-entry
+        row (or any tab's tail content) can sit mid-screen rather than
+        glued to the viewport edge. Per Stephen's backlog item:
+        "Add some kind of scroll buffer at the bottom so we can see
+        the bottom data entry tables in mid screen rather than stuck
+        at the very bottom." 12 spacing units = 96px on the standard
+        8pt grid; comfortably reveals the next chunk of the page.
+      */}
+      <Container
+        maxWidth="xl"
+        sx={{ pt: { xs: 2, md: 3 }, pb: { xs: 6, md: 12 }, flexGrow: 1 }}
+      >
       {/*
         Post-C4 polish item 1: split the former single sticky shell into
         two cooperating elements:
@@ -1682,6 +1694,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             summaryRows={summaryRows}
             traceRows={traceRows}
             onSaveResults={saveCurrentVersion}
+            coverage={projectCoverage}
+            coverageSummaryText={coverageSummaryText}
+            activityLabelById={activityLabelById}
+            onJumpToActivityInputs={() => { setView("project"); setTab(2); }}
           />
         </React.Suspense>
       )}
@@ -1700,10 +1716,6 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
             projectId={activeProjectId}
             resultRows={resultRows}
             activityTypesById={activityTypesById}
-            coverage={projectCoverage}
-            coverageSummaryText={coverageSummaryText}
-            activityLabelById={activityLabelById}
-            onJumpToActivityInputs={() => { setView("project"); setTab(2); }}
           />
         </React.Suspense>
       )}
