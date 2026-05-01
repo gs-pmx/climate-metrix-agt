@@ -6,18 +6,10 @@ import {
   Chip,
   Container,
   IconButton,
-  MenuItem,
   Paper,
-  Select,
   Snackbar,
   Stack,
   Tab,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Tabs,
   TextField,
   Tooltip,
@@ -51,6 +43,7 @@ import AutosaveStatusChip from "./AutosaveStatusChip";
 import Sidebar from "./Sidebar";
 import NotificationsPanel from "./NotificationsPanel";
 import EditProjectSetupDialog from "./EditProjectSetupDialog";
+import ProjectsView from "./ProjectsView";
 import { buildNotifications } from "./notices";
 
 const ActivityInputsPanel = React.lazy(() => import("./ActivityInputsPanel"));
@@ -439,6 +432,22 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       }
     },
     [applySnapshot, show],
+  );
+
+  const loadProjectVersion = React.useCallback(
+    async (version) => {
+      if (!activeProjectId || !version?.version_number) return;
+      try {
+        const payload = await api.getProjectSnapshot(activeProjectId, version.version_number);
+        applySnapshot(payload);
+        setView("project");
+        setTab(1);
+        show(`Loaded version v${version.version_number}.`, "success");
+      } catch (e) {
+        show(`Failed to load version: ${e.message || e}`, "error");
+      }
+    },
+    [activeProjectId, applySnapshot, show],
   );
 
   // Phase D1: after loading the latest version, ask the backend for a
@@ -1533,152 +1542,37 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
       ) : null}
 
       {view === "projects" && (
-        <Stack spacing={2}>
-          <Paper sx={{ p: 2 }}>
-            <Stack spacing={1.5}>
-              <Typography variant="h6">Project Setup</Typography>
-              <Typography variant="body2" color="text.secondary">
-                Enter project name and inventory year, then save snapshots as your data evolves.
-              </Typography>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.25}>
-                <TextField
-                  label="Project Name"
-                  placeholder="2026 Corporate Inventory"
-                  value={projectNameDraft}
-                  onChange={(e) => setProjectNameDraft(e.target.value)}
-                  sx={{ minWidth: 280 }}
-                />
-                <TextField
-                  label="Current Inventory Year"
-                  value={inventoryYear}
-                  onChange={(e) => setInventoryYear(e.target.value)}
-                  sx={{ width: 220 }}
-                />
-                <Button variant="contained" onClick={createProject} disabled={projectBusy}>
-                  Create Project
-                </Button>
-              </Stack>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-                <Select
-                  displayEmpty
-                  value={activeProjectId}
-                  onChange={(e) => selectProject(e.target.value)}
-                  sx={{ minWidth: 330 }}
-                >
-                  <MenuItem value="">
-                    <em>Select Existing Project</em>
-                  </MenuItem>
-                  {projects.map((p) => (
-                    <MenuItem key={p.project_id} value={p.project_id}>
-                      {p.name} (v{p.latest_version})
-                    </MenuItem>
-                  ))}
-                </Select>
-                <TextField
-                  label="Version Note (optional)"
-                  placeholder="Updated electricity usage and refrigerants."
-                  value={versionNote}
-                  onChange={(e) => setVersionNote(e.target.value)}
-                  sx={{ minWidth: 300, flexGrow: 1 }}
-                />
-                <Button variant="outlined" disabled={!hasActiveProject || projectBusy} onClick={() => saveCurrentVersion(versionNote)}>
-                  Save Snapshot
-                </Button>
-                {hasActiveProject ? (
-                  <AutosaveStatusChip status={autosave.status} lastSavedAt={autosave.lastSavedAt} />
-                ) : null}
-                <Button
-                  variant="outlined"
-                  disabled={!hasActiveProject || projectBusy}
-                  onClick={async () => {
-                    await loadLatestSnapshot(activeProjectId);
-                    setView("project");
-                    setTab(1);
-                    show("Loaded latest snapshot.", "success");
-                  }}
-                >
-                  Load Latest
-                </Button>
-              </Stack>
-              <Stack direction={{ xs: "column", md: "row" }} spacing={1.25} alignItems={{ md: "center" }}>
-                <TextField
-                  label="Rename Active Project"
-                  value={projectRenameDraft}
-                  onChange={(e) => setProjectRenameDraft(e.target.value)}
-                  sx={{ minWidth: 330 }}
-                  disabled={!hasActiveProject}
-                />
-                <Button variant="outlined" disabled={!hasActiveProject || projectBusy} onClick={renameActiveProject}>
-                  Rename
-                </Button>
-                <Button variant="outlined" color="error" disabled={!hasActiveProject || projectBusy} onClick={deleteActiveProject}>
-                  Delete Project
-                </Button>
-              </Stack>
-              {projectError ? <Alert severity="error">{projectError}</Alert> : null}
-            </Stack>
-          </Paper>
-
-          <Paper sx={{ p: 2 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              Version History
-            </Typography>
-            {schemaInfo ? (
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                SQLite schema version: v{schemaInfo.current_version}
-              </Typography>
-            ) : null}
-            {projectVersions.length === 0 ? (
-              <Typography color="text.secondary">No versions saved yet.</Typography>
-            ) : (
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Version</TableCell>
-                      <TableCell>Timestamp</TableCell>
-                      <TableCell>Inventory Year</TableCell>
-                      <TableCell>GWP</TableCell>
-                      <TableCell>Trace</TableCell>
-                      <TableCell>Note</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {projectVersions.map((v) => (
-                      <TableRow key={v.version_id}>
-                        <TableCell>v{v.version_number}</TableCell>
-                        <TableCell>{formatTimestamp(v.created_at)}</TableCell>
-                        <TableCell>{v.inventory_year}</TableCell>
-                        <TableCell>{v.gwp_set}</TableCell>
-                        <TableCell>{v.include_trace ? "Yes" : "No"}</TableCell>
-                        <TableCell>{v.note || "-"}</TableCell>
-                        <TableCell align="right">
-                          <Button
-                            size="small"
-                            onClick={async () => {
-                              try {
-                                const payload = await api.getProjectSnapshot(activeProjectId, v.version_number);
-                                applySnapshot(payload);
-                                setView("project");
-                                setTab(1);
-                                show(`Loaded version v${v.version_number}.`, "success");
-                              } catch (e) {
-                                show(`Failed to load version: ${e.message || e}`, "error");
-                              }
-                            }}
-                          >
-                            Load
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
-          </Paper>
-        </Stack>
+        <ProjectsView
+          projectNameDraft={projectNameDraft}
+          onProjectNameDraftChange={setProjectNameDraft}
+          inventoryYear={inventoryYear}
+          onInventoryYearChange={setInventoryYear}
+          onCreateProject={createProject}
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSelectProject={selectProject}
+          hasActiveProject={hasActiveProject}
+          versionNote={versionNote}
+          onVersionNoteChange={setVersionNote}
+          onSaveSnapshot={() => saveCurrentVersion(versionNote)}
+          autosaveStatus={autosave.status}
+          autosaveLastSavedAt={autosave.lastSavedAt}
+          onLoadLatest={async () => {
+            await loadLatestSnapshot(activeProjectId);
+            setView("project");
+            setTab(1);
+            show("Loaded latest snapshot.", "success");
+          }}
+          projectRenameDraft={projectRenameDraft}
+          onProjectRenameDraftChange={setProjectRenameDraft}
+          onRenameActiveProject={renameActiveProject}
+          onDeleteActiveProject={deleteActiveProject}
+          projectBusy={projectBusy}
+          projectError={projectError}
+          projectVersions={projectVersions}
+          schemaInfo={schemaInfo}
+          onLoadVersion={loadProjectVersion}
+        />
       )}
 
       {view === "project" && tab === 1 && hasActiveProject && (
