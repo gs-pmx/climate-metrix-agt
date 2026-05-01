@@ -95,6 +95,52 @@ def build_factor_source_coverage(
     return sorted(rows, key=lambda row: (row["category"], row["scope"], row["factor_domain"], row["accounting_method"]))
 
 
+def build_full_inventory_factor_catalog(
+    activity_types: list[ActivityTypeDefinition],
+    factor_rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build one source-level EF catalog row for every full-inventory factor need."""
+
+    rows: list[dict[str, Any]] = []
+    for activity in activity_types:
+        needs = _activity_factor_needs(activity)
+        if not needs:
+            rows.append(
+                _factor_catalog_row(
+                    activity,
+                    need=None,
+                    matches=[],
+                    need_index=1,
+                    note="Activity has no factor query template in the catalog.",
+                )
+            )
+            continue
+
+        for need_index, need in enumerate(needs, start=1):
+            matches = [row for row in factor_rows if _matches_need(row, need)]
+            rows.append(
+                _factor_catalog_row(
+                    activity,
+                    need=need,
+                    matches=matches,
+                    need_index=need_index,
+                    note="",
+                )
+            )
+
+    return sorted(
+        rows,
+        key=lambda row: (
+            row["category"],
+            row["scope"],
+            row["activity_label"],
+            row["accounting_method"],
+            row["factor_domain"],
+            row["factor_type"],
+        ),
+    )
+
+
 def _activity_factor_needs(activity: ActivityTypeDefinition) -> list[dict[str, Any]]:
     if activity.method_id == "spend_based" or activity.emission_category == "spend-based":
         return [
@@ -109,6 +155,73 @@ def _activity_factor_needs(activity: ActivityTypeDefinition) -> list[dict[str, A
             }
         ]
     return [_template_need(template) for template in activity.factor_query_templates]
+
+
+def _factor_catalog_row(
+    activity: ActivityTypeDefinition,
+    *,
+    need: dict[str, Any] | None,
+    matches: list[dict[str, Any]],
+    need_index: int,
+    note: str,
+) -> dict[str, Any]:
+    expected_attributes = set(need["attributes"]) if need is not None else set()
+    matched_attributes = {_normalize_attribute(row.get("attribute")) for row in matches if row.get("attribute")}
+    notes = {note} if note else set()
+
+    if need is None:
+        coverage_status = "not_mapped"
+    elif not matches:
+        coverage_status = "missing"
+        notes.add("No published factor source matched the catalog template.")
+    elif expected_attributes and not expected_attributes.issubset(matched_attributes):
+        coverage_status = "partial"
+        missing = sorted(expected_attributes - matched_attributes)
+        if missing:
+            notes.add(f"Missing expected attributes: {', '.join(missing)}.")
+    else:
+        coverage_status = "available"
+
+    factor_ids = {
+        str(row.get("factor_version_id") or row.get("source_record_key") or "")
+        for row in matches
+        if row.get("factor_version_id") or row.get("source_record_key")
+    }
+    return {
+        "id": _row_id(activity.activity_type_id, str(need_index)),
+        "category": activity.category,
+        "scope": str(activity.scope),
+        "protocol_category_code": activity.protocol_category_code,
+        "protocol_category_label": activity.protocol_category_label,
+        "activity_type_id": activity.activity_type_id,
+        "activity_label": activity.label,
+        "implementation_status": activity.implementation_status,
+        "method_id": activity.method_id,
+        "source_type": activity.source_type,
+        "factor_kind": need["factor_kind"] if need is not None else "",
+        "factor_domain": need["factor_domain"] if need is not None else "",
+        "factor_type": need["factor_type"] if need is not None and need["factor_type"] is not None else "",
+        "factor_description": need["description"] if need is not None and need["description"] is not None else "",
+        "life_cycle_stage": (
+            need["life_cycle_stage"] if need is not None and need["life_cycle_stage"] is not None else ""
+        ),
+        "accounting_method": need["accounting_method"] if need is not None else "",
+        "expected_attributes": sorted(expected_attributes),
+        "attributes": sorted(matched_attributes),
+        "sources": _sorted_values(matches, "source_id", fallback_key="source_name"),
+        "source_details": _sorted_values(matches, "source_detail"),
+        "dataset_keys": _sorted_values(matches, "dataset_key"),
+        "version_labels": _sorted_values(matches, "version_label"),
+        "data_years": sorted({int(row["data_year"]) for row in matches if row.get("data_year") is not None}),
+        "unit_labels": _sorted_values(matches, "unit_label"),
+        "geography_summary": _geography_summary(matches),
+        "factor_count": len(factor_ids),
+        "refresh_policies": _maintenance_values(matches, "review_cycle"),
+        "next_review_dates": _maintenance_values(matches, "next_review_date"),
+        "statuses": _sorted_values(matches, "status"),
+        "coverage_status": coverage_status,
+        "notes": " ".join(sorted(notes)),
+    }
 
 
 def _template_need(template: FactorQueryTemplate) -> dict[str, Any]:
@@ -196,6 +309,59 @@ def _finalize_row(bucket: dict[str, Any]) -> dict[str, Any]:
         "coverage_status": coverage_status,
         "notes": " ".join(sorted(bucket["notes"])),
     }
+
+
+def _sorted_values(
+    rows: list[dict[str, Any]],
+    key: str,
+    *,
+    fallback_key: str | None = None,
+) -> list[str]:
+    values = set()
+    for row in rows:
+        value = row.get(key)
+        if value is None and fallback_key is not None:
+            value = row.get(fallback_key)
+        if value is not None and str(value).strip():
+            values.add(str(value))
+    return sorted(values)
+
+
+def _maintenance_values(rows: list[dict[str, Any]], key: str) -> list[str]:
+    values = set()
+    for row in rows:
+        maintenance = _metadata(row).get("maintenance", {})
+        if isinstance(maintenance, dict) and maintenance.get(key):
+            values.add(str(maintenance[key]))
+    return sorted(values)
+
+
+def _geography_summary(rows: list[dict[str, Any]]) -> str:
+    if not rows:
+        return ""
+    specificities = _sorted_values(rows, "geographic_specificity")
+    subregions = _sorted_values(rows, "egrid_subregion")
+    states = _sorted_values(rows, "state")
+    countries = _sorted_values(rows, "country")
+    regions = _sorted_values(rows, "region")
+    parts: list[str] = []
+    if subregions:
+        parts.append(_compact_geography("eGRID subregion", subregions))
+    elif states:
+        parts.append(_compact_geography("state", states))
+    elif countries:
+        parts.append(_compact_geography("country", countries))
+    elif regions:
+        parts.append(_compact_geography("region", regions))
+    if specificities:
+        parts.append(f"grain: {', '.join(specificities)}")
+    return "; ".join(parts)
+
+
+def _compact_geography(label: str, values: list[str]) -> str:
+    if len(values) <= 8:
+        return f"{label}: {', '.join(values)}"
+    return f"{len(values)} {label}s"
 
 
 def _metadata(row: dict[str, Any]) -> dict[str, Any]:

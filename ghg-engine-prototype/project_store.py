@@ -11,7 +11,10 @@ from ghg_engine.infrastructure.sqlite_workspace import SQLiteWorkspaceDraftStore
 from ghg_engine.models import ProjectSnapshot
 from ghg_engine.ports.persistence import InventoryRepository, WorkspaceDraftRepository
 from ghg_engine.services.applicability import build_applicability_map
-from ghg_engine.services.factor_source_coverage import build_factor_source_coverage
+from ghg_engine.services.factor_source_coverage import (
+    build_factor_source_coverage,
+    build_full_inventory_factor_catalog,
+)
 
 
 class ProjectService:
@@ -860,6 +863,10 @@ class ProjectStore:
     def factor_source_coverage(self, activity_types: list[Any]) -> list[dict[str, Any]]:
         factor_rows = self._factors.list_factor_versions_for_coverage()
         return build_factor_source_coverage(activity_types, factor_rows)
+
+    def full_inventory_factor_catalog(self, activity_types: list[Any]) -> list[dict[str, Any]]:
+        factor_rows = self._factors.list_factor_versions_for_coverage()
+        return build_full_inventory_factor_catalog(activity_types, factor_rows)
 
     def schema_info(self) -> dict[str, Any]:
         with self._connect() as conn:

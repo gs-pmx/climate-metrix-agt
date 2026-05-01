@@ -59,6 +59,39 @@ def test_catalog_factor_source_coverage_endpoint_returns_source_level_rows(clien
     assert market_based["sources"] == []
 
 
+def test_catalog_full_inventory_factor_catalog_returns_every_activity_need(client: TestClient):
+    response = client.get("/catalog/full-inventory-factor-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload
+
+    activity_ids = {row["activity_type_id"] for row in payload}
+    activity_response = client.get("/catalog/activity-types")
+    all_activity_ids = {row["activity_type_id"] for row in activity_response.json()}
+    assert all_activity_ids.issubset(activity_ids)
+
+    grid_rows = [
+        row
+        for row in payload
+        if row["activity_type_id"] == "scope2_purchased_electricity_grid_mix"
+    ]
+    assert {row["accounting_method"] for row in grid_rows} == {"location_based", "market_based"}
+    location_based = next(row for row in grid_rows if row["accounting_method"] == "location_based")
+    assert location_based["coverage_status"] == "available"
+    assert "egrid" in location_based["sources"]
+    assert "lb/MWh" in location_based["unit_labels"]
+    assert "eGRID subregion" in location_based["geography_summary"]
+
+    unmapped = next(
+        row
+        for row in payload
+        if row["activity_type_id"] == "scope1_onsite_generation_electricity"
+    )
+    assert unmapped["coverage_status"] == "not_mapped"
+    assert unmapped["notes"]
+
+
 def test_catalog_activity_types_endpoint_is_available_under_api_prefix(client: TestClient):
     response = client.get("/api/catalog/activity-types")
 
