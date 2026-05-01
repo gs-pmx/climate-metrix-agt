@@ -585,9 +585,11 @@ class SQLiteFactorStore:
                 """
                 UPDATE factor_datasets
                 SET status = 'retired'
-                WHERE status = 'published' AND dataset_id <> ?
+                WHERE status = 'published'
+                  AND dataset_id <> ?
+                  AND source_name = ?
                 """,
-                (dataset_id,),
+                (dataset_id, source_name),
             )
 
         imported_count = 0
@@ -602,6 +604,45 @@ class SQLiteFactorStore:
             "imported_docs": len(docs),
             "factor_versions": imported_count,
         }
+
+    def list_factor_versions_for_coverage(
+        self,
+        *,
+        conn: sqlite3.Connection | None = None,
+    ) -> list[dict[str, Any]]:
+        if conn is None:
+            with connect_sqlite(self._db_path) as own_conn:
+                return self.list_factor_versions_for_coverage(conn=own_conn)
+        rows = conn.execute(
+            """
+            SELECT
+                fv.factor_version_id,
+                fv.source_record_key,
+                fv.factor_kind,
+                fv.emission_category,
+                fv.factor_type,
+                fv.subtype_or_description,
+                fv.attribute,
+                fv.greenhouse_gas,
+                fv.accounting_method,
+                fv.life_cycle_stage,
+                fv.unit_label,
+                fv.data_year,
+                fv.source_id,
+                fv.source_detail,
+                fv.extra_json,
+                fd.dataset_key,
+                fd.source_name,
+                fd.source_year,
+                fd.version_label,
+                fd.status
+            FROM factor_versions fv
+            JOIN factor_datasets fd ON fd.dataset_id = fv.dataset_id
+            WHERE fd.status = 'published'
+            ORDER BY fv.emission_category, fv.factor_type, fv.attribute, fv.source_id
+            """
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def import_factor_json(
         self,
@@ -1148,6 +1189,9 @@ class SQLiteFactorStore:
             "substance_code": substance_code,
             "extra_json": {
                 "versioning": versioning,
+                "maintenance": doc.get("maintenance") or {},
+                "tags": doc.get("tags") or [],
+                "related_factors": doc.get("related_factors") or [],
                 "classification_subtype": classification.get("subtype"),
                 "raw_provenance": {
                     key: value

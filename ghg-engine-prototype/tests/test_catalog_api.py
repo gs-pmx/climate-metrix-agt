@@ -27,6 +27,38 @@ def test_catalog_activity_types_endpoint_returns_protocol_catalog(client: TestCl
     assert any(row["activity_type_id"] == "scope2_purchased_electricity_grid_mix" for row in payload)
 
 
+def test_catalog_factor_source_coverage_endpoint_returns_source_level_rows(client: TestClient):
+    response = client.get("/catalog/factor-source-coverage")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload
+
+    electricity = next(
+        row
+        for row in payload
+        if row["category"] == "Stationary Energy"
+        and row["scope"] == "Scope 2"
+        and row["factor_domain"] == "electricity-generation"
+        and row["accounting_method"] == "location_based"
+    )
+    assert "egrid" in electricity["sources"]
+    assert 2023 in electricity["data_years"]
+    assert set(electricity["expected_attributes"]) == {"co2_ef", "ch4_ef", "n2o_ef"}
+    assert electricity["coverage_status"] == "available"
+
+    market_based = next(
+        row
+        for row in payload
+        if row["category"] == "Stationary Energy"
+        and row["scope"] == "Scope 2"
+        and row["factor_domain"] == "electricity-generation"
+        and row["accounting_method"] == "market_based"
+    )
+    assert market_based["coverage_status"] == "missing"
+    assert market_based["sources"] == []
+
+
 def test_catalog_activity_types_endpoint_is_available_under_api_prefix(client: TestClient):
     response = client.get("/api/catalog/activity-types")
 
