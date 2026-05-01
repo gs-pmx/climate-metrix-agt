@@ -62,7 +62,7 @@ export default function NotificationsPanel({
 
   const detailTitle = (() => {
     if (detailMode === "errored") return "Sources with calculation errors";
-    if (detailMode === "orphaned") return "Orphaned activity data";
+    if (detailMode === "orphaned") return "Excluded activity data";
     return "Sources missing data";
   })();
 

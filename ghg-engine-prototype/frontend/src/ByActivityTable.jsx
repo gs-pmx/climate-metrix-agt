@@ -17,7 +17,6 @@ import AddIcon from "@mui/icons-material/Add";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { DataGrid } from "@mui/x-data-grid";
 import AddReportingUnitDialog from "./AddReportingUnitDialog";
-import ByActivitySidebar from "./ByActivitySidebar";
 import { RepeatableStatusChip, StatusChip, filterErrorsForRow } from "./StatusChip";
 import {
   EMPTY_ACTIVITY,
@@ -376,9 +375,7 @@ export default function ByActivityTable({
   existingActivitiesByPair,
   show,
 }) {
-  const [sidebarOpen, setSidebarOpen] = React.useState(true);
   const [scopeCollapsed, setScopeCollapsed] = React.useState({});
-  const [activeSubcategoryId, setActiveSubcategoryId] = React.useState("");
   const [addDialogActivity, setAddDialogActivity] = React.useState(null);
 
   // "Show all activities" toggle. Default OFF (hide unused) on first
@@ -450,79 +447,14 @@ export default function ByActivityTable({
     [tree],
   );
 
-  // Refs for every rendered subcategory section so we can both scroll on
-  // click and observe visibility for the scroll-spy.
-  const sectionRefs = React.useRef(new Map());
-  const registerSectionRef = React.useCallback((key) => (node) => {
-    if (!node) {
-      sectionRefs.current.delete(key);
-    } else {
-      sectionRefs.current.set(key, node);
-    }
-  }, []);
-
-  const handleNavigate = React.useCallback(
-    (scopeId, subId) => {
-      const key = `${scopeId}::${subId}`;
-      const node = sectionRefs.current.get(key);
-      if (node && typeof node.scrollIntoView === "function") {
-        // Post-C4 round-4 item 12: sidebar nav used
-        // behavior: "smooth" which animates the scroll over hundreds of
-        // ms (browser-tuned) — a click on a subcategory row felt slow
-        // even though the handler fired immediately. Switch to instant
-        // scroll so the click feels synchronous.
-        //
-        // State updates that follow (active subcategory highlight,
-        // scope expansion) are wrapped in startTransition so React
-        // treats them as non-urgent. The scroll still happens
-        // immediately; the highlighted-row repaint lands as soon as
-        // the browser has a frame to spare.
-        node.scrollIntoView({ behavior: "auto", block: "start" });
-        const applyState = () => {
-          setActiveSubcategoryId(subId);
-          // If the scope is collapsed make sure we open it so the target
-          // section is visible after the scroll lands.
-          setScopeCollapsed((prev) => (prev?.[scopeId] ? { ...prev, [scopeId]: false } : prev));
-        };
-        if (typeof React.startTransition === "function") {
-          React.startTransition(applyState);
-        } else {
-          applyState();
-        }
-      }
-    },
-    [],
-  );
-
-  // Scroll-spy: the subcategory whose top edge is closest to (but below)
-  // the sticky header gets highlighted. IntersectionObserver approximates
-  // this by preferring entries crossing a near-top rootMargin.
-  React.useEffect(() => {
-    if (typeof window === "undefined" || !("IntersectionObserver" in window)) return undefined;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible.length === 0) return;
-        const top = visible[0];
-        const key = top.target.dataset.tocKey || "";
-        const [, subId] = key.split("::");
-        if (subId) setActiveSubcategoryId(subId);
-      },
-      {
-        root: null,
-        // Top rootMargin should match (top-layer + secondary-layer)
-        // approximately so the scroll-spy flags the section just under
-        // the sticky stack as active. Uses a fixed px value rather than
-        // CSS vars because IntersectionObserver does not accept vars.
-        rootMargin: "-288px 0px -60% 0px",
-        threshold: [0, 0.1],
-      },
-    );
-    for (const node of sectionRefs.current.values()) observer.observe(node);
-    return () => observer.disconnect();
-  }, [tree]);
+  // F2 PR 3 — the in-component TOC sidebar (``ByActivitySidebar``) was
+  // replaced by a horizontal ``ScopeChips`` strip in the parent's
+  // sticky toolbar. Scope navigation is now anchor-based: each scope
+  // Box below renders an ``id="scope-${scope.id}"`` and the parent
+  // calls ``document.getElementById(...).scrollIntoView()`` from the
+  // chip click. The previous in-table refs + IntersectionObserver
+  // scroll-spy moved up to ``ActivityInputsPanel`` for the same
+  // reason.
 
   const handleSaveAdd = (checkedById) => {
     if (addDialogActivity && onApplyAddReportingUnit) {
@@ -532,18 +464,8 @@ export default function ByActivityTable({
   };
 
   return (
-    <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems="flex-start">
-      <ByActivitySidebar
-        tree={tree}
-        activeSubcategoryId={activeSubcategoryId}
-        scopeCollapsedState={scopeCollapsed}
-        setScopeCollapsedState={setScopeCollapsed}
-        onNavigate={handleNavigate}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-      />
-
-      <Box sx={{ flexGrow: 1, minWidth: 0, width: "100%" }}>
+    <Stack spacing={2}>
+      <Box sx={{ width: "100%", minWidth: 0 }}>
         {/*
           "Show all activities" toggle. Sits at the top of the right-hand
           content column rather than alongside the view-mode toggles in
@@ -593,18 +515,18 @@ export default function ByActivityTable({
             return (
               <Box
                 key={scope.id}
+                id={`scope-${scope.id}`}
                 sx={{
-                  // Post-C4 round-3 item 3: extra top breathing room
-                  // between scopes to reinforce section boundaries. The
-                  // first scope keeps its baseline spacing so it doesn't
-                  // push away from the view-selector bar above.
-                  //
-                  // Post-C4 round-4 item 6: bump the extra top margin
-                  // so scope-to-scope transitions read more clearly
-                  // (user wanted "a tiny touch more" than the prior
-                  // mt: 2 / 16px). 24px (mt: 3) lands in the
-                  // 8-12px-above-baseline range they asked for.
-                  mt: scopeIndex === 0 ? 0 : 3,
+                  // F2 PR 3 — scope-to-scope spacing bumped from 24
+                  // (mt: 3) to 40 (mt: 5) per the design review's
+                  // "not enough visual space and distinction between
+                  // sections" critique. Anchor lands just below the
+                  // sticky stack via ``scrollMarginTop`` so a click
+                  // from ``ScopeChips`` doesn't park the title under
+                  // the toolbar.
+                  mt: scopeIndex === 0 ? 0 : 5,
+                  scrollMarginTop:
+                    "calc(var(--sticky-top-height) + var(--sticky-secondary-height) + 16px)",
                 }}
               >
                 <Stack
@@ -617,25 +539,17 @@ export default function ByActivityTable({
                     pr: 1.25,
                     cursor: "pointer",
                     userSelect: "none",
-                    // Colored accent strip on the left edge of each
-                    // scope header so users can pattern-match Scope 1
-                    // vs 2 vs 3 while scanning.
-                    //
-                    // Post-C4 round-4 item 5: desaturate from .main to
-                    // .light and layer a very light (~5% alpha) wash
-                    // of the same color across the whole header bar so
-                    // the scope row reads as a gentle "section
-                    // heading" instead of a saturated strip.
+                    // F2 PR 3 — dropped the colored background fill
+                    // (was a 5/8% alpha tint of the scope's accent
+                    // hue). The design review flagged Scope 1's
+                    // light red band as "risks reading as an error
+                    // state"; the same tint logic produced an
+                    // unnecessary green/blue wash for Scope 2 and 3.
+                    // The 4px left border carries the scope identity
+                    // alone — calmer, less risk of confusion with
+                    // status colors.
                     borderLeft: "4px solid",
                     borderLeftColor: accent.border,
-                    borderRadius: 1,
-                    backgroundColor: (theme) => (accent.tint
-                      ? alpha(
-                        theme.palette[accent.tint.split(".")[0]]?.main
-                          || theme.palette.text.primary,
-                        theme.palette.mode === "dark" ? 0.08 : 0.05,
-                      )
-                      : "transparent"),
                   }}
                   onClick={() => setScopeCollapsed((prev) => ({ ...prev, [scope.id]: !prev?.[scope.id] }))}
                   data-testid={`scope-header-${scope.id}`}
@@ -685,13 +599,13 @@ export default function ByActivityTable({
                       adds the 8px beat the user asked for. */}
                   <Stack spacing={3}>
                     {scope.subcategories.map((sub, subIndex) => {
-                      const key = `${scope.id}::${sub.id}`;
+                      // F2 PR 3 — the in-table TOC sidebar moved out, so
+                      // the per-sub ref + data-toc-key wiring is gone.
+                      // The anchor ``id`` stays for direct URL linking.
                       return (
                         <Box
                           key={sub.id}
                           id={sectionAnchorId(scope.id, sub.id)}
-                          ref={registerSectionRef(key)}
-                          data-toc-key={key}
                           sx={{
                             // Keep anchors clear of both sticky layers
                             // when clicked from the TOC.

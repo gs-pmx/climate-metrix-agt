@@ -237,12 +237,19 @@ function ReportingUnitCard({
             {orphanedCount > 0 ? (
               <>
                 {" · "}
-                <Tooltip title="Activities with data on this unit that are not in its applicable list. Won't flow to inventory.">
+                {/* F2 PR 3 — "orphaned" was technical jargon per the
+                    design review ("Orphaned needs a gentler, clearer
+                    label for non-technical users: maybe 'data not
+                    counted' or 'excluded data'"). Switched to
+                    "excluded"; the underlying data field stays
+                    ``unitCoverage.orphaned`` to avoid a coverage-API
+                    rename. */}
+                <Tooltip title="Activities with data on this unit that aren't in its applicable list. The data is preserved on the row but excluded from this inventory.">
                   <Box
                     component="span"
                     data-testid={`ru-chip-orphaned-${reportingUnit.id}`}
                   >
-                    {orphanedCount} orphaned
+                    {orphanedCount} excluded
                   </Box>
                 </Tooltip>
               </>
