@@ -269,6 +269,8 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   const [auditRows, setAuditRows] = React.useState([]);
   const [calcErrors, setCalcErrors] = React.useState([]);
   const [catalogError, setCatalogError] = React.useState("");
+  const [factorSourceCoverageRows, setFactorSourceCoverageRows] = React.useState([]);
+  const [factorSourceCoverageError, setFactorSourceCoverageError] = React.useState("");
   const [projectError, setProjectError] = React.useState("");
   const [schemaInfo, setSchemaInfo] = React.useState(null);
   // Phase D1: when a project is loaded and a newer-than-latest-version
@@ -662,6 +664,23 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
   }, [show]);
 
   React.useEffect(() => {
+    const loadFactorSourceCoverage = async () => {
+      try {
+        const rows = await api.listFactorSourceCoverage();
+        if (!Array.isArray(rows)) {
+          throw new Error("Factor source coverage API returned non-array payload.");
+        }
+        setFactorSourceCoverageRows(rows);
+        setFactorSourceCoverageError("");
+      } catch (e) {
+        setFactorSourceCoverageRows([]);
+        setFactorSourceCoverageError(String(e.message || e));
+      }
+    };
+    loadFactorSourceCoverage();
+  }, []);
+
+  React.useEffect(() => {
     let mounted = true;
     const loadProjectsAndSelect = async () => {
       try {
@@ -829,6 +848,46 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
     const a = document.createElement("a");
     a.href = url;
     a.download = `ghg_audit_${activeProject?.name || "project"}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const downloadFactorSourcesCsv = () => {
+    if (!factorSourceCoverageRows.length) {
+      show("No factor source rows available to export.", "warning");
+      return;
+    }
+    const exportRows = factorSourceCoverageRows.map((row) => ({
+      category: row.category,
+      scope: row.scope,
+      factor_domain: row.factor_domain,
+      accounting_method: row.accounting_method,
+      sources: (row.sources || []).join("; "),
+      data_years: (row.data_years || []).join("; "),
+      attributes: (row.attributes || []).join("; "),
+      expected_attributes: (row.expected_attributes || []).join("; "),
+      factor_types: (row.factor_types || []).join("; "),
+      factor_count: row.factor_count,
+      activity_type_count: row.activity_type_count,
+      activity_labels: (row.activity_labels || []).join("; "),
+      dataset_keys: (row.dataset_keys || []).join("; "),
+      version_labels: (row.version_labels || []).join("; "),
+      refresh_policies: (row.refresh_policies || []).join("; "),
+      next_review_dates: (row.next_review_dates || []).join("; "),
+      statuses: (row.statuses || []).join("; "),
+      coverage_status: row.coverage_status,
+      notes: row.notes || "",
+    }));
+    const cols = Object.keys(exportRows[0]);
+    const esc = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const header = cols.join(",");
+    const lines = exportRows.map((row) => cols.map((column) => esc(row[column])).join(","));
+    const csv = [header, ...lines].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `ghg_factor_sources_${activeProject?.name || "project"}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -1707,7 +1766,10 @@ export default function App({ colorMode = "light", onToggleColorMode = () => {} 
         <React.Suspense fallback={<LazyTabFallback />}>
           <AuditTab
             auditRows={auditRows}
+            factorSourceCoverageRows={factorSourceCoverageRows}
+            factorSourceCoverageError={factorSourceCoverageError}
             onExportAuditCsv={downloadAuditCsv}
+            onExportFactorSourcesCsv={downloadFactorSourcesCsv}
           />
         </React.Suspense>
       )}

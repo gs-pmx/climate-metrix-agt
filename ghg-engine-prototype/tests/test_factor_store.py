@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from ghg_engine.factors import FactorQuery
@@ -38,6 +39,40 @@ def _electricity_doc(*, factor_key: str, data_year: int, value: float) -> dict:
             "data_year": data_year,
             "confidence_level": "high",
             "source_detail": "location-based subregion factor",
+        },
+        "versioning": {"is_current": True},
+    }
+
+
+def _combustion_doc(*, factor_key: str, source_id: str = "tcr", data_year: int = 2024) -> dict:
+    return {
+        "factor_key": factor_key,
+        "lineage_id": f"{source_id}::natural-gas::co2-ef::us-weighted-avg",
+        "classification": {
+            "domain": "combustion",
+            "class": "energy",
+            "type": "natural-gas",
+            "subtype": "us-weighted-avg",
+            "life_cycle_stage": "direct",
+        },
+        "geography": {
+            "region": "North America",
+            "country": "USA",
+            "geographic_specificity": "national",
+        },
+        "factor": {
+            "attribute": "co2-ef",
+            "greenhouse_gas": "co2",
+            "value": 53.06,
+            "unit_label": "kg/mmbtu",
+            "unit_numerator": "kg",
+            "unit_denominator": "mmbtu",
+        },
+        "provenance": {
+            "source_id": source_id,
+            "data_year": data_year,
+            "confidence_level": "high",
+            "source_detail": "test combustion factor",
         },
         "versioning": {"is_current": True},
     }
@@ -104,6 +139,61 @@ def test_factor_store_imports_documents_into_canonical_tables_and_selects_latest
     assert dataset_statuses == {"egrid_2024": "retired", "egrid_2025": "published"}
     assert source_doc_count == 2
     assert factor_version_count == 2
+
+
+def test_publishing_new_physical_source_does_not_retire_existing_published_sources(tmp_path: Path):
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    store.import_factor_documents(
+        dataset_key="tcr_2024",
+        source_name="tcr",
+        version_label="TCR 2024",
+        docs=[_combustion_doc(factor_key="tcr_natural_gas_2024")],
+        publish=True,
+    )
+    store.import_factor_documents(
+        dataset_key="egrid_2024",
+        source_name="egrid",
+        version_label="eGRID 2024",
+        docs=[_electricity_doc(factor_key="nwpp_2024", data_year=2024, value=1.0)],
+        publish=True,
+    )
+
+    with store._connect() as conn:  # noqa: SLF001 - verifying factor dataset publication scope
+        dataset_statuses = {
+            row["dataset_key"]: row["status"]
+            for row in conn.execute(
+                "SELECT dataset_key, status FROM factor_datasets ORDER BY dataset_key"
+            ).fetchall()
+        }
+
+    assert dataset_statuses == {"egrid_2024": "published", "tcr_2024": "published"}
+
+
+def test_document_import_preserves_tags_and_maintenance_metadata(tmp_path: Path):
+    store = ProjectStore(tmp_path / "projects.sqlite")
+    doc = _electricity_doc(factor_key="nwpp_2024", data_year=2024, value=1.0)
+    doc["tags"] = ["ops_inventory", "annual_refresh"]
+    doc["maintenance"] = {
+        "status": "needs-review",
+        "review_cycle": "annual",
+        "next_review_date": "2026-01-15",
+    }
+
+    store.import_factor_documents(
+        dataset_key="egrid_2024",
+        source_name="egrid",
+        version_label="eGRID 2024",
+        docs=[doc],
+        publish=True,
+    )
+
+    with store._connect() as conn:  # noqa: SLF001 - verifying canonical metadata preservation
+        row = conn.execute("SELECT extra_json FROM factor_versions").fetchone()
+    extra = json.loads(row["extra_json"])
+
+    assert extra["tags"] == ["ops_inventory", "annual_refresh"]
+    assert extra["maintenance"]["review_cycle"] == "annual"
+    assert extra["maintenance"]["next_review_date"] == "2026-01-15"
 
 
 def test_physical_factor_lookup_still_works_when_a_spend_dataset_is_published_later(

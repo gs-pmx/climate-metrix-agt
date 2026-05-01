@@ -17,7 +17,7 @@ backward compatibility with existing SQLite snapshots remains
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -43,7 +43,6 @@ from ghg_engine.models import (
     SummaryRow,
     TraceRecord,
 )
-
 
 # ---------------------------------------------------------------------------
 # Catalog / activity-type DTOs
@@ -326,6 +325,32 @@ class FactorPreviewDTO(BaseModel):
     gas: str
     unit: str
     factor_source: str
+
+
+class FactorSourceCoverageDTO(BaseModel):
+    """Source-level audit row for active emission-factor coverage."""
+
+    id: str
+    category: str
+    scope: str
+    factor_domain: str
+    accounting_method: str
+    activity_type_ids: list[str] = Field(default_factory=list)
+    activity_labels: list[str] = Field(default_factory=list)
+    activity_type_count: int
+    sources: list[str] = Field(default_factory=list)
+    dataset_keys: list[str] = Field(default_factory=list)
+    version_labels: list[str] = Field(default_factory=list)
+    data_years: list[int] = Field(default_factory=list)
+    attributes: list[str] = Field(default_factory=list)
+    expected_attributes: list[str] = Field(default_factory=list)
+    factor_types: list[str] = Field(default_factory=list)
+    factor_count: int
+    refresh_policies: list[str] = Field(default_factory=list)
+    next_review_dates: list[str] = Field(default_factory=list)
+    statuses: list[str] = Field(default_factory=list)
+    coverage_status: str
+    notes: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -712,6 +737,10 @@ def factor_preview_to_dto(row: dict[str, Any]) -> FactorPreviewDTO:
     )
 
 
+def factor_source_coverage_to_dto(row: dict[str, Any]) -> FactorSourceCoverageDTO:
+    return FactorSourceCoverageDTO.model_validate(row)
+
+
 def method_schema_to_dto(ms: MethodSchema) -> MethodSchemaDTO:
     return MethodSchemaDTO(
         method_id=ms.method_id,
@@ -772,6 +801,7 @@ __all__ = [
     "CalculationResponseDTO",
     "CalculationAuditResponseDTO",
     "FactorPreviewDTO",
+    "FactorSourceCoverageDTO",
     "MethodSchemaDTO",
     "ProjectResponseDTO",
     "ProjectVersionSummaryDTO",
@@ -801,6 +831,7 @@ __all__ = [
     "calculation_response_to_dto",
     "calculation_audit_response_to_dto",
     "factor_preview_to_dto",
+    "factor_source_coverage_to_dto",
     "method_schema_to_dto",
     "gl_mapping_to_dto",
     "spend_factor_to_dto",

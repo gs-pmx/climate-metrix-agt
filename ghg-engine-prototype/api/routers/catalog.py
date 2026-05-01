@@ -11,10 +11,12 @@ from api.dependencies import (
 from api.dto import (
     ActivityTypeDTO,
     FactorPreviewDTO,
+    FactorSourceCoverageDTO,
     MethodSchemaDTO,
     SpendFactorDTO,
     activity_type_to_dto,
     factor_preview_to_dto,
+    factor_source_coverage_to_dto,
     method_schema_to_dto,
     spend_factor_to_dto,
 )
@@ -33,6 +35,15 @@ def catalog_factors_preview(
 ) -> list[FactorPreviewDTO]:
     rows = factors.preview(query)
     return [factor_preview_to_dto(row) for row in rows]
+
+
+@router.get("/catalog/factor-source-coverage", response_model=list[FactorSourceCoverageDTO])
+def catalog_factor_source_coverage(
+    catalog: ActivityCatalog = Depends(get_activity_catalog),
+    store: ProjectStore = Depends(get_project_store),
+) -> list[FactorSourceCoverageDTO]:
+    rows = store.factor_source_coverage(catalog.list())
+    return [factor_source_coverage_to_dto(row) for row in rows]
 
 
 @router.get("/catalog/activity-types", response_model=list[ActivityTypeDTO])

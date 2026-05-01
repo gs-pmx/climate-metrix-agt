@@ -1,5 +1,6 @@
 import * as React from "react";
 import {
+  Alert,
   Box,
   Button,
   Paper,
@@ -15,6 +16,11 @@ function formatNumber(value, digits = 2) {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
   });
+}
+
+function formatList(value) {
+  if (Array.isArray(value)) return value.join(", ");
+  return String(value ?? "");
 }
 
 function toMetricTons(value, unit = "kg") {
@@ -84,7 +90,53 @@ function WrappedTextCell({ value }) {
 
 const renderWrappedCell = (params) => <WrappedTextCell value={params.value} />;
 
-export default function AuditTab({ auditRows, onExportAuditCsv }) {
+export default function AuditTab({
+  auditRows,
+  factorSourceCoverageRows = [],
+  factorSourceCoverageError = "",
+  onExportAuditCsv,
+  onExportFactorSourcesCsv,
+}) {
+  const factorSourceColumns = React.useMemo(
+    () => [
+      { field: "category", headerName: "Category", width: 180, renderCell: renderWrappedCell },
+      { field: "scope", headerName: "Scope", width: 110, renderCell: renderWrappedCell },
+      { field: "factor_domain", headerName: "Factor Domain", width: 170, renderCell: renderWrappedCell },
+      { field: "accounting_method", headerName: "Treatment", width: 150, renderCell: renderWrappedCell },
+      {
+        field: "sources",
+        headerName: "Source(s)",
+        width: 180,
+        valueGetter: (_, row) => formatList(row.sources),
+        renderCell: renderWrappedCell,
+      },
+      {
+        field: "data_years",
+        headerName: "Data Year(s)",
+        width: 140,
+        valueGetter: (_, row) => formatList(row.data_years),
+        renderCell: renderWrappedCell,
+      },
+      {
+        field: "attributes",
+        headerName: "Attributes",
+        width: 170,
+        valueGetter: (_, row) => formatList(row.attributes),
+        renderCell: renderWrappedCell,
+      },
+      {
+        field: "refresh_policies",
+        headerName: "Refresh",
+        width: 140,
+        valueGetter: (_, row) => formatList(row.refresh_policies),
+        renderCell: renderWrappedCell,
+      },
+      { field: "coverage_status", headerName: "Status", width: 120, renderCell: renderWrappedCell },
+      { field: "notes", headerName: "Notes", width: 280, renderCell: renderWrappedCell },
+    ],
+    [],
+  );
+
   const columns = React.useMemo(
     () => [
       { field: "facility_name", headerName: "Reporting Unit", width: 160, renderCell: renderWrappedCell },
@@ -215,7 +267,30 @@ export default function AuditTab({ auditRows, onExportAuditCsv }) {
   );
 
   return (
-    <Paper sx={{ p: 2 }}>
+    <Stack spacing={2}>
+      <Paper sx={{ p: 2 }}>
+        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+          <Typography variant="h6">Emission Factor Sources</Typography>
+          <Button variant="outlined" onClick={onExportFactorSourcesCsv}>
+            Export Factor Sources CSV
+          </Button>
+        </Stack>
+        {factorSourceCoverageError ? (
+          <Alert severity="warning" sx={{ mb: 1.5 }}>
+            {factorSourceCoverageError}
+          </Alert>
+        ) : null}
+        <Box sx={{ height: 320 }}>
+          <DataGrid
+            rows={factorSourceCoverageRows}
+            columns={factorSourceColumns}
+            rowHeight={ROW_HEIGHT}
+            disableRowSelectionOnClick
+          />
+        </Box>
+      </Paper>
+
+      <Paper sx={{ p: 2 }}>
       <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
         <Typography variant="h6">Audit Pathway</Typography>
         <Button variant="outlined" onClick={onExportAuditCsv}>
@@ -242,6 +317,7 @@ export default function AuditTab({ auditRows, onExportAuditCsv }) {
           disableRowSelectionOnClick
         />
       </Box>
-    </Paper>
+      </Paper>
+    </Stack>
   );
 }
