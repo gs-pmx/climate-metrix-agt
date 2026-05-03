@@ -7,9 +7,8 @@ import {
   Button,
   Chip,
   Collapse,
-  FormControlLabel,
+  Paper,
   Stack,
-  Switch,
   Typography,
   alpha,
 } from "@mui/material";
@@ -36,11 +35,6 @@ import {
 import { filterApplicableReportingUnits, getSelectedActivityTypeIds } from "./applicability";
 import { formatNumericDisplay } from "./numericFormat";
 import { groupByTOC, sectionAnchorId } from "./categorizeForTOC";
-
-// localStorage key for the "Show all activities" toggle. Defaulting to
-// OFF means a returning user with no localStorage entry lands on the
-// hide-unused view, which is the intended noise-reduced default.
-const SHOW_ALL_STORAGE_KEY = "ghg-by-activity-show-all";
 
 const SCROLLABLE_TABLE_SX = {
   width: "100%",
@@ -82,7 +76,7 @@ function ActivityAccordion({
   activityType,
   activitiesByPair,
   reportingUnits,
-  totalActivities,
+  scopeActivityCount,
   upsertActivity,
   openDetailsForPair,
   calcErrors,
@@ -278,22 +272,39 @@ function ActivityAccordion({
 
   return (
     <Accordion
-      // In "Show all" mode an unselected activity should not be expanded
-      // by default — the user is browsing the catalog, not entering data.
-      // Selected (non-dimmed) activities keep the original auto-expand
-      // behavior for small catalogs.
-      defaultExpanded={!dimmed && totalActivities <= 8}
+      // F2 PR 10 — auto-expand when this scope card holds ~6 or fewer
+      // activities, matching the cohesion of the By Reporting Unit
+      // view (where the whole RU's activity list is expanded). For
+      // larger scope cards we keep the per-activity collapse so the
+      // page stays scannable. ``dimmed`` activities (Show-all mode,
+      // unselected) still default to collapsed — they're catalog
+      // browsing affordances, not data the user is editing.
+      defaultExpanded={!dimmed && scopeActivityCount <= 6}
       disableGutters
       sx={{
         overflow: "hidden",
         "& .MuiAccordionDetails-root": { overflow: "hidden" },
-        // Dim the whole accordion for catalog activities not yet selected
-        // by any Reporting Unit. The "+ Add Reporting Unit" button below
-        // is undimmed so the discovery affordance still reads bright.
+        // F2 PR 10 — surface the "Add Reporting Unit" button on
+        // hover/focus only. The user flagged the always-visible
+        // button on every activity row as repetitive; hover-reveal
+        // keeps the affordance reachable without making it the
+        // dominant element on each row.
+        "& [data-add-reporting-unit-button]": {
+          opacity: 0,
+          transition: "opacity 120ms ease",
+        },
+        "&:hover [data-add-reporting-unit-button], &:focus-within [data-add-reporting-unit-button]": {
+          opacity: 1,
+        },
         ...(dimmed && {
           opacity: 0.55,
           transition: "opacity 120ms ease",
           "&:hover, &:focus-within": { opacity: 1 },
+          // Dimmed catalog rows leave the discovery button bright
+          // even when not hovered — it's the call to action.
+          "& [data-add-reporting-unit-button]": {
+            opacity: 1,
+          },
         }),
       }}
     >
@@ -322,6 +333,7 @@ function ActivityAccordion({
             size="small"
             variant={dimmed ? "outlined" : "text"}
             startIcon={<AddIcon />}
+            data-add-reporting-unit-button
             // Stop propagation so clicking the button does not also toggle
             // the surrounding accordion — MUI forwards clicks to the
             // AccordionSummary otherwise.
@@ -329,10 +341,6 @@ function ActivityAccordion({
               event.stopPropagation();
               onOpenAddReportingUnit(activityType);
             }}
-            // When the surrounding accordion is dimmed (Show-all mode,
-            // unselected activity) keep the discovery button at full
-            // opacity so it draws the eye as the call to action.
-            sx={dimmed ? { opacity: 1 } : undefined}
           >
             Add Reporting Unit
           </Button>
@@ -374,30 +382,15 @@ export default function ByActivityTable({
   onApplyAddReportingUnit,
   existingActivitiesByPair,
   show,
+  // F2 PR 10 — show-all state lives in ``ActivityInputsPanel`` so it
+  // can share the sticky bar's row 2 with the visible-count chip.
+  // Defaults preserve the prior local-state behavior in tests that
+  // mount ``ByActivityTable`` without the parent wiring.
+  showAll = false,
+  onShowAllChange = () => {},
 }) {
   const [scopeCollapsed, setScopeCollapsed] = React.useState({});
   const [addDialogActivity, setAddDialogActivity] = React.useState(null);
-
-  // "Show all activities" toggle. Default OFF (hide unused) on first
-  // visit so users land in the noise-reduced view; localStorage carries
-  // the choice across sessions.
-  const [showAll, setShowAll] = React.useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.localStorage?.getItem(SHOW_ALL_STORAGE_KEY) === "true";
-    } catch (_) {
-      return false;
-    }
-  });
-  React.useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage?.setItem(SHOW_ALL_STORAGE_KEY, showAll ? "true" : "false");
-    } catch (_) {
-      // localStorage may be disabled (private mode, quota) — silent
-      // fallback keeps in-memory toggle state working for the session.
-    }
-  }, [showAll]);
 
   // Selected set: activity_type_ids that any RU has explicitly listed.
   // Drives the "hide unused" filter and the dimming in "show all" mode.
@@ -431,22 +424,6 @@ export default function ByActivityTable({
       .filter((scope) => scope.subcategories.length > 0);
   }, [fullTree, showAll, selectedActivityIds]);
 
-  // Visibility counts for the "Showing X of Y" status chip.
-  const totalActivityCount = React.useMemo(
-    () => fullTree.reduce(
-      (n, scope) => n + scope.subcategories.reduce((m, sub) => m + sub.activities.length, 0),
-      0,
-    ),
-    [fullTree],
-  );
-  const visibleActivityCount = React.useMemo(
-    () => tree.reduce(
-      (n, scope) => n + scope.subcategories.reduce((m, sub) => m + sub.activities.length, 0),
-      0,
-    ),
-    [tree],
-  );
-
   // F2 PR 3 — the in-component TOC sidebar (``ByActivitySidebar``) was
   // replaced by a horizontal ``ScopeChips`` strip in the parent's
   // sticky toolbar. Scope navigation is now anchor-based: each scope
@@ -466,67 +443,36 @@ export default function ByActivityTable({
   return (
     <Stack spacing={2}>
       <Box sx={{ width: "100%", minWidth: 0 }}>
-        {/*
-          "Show all activities" toggle. Sits at the top of the right-hand
-          content column rather than alongside the view-mode toggles in
-          ActivityInputsPanel — it's specific to the By Activity view
-          and keyed off the data showing in this column. The status chip
-          updates live so users always see how many activities are
-          rendered vs how many exist in the catalog.
-        */}
-        <Stack
-          direction="row"
-          spacing={1.5}
-          alignItems="center"
-          sx={{ mb: 2, flexWrap: "wrap", rowGap: 1 }}
-          data-testid="by-activity-toggle-bar"
-        >
-          <FormControlLabel
-            control={(
-              <Switch
-                size="small"
-                checked={showAll}
-                onChange={(event) => setShowAll(event.target.checked)}
-                inputProps={{ "aria-label": "Show all activities" }}
-              />
-            )}
-            label={(
-              <Typography variant="body2">
-                Show all activities
-              </Typography>
-            )}
-          />
-          <Chip
-            size="small"
-            variant="outlined"
-            label={`Showing ${visibleActivityCount} of ${totalActivityCount}`}
-            data-testid="by-activity-visible-count"
-          />
-          {showAll ? (
-            <Typography variant="caption" color="text.secondary">
-              Dimmed rows are catalog activities no Reporting Unit has selected yet.
-            </Typography>
-          ) : null}
-        </Stack>
         <Stack spacing={3}>
           {tree.map((scope, scopeIndex) => {
             const collapsed = Boolean(scopeCollapsed[scope.id]);
             const accent = scopeAccentPalette(scope.id);
+            const scopeActivityCount = scope.subcategories.reduce(
+              (n, s) => n + s.activities.length,
+              0,
+            );
             return (
-              <Box
+              <Paper
                 key={scope.id}
                 id={`scope-${scope.id}`}
+                variant="outlined"
                 sx={{
-                  // F2 PR 3 — scope-to-scope spacing bumped from 24
-                  // (mt: 3) to 40 (mt: 5) per the design review's
-                  // "not enough visual space and distinction between
-                  // sections" critique. Anchor lands just below the
-                  // sticky stack via ``scrollMarginTop`` so a click
-                  // from ``ScopeChips`` doesn't park the title under
-                  // the toolbar.
-                  mt: scopeIndex === 0 ? 0 : 5,
+                  // F2 PR 10 — wrap each scope in its own Paper card.
+                  // Pre-PR-10 the scope content sat directly on the
+                  // page background, which the user described as "a
+                  // bunch of floating bars drifting on the sea of the
+                  // background." The Paper card matches the visual
+                  // cohesion of the By Reporting Unit view that the
+                  // user prefers.
+                  mt: scopeIndex === 0 ? 0 : 2,
+                  p: 2,
                   scrollMarginTop:
                     "calc(var(--sticky-top-height) + var(--sticky-secondary-height) + 16px)",
+                  // 4px scope-accent left border lives flush with the
+                  // card edge so the scope identity reads at a glance.
+                  borderLeftWidth: "4px",
+                  borderLeftStyle: "solid",
+                  borderLeftColor: accent.border,
                 }}
               >
                 <Stack
@@ -534,22 +480,9 @@ export default function ByActivityTable({
                   spacing={1}
                   alignItems="center"
                   sx={{
-                    py: 1,
-                    pl: 1.25,
-                    pr: 1.25,
+                    py: 0.5,
                     cursor: "pointer",
                     userSelect: "none",
-                    // F2 PR 3 — dropped the colored background fill
-                    // (was a 5/8% alpha tint of the scope's accent
-                    // hue). The design review flagged Scope 1's
-                    // light red band as "risks reading as an error
-                    // state"; the same tint logic produced an
-                    // unnecessary green/blue wash for Scope 2 and 3.
-                    // The 4px left border carries the scope identity
-                    // alone — calmer, less risk of confusion with
-                    // status colors.
-                    borderLeft: "4px solid",
-                    borderLeftColor: accent.border,
                   }}
                   onClick={() => setScopeCollapsed((prev) => ({ ...prev, [scope.id]: !prev?.[scope.id] }))}
                   data-testid={`scope-header-${scope.id}`}
@@ -564,10 +497,6 @@ export default function ByActivityTable({
                     variant="h5"
                     sx={{
                       fontWeight: 700,
-                      // Uppercase + loose letter-spacing gives scope
-                      // headers the "dominant rhythm" role in the
-                      // heading hierarchy; subcategory h6 stays
-                      // mixed-case so scopes always read louder.
                       textTransform: "uppercase",
                       letterSpacing: "0.08em",
                       fontSize: "1.15rem",
@@ -579,25 +508,12 @@ export default function ByActivityTable({
                   <Chip
                     size="small"
                     variant="outlined"
-                    label={`${scope.subcategories.reduce((n, s) => n + s.activities.length, 0)} activities`}
+                    label={`${scopeActivityCount} activities`}
                   />
                 </Stack>
-                {/*
-                  Post-C4 round-5 item 3: removed the horizontal rule
-                  that previously sat under each scope header. The
-                  colored left border + 5/8% alpha tint background +
-                  uppercase letter-spacing on the scope label give the
-                  header more than enough demarcation; the Divider read
-                  as a leftover legacy underline.
-                */}
-                <Box sx={{ mb: 1 }} />
                 <Collapse in={!collapsed} unmountOnExit>
-                  {/* Post-C4 round-4 item 6: extra vertical rhythm
-                      between subcategories. Prior spacing={2} (16px)
-                      felt cramped once the scope header gained its
-                      tinted background; bumping to spacing={3} (24px)
-                      adds the 8px beat the user asked for. */}
-                  <Stack spacing={3}>
+                  <Box sx={{ mt: 1.5 }}>
+                  <Stack spacing={2.5}>
                     {scope.subcategories.map((sub, subIndex) => {
                       // F2 PR 3 — the in-table TOC sidebar moved out, so
                       // the per-sub ref + data-toc-key wiring is gone.
@@ -640,7 +556,7 @@ export default function ByActivityTable({
                                 activityType={activityType}
                                 activitiesByPair={activitiesByPair}
                                 reportingUnits={reportingUnits}
-                                totalActivities={selectableActivities.length}
+                                scopeActivityCount={scopeActivityCount}
                                 upsertActivity={upsertActivity}
                                 openDetailsForPair={openDetailsForPair}
                                 calcErrors={calcErrors}
@@ -658,8 +574,9 @@ export default function ByActivityTable({
                       );
                     })}
                   </Stack>
+                  </Box>
                 </Collapse>
-              </Box>
+              </Paper>
             );
           })}
           {tree.length === 0 && fullTree.length === 0 ? (
@@ -684,7 +601,7 @@ export default function ByActivityTable({
                 <Typography variant="body2" color="text.secondary">
                   Toggle "Show all" to browse the catalog and add sources to a Reporting Unit.
                 </Typography>
-                <Button size="small" variant="outlined" onClick={() => setShowAll(true)}>
+                <Button size="small" variant="outlined" onClick={() => onShowAllChange(true)}>
                   Show all activities
                 </Button>
               </Stack>

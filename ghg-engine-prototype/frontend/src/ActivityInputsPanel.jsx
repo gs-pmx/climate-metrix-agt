@@ -2,10 +2,15 @@ import * as React from "react";
 import {
   Alert,
   Box,
+  Chip,
+  Divider,
+  FormControlLabel,
   Paper,
   Stack,
+  Switch,
   ToggleButton,
   ToggleButtonGroup,
+  Typography,
 } from "@mui/material";
 import ActivityDetailDialog from "./ActivityDetailDialog";
 import RepeatableActivityDialog from "./RepeatableActivityDialog";
@@ -25,8 +30,17 @@ import {
   withActivityTypeDefaults,
 } from "./activityDrafts";
 import { hasMeaningfulData, pairKey } from "./gridEditingHelpers";
-import { buildExistingPairsSet, ensureActivityApplicable } from "./applicability";
+import {
+  buildExistingPairsSet,
+  ensureActivityApplicable,
+  getSelectedActivityTypeIds,
+} from "./applicability";
 import { makeApplyPerActivityUpdate, makeApplyPerReportingUnitUpdate } from "./configureSources";
+
+// localStorage key for the show-all toggle. Lives at the panel level
+// (rather than ByActivityTable) since PR 10 lifted the toggle into the
+// shared sticky bar — same persistence behavior, owned upstream.
+const SHOW_ALL_STORAGE_KEY = "ghg-by-activity-show-all";
 
 // Thin orchestrator: owns shared state, passes it down to the three view
 // components. All heavy rendering lives in ByActivityTable,
@@ -57,6 +71,30 @@ export default function ActivityInputsPanel({
   // focused on rendering rows.
   const [activeScopeId, setActiveScopeId] = React.useState("");
 
+  // F2 PR 10 — show-all state lifted from ByActivityTable so it can
+  // share row 2 of the sticky bar with the visible-count chip. Default
+  // OFF (hide unused) on first visit; localStorage carries the choice
+  // across sessions.
+  const [showAllActivities, setShowAllActivities] = React.useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage?.getItem(SHOW_ALL_STORAGE_KEY) === "true";
+    } catch (_) {
+      return false;
+    }
+  });
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage?.setItem(
+        SHOW_ALL_STORAGE_KEY,
+        showAllActivities ? "true" : "false",
+      );
+    } catch (_) {
+      // localStorage may be disabled; in-memory toggle keeps working.
+    }
+  }, [showAllActivities]);
+
   // Bug 2 mitigation: whenever a calculation begins, force-close every
   // detail dialog (which is where the Emission Factor Override field
   // lives). Prior phases left it possible for a dialog to remain open
@@ -81,14 +119,43 @@ export default function ActivityInputsPanel({
   // catalog tree the table uses. The chips only render scopes that
   // actually exist in the current catalog so we don't show "Scope 3"
   // when there are no Scope 3 rows.
-  const availableScopeIds = React.useMemo(() => {
-    const tree = groupByTOC(selectableActivities);
-    return new Set(
-      tree
+  const fullCatalogTree = React.useMemo(
+    () => groupByTOC(selectableActivities),
+    [selectableActivities],
+  );
+  const availableScopeIds = React.useMemo(
+    () => new Set(
+      fullCatalogTree
         .filter((scope) => scope.subcategories.some((sub) => sub.activities.length > 0))
         .map((scope) => scope.id),
+    ),
+    [fullCatalogTree],
+  );
+
+  // F2 PR 10 — visible-count chip in row 2 of the sticky bar. Counts
+  // mirror the filter in ByActivityTable: hide-unused drops activities
+  // no Reporting Unit has selected.
+  const selectedActivityIds = React.useMemo(
+    () => getSelectedActivityTypeIds(reportingUnits),
+    [reportingUnits],
+  );
+  const totalActivityCount = React.useMemo(
+    () => fullCatalogTree.reduce(
+      (n, scope) => n + scope.subcategories.reduce((m, sub) => m + sub.activities.length, 0),
+      0,
+    ),
+    [fullCatalogTree],
+  );
+  const visibleActivityCount = React.useMemo(() => {
+    if (showAllActivities) return totalActivityCount;
+    return fullCatalogTree.reduce(
+      (n, scope) => n + scope.subcategories.reduce(
+        (m, sub) => m + sub.activities.filter((at) => selectedActivityIds.has(at.activity_type_id)).length,
+        0,
+      ),
+      0,
     );
-  }, [selectableActivities]);
+  }, [fullCatalogTree, showAllActivities, totalActivityCount, selectedActivityIds]);
 
   // Active-scope scroll-spy. Watches the scope anchor Boxes
   // ``ByActivityTable`` registers under ``id="scope-${scope.id}"`` and
@@ -413,42 +480,34 @@ export default function ActivityInputsPanel({
       ) : null}
 
       {/*
-        Post-C4 item 2: the view-selector + save/run bar sticks just
-        below the app-level top bar (Layer 1 -> Layer 2 stack). The
-        bar's zIndex stays under the app nav's so the dropdown shadows
-        don't punch through. `--sticky-top-height` is set in main.jsx
-        root styles.
-        Post-C4 polish items 4 + 5: the bar is now fully opaque
-        (bgcolor instead of a blur layer) so rows don't bleed through,
-        and carries a subtle bottom shadow so the flowing data rows
-        below it feel visually distinct. The sticky `top` sits flush
-        with the nav bar's bottom edge so there is no see-through gap
-        between the two layers.
+        F2 PR 10 — single sticky command card.
+        Pre-PR 10 there were two stacked rows the user perceived as
+        separate floating bars: the sticky view-selector + scope chips,
+        and a non-sticky "Show all activities" toggle below it inside
+        ``ByActivityTable``. They now share one rounded Paper card
+        with a two-row layout that only renders row 2 when the
+        ``byActivity`` view is active. Square corners and the missing-
+        looking bottom border (the previous bar used borderRadius:0)
+        gave the bar an "unfinished panel" feel that the user flagged
+        in design feedback.
       */}
       <Paper
+        variant="outlined"
         sx={{
-          // F2 PR 4 — view-selector bar lightened. Padding from 16
-          // to 12 and the heavy ``0 3px 10px`` override shadow
-          // dropped in favor of a single-line bottom border that
-          // reads as a clean separation without the "floating
-          // obstruction" the design review flagged. Combined with
-          // the bar living flush below the app's sticky tabs, the
-          // user sees a contiguous command band rather than two
-          // stacked floating panels.
-          p: 1.5,
+          p: 1.25,
           position: "sticky",
           top: "var(--sticky-top-height)",
           zIndex: (theme) => theme.zIndex.appBar - 1,
           bgcolor: "background.paper",
-          boxShadow: "none",
-          borderRadius: 0,
-          borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
+          // Default theme borderRadius (rounded). Subtle elevation
+          // shadow plus the outlined border lets the card read as a
+          // bounded surface without floating off the page.
+          boxShadow: (theme) => theme.shadows[1],
         }}
         data-testid="view-selector-bar"
       >
         <Stack
           direction="row"
-          justifyContent="flex-start"
           alignItems="center"
           spacing={2}
           sx={{ flexWrap: "wrap", rowGap: 1 }}
@@ -465,11 +524,6 @@ export default function ActivityInputsPanel({
             <ToggleButton value="byActivity">By Activity</ToggleButton>
             <ToggleButton value="byFacility">By Reporting Unit</ToggleButton>
           </ToggleButtonGroup>
-          {/* F2 PR 3 — Scope chips only render in the By-Activity view.
-              F2 PR 5 — pushed to the right of the bar via
-              ``marginLeft: "auto"`` so the toggle stays anchored
-              left and the scope-jump affordance reads as the
-              right-justified secondary action. */}
           {viewMode === "byActivity" ? (
             <Box sx={{ ml: "auto !important" }}>
               <ScopeChips
@@ -478,14 +532,46 @@ export default function ActivityInputsPanel({
               />
             </Box>
           ) : null}
-          {/* Phase F1: Save Version + Run Calculation moved to App.jsx
-              top bar so they're reachable from any tab.
-              Phase F2 PR 3: dropped the inline "how to paste" + the
-              "implemented/planned" status copy that used to sit
-              beneath this toggle — daily users know how to paste, and
-              the implementation-status framing isn't customer-facing
-              language. */}
         </Stack>
+        {viewMode === "byActivity" ? (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <Stack
+              direction="row"
+              alignItems="center"
+              spacing={1.5}
+              sx={{ flexWrap: "wrap", rowGap: 0.75 }}
+              data-testid="by-activity-toggle-bar"
+            >
+              <FormControlLabel
+                control={(
+                  <Switch
+                    size="small"
+                    checked={showAllActivities}
+                    onChange={(event) => setShowAllActivities(event.target.checked)}
+                    inputProps={{ "aria-label": "Show all activities" }}
+                  />
+                )}
+                label={(
+                  <Typography variant="body2">
+                    Show all activities
+                  </Typography>
+                )}
+              />
+              <Chip
+                size="small"
+                variant="outlined"
+                label={`Showing ${visibleActivityCount} of ${totalActivityCount}`}
+                data-testid="by-activity-visible-count"
+              />
+              {showAllActivities ? (
+                <Typography variant="caption" color="text.secondary">
+                  Dimmed rows are catalog activities no Reporting Unit has selected yet.
+                </Typography>
+              ) : null}
+            </Stack>
+          </>
+        ) : null}
       </Paper>
 
       {viewMode === "rowByRow" ? (
@@ -514,6 +600,8 @@ export default function ActivityInputsPanel({
           onApplyAddReportingUnit={applyAddReportingUnit}
           existingActivitiesByPair={existingActivitiesByPair}
           show={show}
+          showAll={showAllActivities}
+          onShowAllChange={setShowAllActivities}
         />
       ) : null}
 

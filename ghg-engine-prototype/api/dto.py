@@ -181,6 +181,12 @@ class AuditRecordDTO(BaseModel):
     ch4_result_kg: float | None = None
     n2o_result_kg: float | None = None
     co2e_result_kg: float | None = None
+    # Phase F2 PR 9 — see AuditRecord docstring. Surfaces the
+    # meaningful factor for single-result EQMs (refrigerant + spend)
+    # where the per-gas slots are empty by design.
+    primary_factor_label: str | None = None
+    primary_factor_value: float | None = None
+    primary_factor_unit: str | None = None
 
 
 class ActivityCalculationErrorDTO(BaseModel):
