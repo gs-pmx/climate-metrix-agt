@@ -152,6 +152,19 @@ export default function AuditTab({
       },
       { field: "input_activity_unit", headerName: "Input Unit", width: 110, renderCell: renderWrappedCell },
       { field: "eqm_method", headerName: "EQM", width: 130, renderCell: renderWrappedCell },
+      // Phase F2 PR 9 — primary factor surface for single-result EQMs
+      // (refrigerant_mass_to_gwp, spend_based). For per-gas activities
+      // these cells stay blank and the per-gas factor columns below
+      // carry the detail.
+      { field: "primary_factor_label", headerName: "Primary Factor", width: 200, renderCell: renderWrappedCell },
+      {
+        field: "primary_factor_value",
+        headerName: "Primary Value",
+        type: "number",
+        width: 120,
+        valueFormatter: (value) => formatNumber(value, 4),
+      },
+      { field: "primary_factor_unit", headerName: "Primary Unit", width: 130, renderCell: renderWrappedCell },
       { field: "factor_co2_id", headerName: "CO2 Factor ID", width: 180, renderCell: renderWrappedCell },
       { field: "factor_co2_value", headerName: "CO2 Factor", type: "number", width: 110, valueFormatter: (value) => formatNumber(value) },
       { field: "factor_co2_unit", headerName: "CO2 Unit", width: 130, renderCell: renderWrappedCell },

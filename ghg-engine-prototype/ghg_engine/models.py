@@ -210,6 +210,25 @@ class AuditRecord(BaseModel):
     ch4_result_kg: float | None = None
     n2o_result_kg: float | None = None
     co2e_result_kg: float | None = None
+    # Phase F2 PR 9 — surface the meaningful factor for single-result
+    # EQMs (refrigerant_mass_to_gwp, spend_based) where the per-gas
+    # CO2/CH4/N2O slots are empty by design. For per-gas activities
+    # these stay None and the gas-specific columns carry the detail.
+    #
+    # ``primary_factor_label``: human description of the factor used.
+    # For refrigerant rows this is the input refrigerant_type
+    # (cleaner than the catalog description, e.g. "R-410A" rather
+    # than "Difluoromethane (HFC-32) 50% / Pentafluoroethane 50%").
+    # For spend rows this is the factor description from the EEIO
+    # catalog (e.g. "Offices of Lawyers").
+    #
+    # ``primary_factor_value`` / ``primary_factor_unit``: the factor's
+    # numeric value and unit_label. For refrigerants this is the
+    # GWP (kg CO2e / kg refrigerant). For spend this is the
+    # emissions intensity (kg CO2e / USD).
+    primary_factor_label: str | None = None
+    primary_factor_value: float | None = None
+    primary_factor_unit: str | None = None
 
 
 class ReportingUnitDraft(BaseModel):

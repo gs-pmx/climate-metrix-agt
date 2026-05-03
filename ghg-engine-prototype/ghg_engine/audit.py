@@ -41,12 +41,49 @@ def _factor_detail(factor_id: str | None, factors: FactorRepository) -> dict[str
         return None
     return {
         "factor_id": factor.factor_id,
+        "description": factor.description,
         "value": factor.value,
         "unit": factor.unit,
+        "unit_label": factor.unit_label,
         "source": factor.factor_source or factor.source_entity_short,
         "valid_from": str(factor.valid_from) if factor.valid_from else None,
         "valid_to": str(factor.valid_to) if factor.valid_to else None,
     }
+
+
+# Phase F2 PR 9 — single-result EQMs (refrigerant_mass_to_gwp,
+# spend_based) emit one CO2e ResultRecord with no per-gas breakdown.
+# When that's the case we surface the meaningful factor under
+# ``primary_factor_*`` so the audit grid shows ``R-410A | 2088 | kg/kg``
+# or ``Offices of Lawyers | 0.012 | kg/USD`` instead of an empty row.
+_SINGLE_RESULT_METHODS = frozenset({"refrigerant_mass_to_gwp", "spend_based"})
+
+
+def _primary_factor_for_single_result(
+    *,
+    method_id: str,
+    factor_ids: list[str],
+    factors: FactorRepository,
+    input_params: dict[str, Any],
+) -> tuple[str | None, float | None, str | None]:
+    """Return (label, value, unit) for the row's meaningful factor.
+
+    Refrigerant rows label off the input ``refrigerant_type`` param —
+    cleaner than the catalog's chemical-name description. Spend rows
+    label off the factor's catalog description (e.g. EEIO category).
+    """
+    if method_id not in _SINGLE_RESULT_METHODS or not factor_ids:
+        return None, None, None
+    detail = _factor_detail(factor_ids[0], factors)
+    if not detail:
+        return None, None, None
+    if method_id == "refrigerant_mass_to_gwp":
+        refrigerant_type = str(input_params.get("refrigerant_type") or "").strip()
+        label = refrigerant_type or detail.get("description")
+    else:
+        label = detail.get("description")
+    unit = detail.get("unit_label") or detail.get("unit")
+    return label, detail.get("value"), unit
 
 
 def _conversion_notes(activity_unit: str, factor_unit: str | None) -> tuple[str | None, str | None]:
@@ -113,6 +150,13 @@ def build_audit_rows(
         if any(row.gas == "co2" and row.is_biogenic for row in method_rows):
             factor_selection_notes.append("biogenic CO2 is reported separately from scope totals")
 
+        primary_label, primary_value, primary_unit = _primary_factor_for_single_result(
+            method_id=trace.selected_method,
+            factor_ids=factor_ids,
+            factors=factors,
+            input_params=activity.params,
+        )
+
         out.append(
             AuditRecord(
                 facility_id=activity.facility_id,
@@ -158,6 +202,9 @@ def build_audit_rows(
                 ch4_result_kg=gas_rows["ch4"].value if gas_rows.get("ch4") else None,
                 n2o_result_kg=gas_rows["n2o"].value if gas_rows.get("n2o") else None,
                 co2e_result_kg=gas_rows["co2e"].value if gas_rows.get("co2e") else None,
+                primary_factor_label=primary_label,
+                primary_factor_value=primary_value,
+                primary_factor_unit=primary_unit,
             ).model_dump()
         )
     return out
