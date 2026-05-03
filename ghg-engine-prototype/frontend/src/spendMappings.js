@@ -63,6 +63,27 @@ export function findMappingByName(mappings, accountName) {
   return null;
 }
 
+// Phase F2 PR 8 — resolve a pasted factor identifier against the
+// spend-factor catalog. Tries source_record_key first (the canonical
+// id stored in the mapping row), then case-insensitive description
+// match. Returns the factor or null. First match wins —
+// descriptions aren't strictly unique, but accountants paste a single
+// factor per GL code, so silent first-match is the right call.
+export function findFactorByIdentifier(factors, identifier) {
+  const target = String(identifier ?? "").trim();
+  if (!target) return null;
+  const targetLower = target.toLowerCase();
+  for (const f of factors || []) {
+    if (f?.source_record_key === target) return f;
+  }
+  for (const f of factors || []) {
+    if (typeof f?.description === "string" && f.description.toLowerCase() === targetLower) {
+      return f;
+    }
+  }
+  return null;
+}
+
 // Apply the code<->name autofill rule to a single row's params. Pure
 // function; returns a new params object only if a fill occurred,
 // otherwise returns the original reference (so callers can detect a

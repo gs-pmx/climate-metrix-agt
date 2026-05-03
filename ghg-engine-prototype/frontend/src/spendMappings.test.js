@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   autofillSpendRow,
   filterRusWithSpendSelected,
+  findFactorByIdentifier,
   findMappingByCode,
   findMappingByName,
   groupMappingsByRu,
@@ -135,4 +136,36 @@ test("autofillSpendRow preserves other params keys (supplier, country, etc.)", (
   const out = autofillSpendRow(params, SAMPLE_MAPPINGS);
   assert.equal(out.supplier, "Acme");
   assert.equal(out.supplier_country, "US");
+});
+
+const SAMPLE_FACTORS = [
+  { source_record_key: "useeio:541110", description: "Legal Services", source_id: "useeio_v2", factor_type: "spend" },
+  { source_record_key: "useeio:481000", description: "Air Transportation", source_id: "useeio_v2", factor_type: "spend" },
+  { source_record_key: "useeio:221100", description: "Electric Power", source_id: "useeio_v2", factor_type: "spend" },
+];
+
+test("findFactorByIdentifier matches by source_record_key", () => {
+  const hit = findFactorByIdentifier(SAMPLE_FACTORS, "useeio:481000");
+  assert.equal(hit?.description, "Air Transportation");
+});
+
+test("findFactorByIdentifier falls back to case-insensitive description match", () => {
+  const hit = findFactorByIdentifier(SAMPLE_FACTORS, "legal services");
+  assert.equal(hit?.source_record_key, "useeio:541110");
+});
+
+test("findFactorByIdentifier prefers source_record_key over description on a tie", () => {
+  const factors = [
+    { source_record_key: "useeio:A", description: "Match Me" },
+    { source_record_key: "Match Me", description: "useeio:A" },
+  ];
+  const hit = findFactorByIdentifier(factors, "Match Me");
+  assert.equal(hit?.source_record_key, "Match Me");
+});
+
+test("findFactorByIdentifier returns null on no match or blank input", () => {
+  assert.equal(findFactorByIdentifier(SAMPLE_FACTORS, "nothing"), null);
+  assert.equal(findFactorByIdentifier(SAMPLE_FACTORS, ""), null);
+  assert.equal(findFactorByIdentifier(SAMPLE_FACTORS, null), null);
+  assert.equal(findFactorByIdentifier([], "useeio:541110"), null);
 });
