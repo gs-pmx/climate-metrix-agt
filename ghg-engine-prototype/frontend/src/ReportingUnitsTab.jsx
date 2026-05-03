@@ -17,9 +17,11 @@ import {
   Typography,
 } from "@mui/material";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
 import TuneIcon from "@mui/icons-material/Tune";
 import { DataGrid, useGridApiContext } from "@mui/x-data-grid";
 import ConfigureSourcesDialog from "./ConfigureSourcesDialog";
+import ManageReportingUnitsDialog from "./ManageReportingUnitsDialog";
 import { buildExistingPairsSet, computeReportingUnitProgress } from "./applicability";
 import { computeProjectCoverage } from "./coverage";
 import { isEntryVisibleActivity } from "./activityDrafts";
@@ -358,6 +360,10 @@ export default function ReportingUnitsTab({
 }) {
   const [configureUnitId, setConfigureUnitId] = React.useState("");
   const [pendingDeleteId, setPendingDeleteId] = React.useState("");
+  // F2 PR 11 — manage-RUs popup. Auto-opens when the project has zero
+  // RUs so a fresh project lands the user straight in the configurator
+  // (the only path to add a unit now lives inside the popup).
+  const [manageOpen, setManageOpen] = React.useState(false);
   const configureUnit = reportingUnits.find((ru) => ru.id === configureUnitId) || null;
   const pendingDeleteUnit = pendingDeleteId
     ? reportingUnits.find((ru) => ru.id === pendingDeleteId) || null
@@ -586,34 +592,86 @@ export default function ReportingUnitsTab({
     [],
   );
 
+  // F2 PR 11 — single-line summary for the compressed top card.
+  // Aggregated counts come straight from projectCoverage. Legacy-
+  // permissive units don't contribute to ``totalApplicable`` so the
+  // ``X/Y complete`` ratio stays meaningful; orphaned counts roll up.
+  const summaryText = (() => {
+    if (reportingUnits.length === 0) {
+      return "No reporting units yet";
+    }
+    const ruLabel = reportingUnits.length === 1 ? "reporting unit" : "reporting units";
+    const parts = [`${reportingUnits.length} ${ruLabel}`];
+    if (projectCoverage.totalApplicable > 0) {
+      parts.push(`${projectCoverage.complete}/${projectCoverage.totalApplicable} sources complete`);
+    }
+    if (projectCoverage.orphaned > 0) {
+      parts.push(`${projectCoverage.orphaned} excluded`);
+    }
+    return parts.join(" · ");
+  })();
+
+  // Renderer threaded through the dialog — keeps state ownership
+  // here (ReportingUnitsTab) and the ManageReportingUnitsDialog
+  // generic / state-free.
+  const renderReportingUnitCard = React.useCallback(
+    (ru) => (
+      <ReportingUnitCard
+        key={ru.id}
+        reportingUnit={ru}
+        activityCatalog={selectableActivities}
+        activities={activities}
+        unitCoverage={projectCoverage.byUnit.get(ru.id) || null}
+        onConfigureSources={(id) => setConfigureUnitId(id)}
+        onRequestDelete={handleRequestDelete}
+        isNewlyCreated={Boolean(newlyCreatedIds && newlyCreatedIds.has(ru.id))}
+      />
+    ),
+    [
+      activities,
+      handleRequestDelete,
+      newlyCreatedIds,
+      projectCoverage.byUnit,
+      selectableActivities,
+    ],
+  );
+
   return (
     <Stack spacing={2}>
+      {/*
+        F2 PR 11 — compressed summary card. The inline per-RU list
+        moved into the ManageReportingUnitsDialog; previously it
+        could push the geo details table well below the fold once
+        the project had several RUs or any RU's source list got
+        long. The summary line collapses everything into a single
+        glance and the dialog handles the fiddly per-RU work.
+      */}
       <Paper sx={{ p: 2 }}>
-        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-          <Typography variant="h6">Reporting Units</Typography>
-          <Button variant="contained" onClick={onAddReportingUnit}>
-            Add Reporting Unit
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={1.5}
+          alignItems={{ sm: "center" }}
+          justifyContent="space-between"
+        >
+          <Stack spacing={0.25}>
+            <Typography variant="h6" sx={{ lineHeight: 1.3 }}>
+              Reporting Units
+            </Typography>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              data-testid="reporting-units-summary"
+            >
+              {summaryText}
+            </Typography>
+          </Stack>
+          <Button
+            variant="contained"
+            startIcon={<SettingsOutlinedIcon />}
+            onClick={() => setManageOpen(true)}
+          >
+            Configure reporting units
           </Button>
-        </Stack>
-        {/* F2 PR 5 — dropped the persistent "Each Reporting Unit is
-            a location, entity, or activity bucket you track..." copy.
-            Daily users don't need to be re-told what an RU is on
-            every page load. */}
-        <Stack spacing={1}>
-          {reportingUnits.length === 0 ? (
-            <Typography color="text.secondary">No Reporting Units yet. Add one above.</Typography>
-          ) : reportingUnits.map((ru) => (
-            <ReportingUnitCard
-              key={ru.id}
-              reportingUnit={ru}
-              activityCatalog={selectableActivities}
-              activities={activities}
-              unitCoverage={projectCoverage.byUnit.get(ru.id) || null}
-              onConfigureSources={(id) => setConfigureUnitId(id)}
-              onRequestDelete={handleRequestDelete}
-              isNewlyCreated={Boolean(newlyCreatedIds && newlyCreatedIds.has(ru.id))}
-            />
-          ))}
         </Stack>
       </Paper>
 
@@ -637,6 +695,14 @@ export default function ReportingUnitsTab({
           </Box>
         </Box>
       </Paper>
+
+      <ManageReportingUnitsDialog
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
+        reportingUnits={reportingUnits}
+        onAddReportingUnit={onAddReportingUnit}
+        renderReportingUnitCard={renderReportingUnitCard}
+      />
 
       <ConfigureSourcesDialog
         open={Boolean(configureUnit)}
