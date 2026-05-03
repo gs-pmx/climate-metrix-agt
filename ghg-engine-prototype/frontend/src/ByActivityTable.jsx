@@ -492,7 +492,7 @@ export default function ByActivityTable({
             )}
             label={(
               <Typography variant="body2">
-                {showAll ? "Show all activities" : "Hide unused activities"}
+                Show all activities
               </Typography>
             )}
           />

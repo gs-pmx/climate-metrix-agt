@@ -20,7 +20,11 @@ import {
   Typography,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
+import ContentPasteIcon from "@mui/icons-material/ContentPaste";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+
+import { findFactorByIdentifier } from "./spendMappings";
+import { parseTSV } from "./usePasteHandler";
 
 // Phase E2 — per-RU GL mapping editor.
 //
@@ -100,6 +104,77 @@ export default function SpendMappingDialog({
 
   const addRow = () => setRows((prev) => [...prev, ROW_TEMPLATE()]);
 
+  // Phase F2 PR 8 — paste a block from the user's chart-of-accounts
+  // spreadsheet directly into the mapping editor. TSV columns are
+  // mapped left-to-right onto: gl_code, gl_account_name,
+  // factor_identifier (a source_record_key like "useeio:541110" or a
+  // factor description like "Legal Services"). Unmatched factor
+  // strings come through as blank factor_id so the user sees the row
+  // and can resolve via the Autocomplete; the gl_code + name still
+  // import.
+  //
+  // Behavior on existing state: if the editor's only row is the
+  // default empty template, the paste replaces it. Otherwise pasted
+  // rows are appended after the existing ones.
+  const applyPaste = React.useCallback(
+    (text) => {
+      const parsed = parseTSV(text || "");
+      if (!parsed.length) return 0;
+      const pastedRows = parsed
+        .map((cells) => {
+          const code = String(cells[0] ?? "").trim();
+          const name = String(cells[1] ?? "").trim();
+          const factorIdent = String(cells[2] ?? "").trim();
+          if (!code && !name && !factorIdent) return null;
+          const factor = factorIdent ? findFactorByIdentifier(spendFactors, factorIdent) : null;
+          return {
+            __id: Math.random().toString(36).slice(2, 10),
+            gl_code: code,
+            gl_account_name: name,
+            factor_id: factor?.source_record_key || "",
+          };
+        })
+        .filter(Boolean);
+      if (!pastedRows.length) return 0;
+      setRows((prev) => {
+        const onlyEmptyDefault =
+          prev.length === 1
+          && !prev[0].gl_code
+          && !prev[0].gl_account_name
+          && !prev[0].factor_id;
+        if (onlyEmptyDefault) return pastedRows;
+        return [...prev, ...pastedRows];
+      });
+      return pastedRows.length;
+    },
+    [spendFactors],
+  );
+
+  const handlePasteEvent = React.useCallback(
+    (event) => {
+      // Cell editors are inputs — let their own paste handler take
+      // over so users can still paste a single value into one field.
+      const tag = event.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA") return;
+      const text = event.clipboardData?.getData("text/plain") || "";
+      if (!text.trim()) return;
+      event.preventDefault();
+      applyPaste(text);
+    },
+    [applyPaste],
+  );
+
+  const handlePasteButton = React.useCallback(async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text || !text.trim()) return;
+      applyPaste(text);
+    } catch (e) {
+      // Clipboard read can fail on permissions; the user can still
+      // paste with Ctrl+V on the dialog body itself.
+    }
+  }, [applyPaste]);
+
   const validRows = rows
     .map((r) => ({
       gl_code: (r.gl_code || "").trim(),
@@ -138,7 +213,7 @@ export default function SpendMappingDialog({
         Configure Spend Mapping
         {reportingUnit?.facility_name ? ` — ${reportingUnit.facility_name}` : ""}
       </DialogTitle>
-      <DialogContent dividers>
+      <DialogContent dividers onPaste={handlePasteEvent}>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
           Pair each GL code from this Reporting Unit's chart of accounts with the
           spend-based emission factor it should resolve to. The account name is
@@ -242,6 +317,15 @@ export default function SpendMappingDialog({
           <Button startIcon={<AddIcon />} size="small" onClick={addRow}>
             Add row
           </Button>
+          <Tooltip title="Paste tab-separated mappings: GL code, account name, factor (source_record_key or description).">
+            <Button
+              startIcon={<ContentPasteIcon />}
+              size="small"
+              onClick={handlePasteButton}
+            >
+              Paste mappings
+            </Button>
+          </Tooltip>
           {dropped > 0 ? (
             <Typography variant="caption" color="text.secondary">
               {dropped} incomplete row{dropped === 1 ? "" : "s"} will be skipped on save.
